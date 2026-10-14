@@ -79,6 +79,50 @@ class LoginAttemptServiceTest {
     assertThat(LoginAttemptService.keyFor("  prueba01 ", "10.0.0.1")).isEqualTo(KEY);
   }
 
+  @Test
+  void unknownKeyIsNotLocked() {
+    assertThatCode(() -> service.ensureNotLocked("DESCONOCIDA|10.0.0.7"))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void failureDuringLockExtendsIt() {
+    failTimes(5);
+    clock.advance(Duration.ofMinutes(10));
+    service.recordFailure(KEY);
+    assertThatThrownBy(() -> service.ensureNotLocked(KEY))
+        .isInstanceOfSatisfying(
+            TooManyLoginAttemptsException.class,
+            e -> assertThat(e.retryAfter()).isEqualTo(Duration.ofMinutes(15)));
+  }
+
+  @Test
+  void recordSuccessUnlocksLockedKey() {
+    failTimes(5);
+    service.recordSuccess(KEY);
+    assertThatCode(() -> service.ensureNotLocked(KEY)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void capKeepsMapBoundedAndNeverEvictsLockedKeys() {
+    LoginAttemptService bounded = new LoginAttemptService(clock, defaultProperties(), 20);
+    String lockedKey = LoginAttemptService.keyFor("BLOQUEADO", "10.0.0.9");
+    for (int attempt = 0; attempt < 5; attempt++) {
+      bounded.recordFailure(lockedKey);
+    }
+    for (int user = 0; user < 200; user++) {
+      bounded.recordFailure(LoginAttemptService.keyFor("USUARIO" + user, "10.0.0.1"));
+    }
+    assertThat(bounded.trackedKeys()).isLessThanOrEqualTo(20);
+    assertThatThrownBy(() -> bounded.ensureNotLocked(lockedKey))
+        .isInstanceOf(TooManyLoginAttemptsException.class);
+  }
+
+  private static AppSecurityProperties defaultProperties() {
+    return new AppSecurityProperties(
+        "0123456789abcdef0123456789abcdef", 30, true, "http://localhost", 5, 15, false);
+  }
+
   private void failTimes(int times) {
     for (int attempt = 0; attempt < times; attempt++) {
       service.recordFailure(KEY);
