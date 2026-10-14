@@ -9,12 +9,16 @@ import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -43,9 +47,21 @@ public class AuthController {
   @Operation(summary = "Iniciar sesión", description = "Emite la cookie de sesión EDI_SESSION.")
   @SecurityRequirements
   @ApiResponse(responseCode = "200", description = "Sesión iniciada")
-  @ApiResponse(responseCode = "401", description = "Usuario o clave incorrectos")
-  @ApiResponse(responseCode = "429", description = "Demasiados intentos; ver Retry-After")
-  @PostMapping("/login")
+  @ApiResponse(
+      responseCode = "401",
+      description = "Usuario o clave incorrectos",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "429",
+      description = "Demasiados intentos; ver Retry-After",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @PostMapping(value = "/login", produces = MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<SessionResponse> login(
       @Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
     SessionPrincipal principal = authService.authenticate(request, httpRequest.getRemoteAddr());
@@ -67,8 +83,14 @@ public class AuthController {
 
   @Operation(summary = "Consultar la sesión actual")
   @ApiResponse(responseCode = "200", description = "Sesión vigente")
-  @ApiResponse(responseCode = "401", description = "Sin sesión")
-  @GetMapping("/me")
+  @ApiResponse(
+      responseCode = "401",
+      description = "Sin sesión",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @GetMapping(value = "/me", produces = MediaType.APPLICATION_JSON_VALUE)
   public SessionResponse me(@AuthenticationPrincipal Jwt jwt) {
     return toResponse(SessionPrincipal.fromJwt(jwt));
   }

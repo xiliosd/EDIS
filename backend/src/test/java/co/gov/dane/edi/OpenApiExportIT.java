@@ -34,7 +34,11 @@ class OpenApiExportIT extends OracleIntegrationTest {
         .contains("/api/v1/auth/me")
         .contains("sessionCookie")
         .doesNotContain("/probe")
-        .doesNotContain("/test/");
+        .doesNotContain("/test/")
+        .doesNotContain("csrfToken")
+        .doesNotContain("CsrfToken:")
+        .doesNotContain("localhost")
+        .contains("application/problem+json");
 
     Files.createDirectories(CONTRACT.getParent());
     Files.writeString(CONTRACT, yaml, StandardCharsets.UTF_8);

@@ -5,8 +5,7 @@ info:
   title: API Formulario EDI/EDID
   version: v1
 servers:
-- description: Generated server url
-  url: http://localhost
+- url: /
 security:
 - sessionCookie: []
 tags:
@@ -17,16 +16,10 @@ paths:
     get:
       description: Emite la cookie XSRF-TOKEN.
       operationId: csrf
-      parameters:
-      - in: query
-        name: csrfToken
-        required: true
-        schema:
-          $ref: "#/components/schemas/CsrfToken"
       responses:
         "200":
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/CsrfTokenResponse"
           description: OK
@@ -47,21 +40,21 @@ paths:
       responses:
         "200":
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SessionResponse"
           description: Sesión iniciada
         "401":
           content:
-            '*/*':
+            application/problem+json:
               schema:
-                $ref: "#/components/schemas/SessionResponse"
+                $ref: "#/components/schemas/ProblemDetail"
           description: Usuario o clave incorrectos
         "429":
           content:
-            '*/*':
+            application/problem+json:
               schema:
-                $ref: "#/components/schemas/SessionResponse"
+                $ref: "#/components/schemas/ProblemDetail"
           description: Demasiados intentos; ver Retry-After
       security: []
       summary: Iniciar sesión
@@ -83,30 +76,21 @@ paths:
       responses:
         "200":
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/SessionResponse"
           description: Sesión vigente
         "401":
           content:
-            '*/*':
+            application/problem+json:
               schema:
-                $ref: "#/components/schemas/SessionResponse"
+                $ref: "#/components/schemas/ProblemDetail"
           description: Sin sesión
       summary: Consultar la sesión actual
       tags:
       - Autenticación
 components:
   schemas:
-    CsrfToken:
-      type: object
-      properties:
-        headerName:
-          type: string
-        parameterName:
-          type: string
-        token:
-          type: string
     CsrfTokenResponse:
       type: object
       properties:
@@ -132,6 +116,25 @@ components:
       - accountType
       - password
       - username
+    ProblemDetail:
+      type: object
+      properties:
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
+          additionalProperties: {}
+        status:
+          type: integer
+          format: int32
+        title:
+          type: string
+        type:
+          type: string
+          format: uri
     SessionResponse:
       type: object
       properties:
