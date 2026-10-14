@@ -12,6 +12,7 @@ LABEL org.opencontainers.image.title="formulario-edi-frontend" \
       org.opencontainers.image.authors="Oscar Dueñas" \
       org.opencontainers.image.documentation="README.md del repositorio formulario-web"
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 ENV BACKEND_URL=http://backend:8080
 EXPOSE 8080

@@ -13,7 +13,10 @@ spring:
 
 server:
   port: 8080
-  forward-headers-strategy: framework
+  # native (RemoteIpValve de Tomcat) reescribe la IP remota con X-Forwarded-For, necesaria para el
+  # bloqueo por usuario + IP; confía solo en proxies privados/loopback. Si hay un balanceador delante
+  # de nginx, configurar los proxies de confianza.
+  forward-headers-strategy: native
   error:
     include-stacktrace: never
     include-message: never
