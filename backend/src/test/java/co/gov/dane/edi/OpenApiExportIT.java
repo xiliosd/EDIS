@@ -32,6 +32,7 @@ class OpenApiExportIT extends OracleIntegrationTest {
     assertThat(yaml)
         .contains("/api/v1/auth/login")
         .contains("/api/v1/auth/me")
+        .contains("/api/v1/survey/chapters")
         .contains("sessionCookie")
         .doesNotContain("/probe")
         .doesNotContain("/test/")
