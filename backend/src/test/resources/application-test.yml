@@ -1,0 +1,17 @@
+spring:
+  sql:
+    init:
+      mode: always
+      schema-locations: file:../db/dev/schema.sql
+      data-locations: file:../db/dev/data.sql
+
+app:
+  survey:
+    code: EDIN
+    year: 2026
+    rules-dir: ${java.io.tmpdir}/edi-rules-test
+  security:
+    jwt-secret: solo-para-pruebas-automatizadas-no-usar-en-ningun-ambiente
+    cookie-secure: false
+    allowed-origin: http://localhost:5173
+    swagger-public: true

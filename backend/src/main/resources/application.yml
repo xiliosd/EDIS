@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: formulario-edi-backend
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+app:
+  survey:
+    code: ${SURVEY_CODE:EDIN}
+    year: ${SURVEY_YEAR}
+    db-schema: ${DB_SCHEMA:DANE_DIRPEN}
+    rules-dir: ${RULES_DIR:/data/rules}
+  security:
+    jwt-secret: ${JWT_SECRET}
+    session-minutes: ${SESSION_MINUTES:30}
+    cookie-secure: ${COOKIE_SECURE:true}
+    allowed-origin: ${CORS_ALLOWED_ORIGIN}
+    max-login-attempts: 5
+    lockout-minutes: 15
+    swagger-public: ${SWAGGER_PUBLIC:false}
