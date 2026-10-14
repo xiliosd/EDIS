@@ -51,3 +51,9 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:false}
   paths-to-match: /api/**
   writer-with-order-by-keys: true
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:ecs}
+  level:
+    root: INFO
