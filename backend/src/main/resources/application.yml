@@ -43,3 +43,11 @@ app:
     max-login-attempts: 5
     lockout-minutes: 15
     swagger-public: ${SWAGGER_PUBLIC:false}
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+  paths-to-match: /api/**
+  writer-with-order-by-keys: true

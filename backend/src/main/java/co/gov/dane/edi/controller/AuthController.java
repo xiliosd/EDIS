@@ -8,6 +8,10 @@ import co.gov.dane.edi.security.AuthService;
 import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "Autenticación", description = "Inicio y cierre de sesión")
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -35,6 +40,11 @@ public class AuthController {
     this.survey = survey;
   }
 
+  @Operation(summary = "Iniciar sesión", description = "Emite la cookie de sesión EDI_SESSION.")
+  @SecurityRequirements
+  @ApiResponse(responseCode = "200", description = "Sesión iniciada")
+  @ApiResponse(responseCode = "401", description = "Usuario o clave incorrectos")
+  @ApiResponse(responseCode = "429", description = "Demasiados intentos; ver Retry-After")
   @PostMapping("/login")
   public ResponseEntity<SessionResponse> login(
       @Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
@@ -45,6 +55,9 @@ public class AuthController {
         .body(toResponse(principal));
   }
 
+  @Operation(summary = "Cerrar sesión")
+  @SecurityRequirements
+  @ApiResponse(responseCode = "204", description = "Sesión cerrada")
   @PostMapping("/logout")
   public ResponseEntity<Void> logout() {
     return ResponseEntity.noContent()
@@ -52,6 +65,9 @@ public class AuthController {
         .build();
   }
 
+  @Operation(summary = "Consultar la sesión actual")
+  @ApiResponse(responseCode = "200", description = "Sesión vigente")
+  @ApiResponse(responseCode = "401", description = "Sin sesión")
   @GetMapping("/me")
   public SessionResponse me(@AuthenticationPrincipal Jwt jwt) {
     return toResponse(SessionPrincipal.fromJwt(jwt));

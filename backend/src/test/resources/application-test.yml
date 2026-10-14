@@ -15,3 +15,10 @@ app:
     cookie-secure: false
     allowed-origin: http://localhost:5173
     swagger-public: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+  paths-to-exclude: /api/v1/survey/probe*, /api/v1/admin/probe*

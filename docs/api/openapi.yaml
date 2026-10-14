@@ -1,0 +1,158 @@
+openapi: 3.1.0
+info:
+  description: API de la Encuesta sobre Ambiente y Desempeño Institucional (DANE).
+    Las operaciones que modifican datos exigen la cabecera X-XSRF-TOKEN.
+  title: API Formulario EDI/EDID
+  version: v1
+servers:
+- description: Generated server url
+  url: http://localhost
+security:
+- sessionCookie: []
+tags:
+- description: Inicio y cierre de sesión
+  name: Autenticación
+paths:
+  /api/v1/auth/csrf:
+    get:
+      description: Emite la cookie XSRF-TOKEN.
+      operationId: csrf
+      parameters:
+      - in: query
+        name: csrfToken
+        required: true
+        schema:
+          $ref: "#/components/schemas/CsrfToken"
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CsrfTokenResponse"
+          description: OK
+      security: []
+      summary: Obtener token CSRF
+      tags:
+      - Autenticación
+  /api/v1/auth/login:
+    post:
+      description: Emite la cookie de sesión EDI_SESSION.
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: Sesión iniciada
+        "401":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: Usuario o clave incorrectos
+        "429":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: Demasiados intentos; ver Retry-After
+      security: []
+      summary: Iniciar sesión
+      tags:
+      - Autenticación
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      responses:
+        "204":
+          description: Sesión cerrada
+      security: []
+      summary: Cerrar sesión
+      tags:
+      - Autenticación
+  /api/v1/auth/me:
+    get:
+      operationId: me
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: Sesión vigente
+        "401":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: Sin sesión
+      summary: Consultar la sesión actual
+      tags:
+      - Autenticación
+components:
+  schemas:
+    CsrfToken:
+      type: object
+      properties:
+        headerName:
+          type: string
+        parameterName:
+          type: string
+        token:
+          type: string
+    CsrfTokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+    LoginRequest:
+      type: object
+      properties:
+        accountType:
+          type: string
+          enum:
+          - RESPONDENT
+          - ADMINISTRATOR
+        password:
+          type: string
+          maxLength: 100
+          minLength: 0
+        username:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - accountType
+      - password
+      - username
+    SessionResponse:
+      type: object
+      properties:
+        accountType:
+          type: string
+          enum:
+          - RESPONDENT
+          - ADMINISTRATOR
+        departmentCode:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        surveyCode:
+          type: string
+        surveyYear:
+          type: integer
+          format: int32
+  securitySchemes:
+    sessionCookie:
+      in: cookie
+      name: EDI_SESSION
+      type: apiKey
