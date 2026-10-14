@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Datos FICTICIOS de desarrollo y pruebas (nunca credenciales reales)"
+paths = [
+  '''db/dev/.*\.sql''',
+  '''backend/src/test/resources/.*''',
+  '''\.env\.example''',
+]
