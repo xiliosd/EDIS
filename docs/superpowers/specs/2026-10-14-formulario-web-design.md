@@ -47,6 +47,9 @@ funcionario y generación de claves de la muestra.
 | D9 | Identidad **DANE**, reutilizando los activos actuales (`Cabezote_EDI_EDID_2.jpeg`, logo DANE, magenta institucional) | Se excluye `logo_dane-presidencia.png` (sello de gobierno desactualizado) |
 | D10 | Back con **OpenAPI 3 + Swagger UI** (springdoc) | Abierto en dev/QA; solo rol administrador en prod |
 | D11 | **Monorepo** con dos aplicaciones independientes, repositorio nuevo en `D:\PERSONALES\PROYECTOS\FORMULARIO_WEB\formulario-web` | §3 |
+| D12 | Administradores ingresan con COD_USUA + CLAVE (el PHP usaba solo la clave) | Evita confundir administradores con la misma clave |
+| D13 | Rol ADMIN_OPERATIVO para ROL 3 y 4 heredados (grupo operativo) | Acceso a reportes en la Fase 4 |
+| D14 | Códigos de encuesta heredados EDIN / EDID; ambas comparten las tablas EDIN_20_CAP_* | Las tablas de muestra son EDIN_MUESTRA / EDID_MUESTRA |
 
 ## 3. Arquitectura
 
@@ -74,7 +77,7 @@ formulario-web/
 │     ├─ services/           cliente API (tipos generados desde OpenAPI) + TanStack Query
 │     ├─ rules/              motor de saltos/validaciones del lado del cliente
 │     └─ styles/             tokens DANE, tema claro/oscuro
-├─ backend/                  Spring Boot 3.x, Java 21, Maven
+├─ backend/                  Spring Boot 4.1 (la línea 3.5 terminó su soporte OSS en junio de 2026), Java 21, Maven
 │  └─ src/main/java/co/gov/dane/edi/
 │     ├─ controller/         REST + anotaciones OpenAPI
 │     ├─ service/            lógica de negocio
@@ -254,7 +257,7 @@ mobile-first, modo oscuro, skeletons de carga, estados vacíos y de error con re
 
 ### 7.1 API (`/api/v1`, OpenAPI 3, errores RFC 7807)
 
-**Autenticación:** `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`.
+**Autenticación:** `GET /auth/csrf`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`.
 
 **Encuestado** (rol `ENCUESTADO`; `C_C` siempre desde el token):
 `GET /survey`, `GET /survey/chapters/{cap}`, `GET /survey/rules`, `PUT /survey/chapters/{cap}/answers`,
@@ -368,3 +371,24 @@ Cada fase tiene su propio plan de implementación.
 | Credenciales expuestas en el código PHP | No copiarlas; recomendar rotación |
 | JSON de reglas fuera de Oracle | Historial, exportar/importar, volumen respaldado |
 | Oracle XE para pruebas difiere de producción | Pruebas de humo en QA contra la base real de pruebas |
+
+## Desviaciones de implementación (Fase 1)
+
+- Spring Boot 4.1.1 en lugar de 3.x; Tomcat fijado en 11.0.26 (`tomcat.version`) por 3 CVE críticos en
+  11.0.24, a retirar cuando Boot incluya 11.0.26 o superior.
+- Se agregó `GET /api/v1/auth/csrf`; el valor que debe enviarse en `X-XSRF-TOKEN` es el de la cookie
+  `XSRF-TOKEN`, no el campo `token` del JSON (enmascarado).
+- El backend no usa `.oauth2ResourceServer()`: registra `BearerTokenAuthenticationFilter` a mano porque
+  el configurador exime de CSRF a las peticiones con token en cookie. `ApiExceptionHandler` relanza
+  `AccessDeniedException` y `AuthenticationException` para conservar los 403/401 de Spring Security.
+- IP del cliente: nginx es el borde (`X-Forwarded-For $remote_addr`) y el backend usa
+  `server.forward-headers-strategy: native`; con un balanceador delante hay que configurar
+  `server.tomcat.remoteip.*`. nginx sobrescribe `X-Correlation-Id` con `$request_id`.
+- Imagen del frontend `nginxinc/nginx-unprivileged:1.30.3-alpine3.23` (1.28.2 tenía 3 CVE críticos sin
+  parche); cabeceras de seguridad en `frontend/nginx/security-headers.conf`.
+- Proxy de Vite con `changeOrigin: false` (con `true` el backend aplica CORS).
+- `@testing-library/jest-dom` 6.9.1 (la 6.10.0 figura como release incorrecta). ESLint se mantiene en
+  9.39.5 porque `eslint-plugin-jsx-a11y` 6.10.2 no soporta ESLint 10 (deuda técnica).
+- `overrides` de `playwright-core` 1.63.0 en el frontend para alinear `@axe-core/playwright`.
+- El bloqueo por intentos es en memoria (por instancia); la mitigación real contra inundación es rate
+  limiting en el proxy o balanceador.
