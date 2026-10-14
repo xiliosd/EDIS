@@ -1,14 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { AppLayout } from './AppLayout';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
-function renderAt(path: string) {
+function renderAt(path: string, headerActions?: ReactNode) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route element={<AppLayout />}>
+        <Route element={<AppLayout headerActions={headerActions} />}>
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
@@ -17,6 +18,13 @@ function renderAt(path: string) {
 }
 
 describe('AppLayout', () => {
+  it('renderiza las acciones del encabezado dentro del banner', () => {
+    renderAt('/cualquiera', <button type="button">Cerrar sesión</button>);
+    expect(
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Cerrar sesión' }),
+    ).toBeInTheDocument();
+  });
+
   it('muestra el encabezado institucional con texto alternativo', () => {
     renderAt('/cualquiera');
     expect(screen.getByRole('img', { name: /EDI-EDID/ })).toBeInTheDocument();

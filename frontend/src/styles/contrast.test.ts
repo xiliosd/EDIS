@@ -25,8 +25,11 @@ const PAIRS: ReadonlyArray<[string, string]> = [
   ['primary', 'surface'],
   ['primary', 'surface-muted'],
   ['on-primary', 'primary'],
+  ['primary-strong', 'surface'],
   ['danger', 'surface'],
+  ['danger', 'surface-muted'],
   ['success', 'surface'],
+  ['success', 'surface-muted'],
 ];
 
 describe('contraste de los tokens', () => {
@@ -44,5 +47,13 @@ describe('contraste de los tokens', () => {
       expect(theme[background], `falta --color-${background}`).toBeDefined();
       expect(contrastRatio(theme[foreground], theme[background])).toBeGreaterThanOrEqual(4.5);
     });
+
+    // WCAG 1.4.11: el contorno de foco (color primary) necesita 3:1 contra el fondo adyacente.
+    it.each(['surface', 'surface-muted'])(
+      `tema ${themeName}: el foco sobre %s cumple 3:1`,
+      (bg) => {
+        expect(contrastRatio(theme['primary'], theme[bg])).toBeGreaterThanOrEqual(3);
+      },
+    );
   }
 });
