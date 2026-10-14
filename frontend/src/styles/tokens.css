@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+
+/* Magenta institucional DANE oscurecido lo justo para cumplir WCAG AA (7,6:1 sobre blanco). */
+@theme {
+  --color-primary: #a3134b;
+  --color-primary-strong: #7d0e39;
+  --color-on-primary: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f6f4f5;
+  --color-ink: #1f1a1c;
+  --color-ink-muted: #5c5257;
+  --color-danger: #b42318;
+  --color-success: #1e7a3c;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #f28cb3;
+    --color-primary-strong: #f7b3cd;
+    --color-on-primary: #17131a;
+    --color-surface: #221c24;
+    --color-surface-muted: #17131a;
+    --color-ink: #f3eef0;
+    --color-ink-muted: #c9bfc4;
+    --color-danger: #ff8a80;
+    --color-success: #6fd08c;
+  }
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
