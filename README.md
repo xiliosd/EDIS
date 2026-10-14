@@ -70,9 +70,11 @@ Usuarios ficticios de `db/dev/data.sql`:
 | :-- | :-- | :-- |
 | Encuestado | `PRUEBA01` | Activo |
 | Encuestado | `PRUEBA02` | Inactivo (debe rechazarse) |
+| Encuestado | `PRUEBA03` | Año 2025 (no pertenece a la encuesta activa; debe rechazarse) |
 | Encuestado | `PRUEBA04` | Para pruebas de bloqueo |
 | Administrador | `adm.nacional` | ROL 1 |
 | Administrador | `adm.bogota` | ROL 2, departamento 11 |
+| Administrador | `adm.edid` | Otra encuesta (EDID); no debe ingresar a EDIN |
 
 Las claves de prueba están en `db/dev/data.sql`. El bloqueo ocurre tras 5 fallos en 15 minutos por
 usuario + IP.
@@ -113,22 +115,28 @@ docker compose up -d --build --wait
 docker compose down -v
 ```
 
-**Local sin contenedor de aplicación** (Java 21, Node 22+; probado con Node 24)
+**Local sin contenedor de aplicación** (Java 21, Node 22+; probado con Node 24). El `DB_URL` de
+`.env.example` usa el host `oracle`, que solo resuelve dentro de compose; aquí se usa `localhost`.
 
 ```bash
-# 1. Oracle Free de desarrollo (gvenzl/oracle-free:23-slim-faststart, usuario EDI_DEV, puerto 1521)
-# 2. Backend: cwd = backend/, con las variables de .env.example exportadas
+# 1. Oracle Free de desarrollo (datos ficticios; reemplace los placeholders)
+docker run -d --name edi-oracle-dev -p 1521:1521   -e ORACLE_PASSWORD=<clave-admin-dev> -e APP_USER=EDI_DEV -e APP_USER_PASSWORD=<clave-app-dev>   gvenzl/oracle-free:23-slim-faststart
+
+# 2. Backend: ejecutar desde backend/ (las rutas ../db/dev son relativas a esa carpeta)
 cd backend && ./mvnw -B package
-SPRING_PROFILES_ACTIVE=dev SPRING_SQL_INIT_MODE=always \
-SPRING_SQL_INIT_SCHEMA_LOCATIONS=file:../db/dev/schema.sql \
-SPRING_SQL_INIT_DATA_LOCATIONS=file:../db/dev/data.sql \
+export DB_URL=jdbc:oracle:thin:@//localhost:1521/FREEPDB1 DB_USER=EDI_DEV DB_SCHEMA=EDI_DEV
+export DB_PASSWORD=<clave-app-dev> JWT_SECRET=<secreto-de-32-o-mas-caracteres>
+export SURVEY_CODE=EDIN SURVEY_YEAR=2026 RULES_DIR=./rules-data COOKIE_SECURE=false
+export SWAGGER_ENABLED=true SWAGGER_PUBLIC=true CORS_ALLOWED_ORIGIN=http://localhost:5173
+export SPRING_SQL_INIT_MODE=always   SPRING_SQL_INIT_SCHEMA_LOCATIONS=file:../db/dev/schema.sql   SPRING_SQL_INIT_DATA_LOCATIONS=file:../db/dev/data.sql
 java -jar target/formulario-edi-backend.jar
+
 # 3. Frontend (proxy /api -> 8080)
 cd ../frontend && npm ci && npx vite
 ```
 
-Con el proxy de Vite no hace falta `CORS_ALLOWED_ORIGIN`; si accede directo al backend, debe ser el
-origen del frontend.
+`CORS_ALLOWED_ORIGIN` solo importa si el frontend no se sirve por el proxy de Vite (acceso directo al
+backend); en ese caso debe ser el origen del frontend.
 
 **QA y producción.** Entran por el pipeline (lint, build, pruebas, SAST/SCA, imagen, staging,
 aprobación manual, producción, smoke tests). El paso a producción exige el formato FR-FT-GST-02
@@ -221,6 +229,22 @@ curl -s -b cookies.txt "$BASE/api/v1/survey/chapters"
 ```bash
 cd frontend && npm run api:types   # actualiza src/services/api-schema.d.ts
 ```
+
+## Decisiones de la Fase 1
+
+Detalle en la sección [Desviaciones de implementación](docs/superpowers/specs/2026-10-14-formulario-web-design.md)
+y en la tabla de decisiones del spec.
+
+- **D12.** Los administradores ingresan con `COD_USUA` + clave (el PHP usaba solo la clave).
+- **D13.** Mapeo de `GRAL_USUARIOS_ADM.ROL` a roles: 1 → `ADMIN_NACIONAL` + `ADMIN_CUESTIONARIO`;
+  2 → `ADMIN_TERRITORIAL`; 3 y 4 → `ADMIN_OPERATIVO`; otro → sin acceso.
+- **D14.** Códigos de encuesta heredados `EDIN` / `EDID`; ambas comparten las tablas `EDIN_20_CAP_*`.
+  Las muestras son `EDIN_MUESTRA` / `EDID_MUESTRA`.
+- nginx sobrescribe `X-Correlation-Id` con `$request_id` para evitar identificadores inyectados.
+- El proxy de Vite usa `changeOrigin: false` (mismo origen real; con `true` el backend aplica CORS).
+- `@testing-library/jest-dom` fijado en 6.9.1 (la 6.10.0 figura como release incorrecta en npm).
+- `overrides` de `playwright-core` 1.63.0 en `frontend/package.json` para alinear `@axe-core/playwright`
+  con `@playwright/test`.
 
 ## Excepciones a los lineamientos de nombres
 

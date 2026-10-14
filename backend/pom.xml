@@ -24,7 +24,7 @@
     <checkstyle.version>14.1.0</checkstyle.version>
     <jacoco.version>0.8.15</jacoco.version>
     <springdoc.version>3.1.1</springdoc.version>
-    <!-- Corrige 3 CVE críticos de Tomcat 11.0.24 (CVE-2026-65182, -65905, -68525); quitar cuando Boot traiga Tomcat >= 11.0.25. -->
+    <!-- Corrige 3 CVE críticos de Tomcat 11.0.24 (CVE-2026-65182, -65905, -68525); quitar cuando Boot traiga Tomcat >= 11.0.26. -->
     <tomcat.version>11.0.26</tomcat.version>
   </properties>
 
