@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -53,6 +55,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         HttpStatus.SERVICE_UNAVAILABLE,
         "Servicio no disponible",
         "La base de datos no está disponible. Intente de nuevo en unos minutos.");
+  }
+
+  /** Se relanzan para que ExceptionTranslationFilter responda 401/403 y no un 500. */
+  @ExceptionHandler(AccessDeniedException.class)
+  void rethrowAccessDenied(AccessDeniedException exception) {
+    throw exception;
+  }
+
+  @ExceptionHandler(AuthenticationException.class)
+  void rethrowAuthentication(AuthenticationException exception) {
+    throw exception;
   }
 
   @ExceptionHandler(Exception.class)
