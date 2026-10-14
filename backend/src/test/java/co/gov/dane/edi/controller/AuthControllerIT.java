@@ -1,7 +1,7 @@
 package co.gov.dane.edi.controller;
 
+import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
@@ -18,14 +18,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-// csrf() deja un repositorio de tokens de prueba en el CsrfFilter compartido; sin recargar el
-// contexto contaminaría a SecurityConfigIT (cookie XSRF-TOKEN ausente).
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ExtendWith(OutputCaptureExtension.class)
 class AuthControllerIT extends OracleIntegrationTest {
 
@@ -127,7 +123,7 @@ class AuthControllerIT extends OracleIntegrationTest {
   @Test
   void logoutDeletesTheSessionCookie() throws Exception {
     mockMvc
-        .perform(post("/api/v1/auth/logout").with(csrf()))
+        .perform(post("/api/v1/auth/logout").with(realCsrf(mockMvc)))
         .andExpect(status().isNoContent())
         .andExpect(cookie().maxAge(SessionTokenService.SESSION_COOKIE_NAME, 0));
   }
@@ -136,7 +132,7 @@ class AuthControllerIT extends OracleIntegrationTest {
       String accountType, String username, String password) throws Exception {
     MockHttpServletRequestBuilder request =
         post("/api/v1/auth/login")
-            .with(csrf())
+            .with(realCsrf(mockMvc))
             .contentType(MediaType.APPLICATION_JSON)
             .content(payload(accountType, username, password));
     return mockMvc.perform(request);

@@ -1,8 +1,8 @@
 package co.gov.dane.edi.security;
 
+import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -73,7 +73,7 @@ class SecurityConfigIT extends OracleIntegrationTest {
     Cookie session = sessionFor(SessionPrincipal.respondent("1000000001"), Instant.now());
     mockMvc.perform(post("/api/v1/survey/probe").cookie(session)).andExpect(status().isForbidden());
     mockMvc
-        .perform(post("/api/v1/survey/probe").cookie(session).with(csrf()))
+        .perform(post("/api/v1/survey/probe").cookie(session).with(realCsrf(mockMvc)))
         .andExpect(status().isOk());
   }
 
