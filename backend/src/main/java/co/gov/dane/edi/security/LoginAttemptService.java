@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,6 +33,7 @@ public class LoginAttemptService {
   private final int maxTrackedKeys;
   private volatile Instant lastPurge = Instant.EPOCH;
 
+  @Autowired
   public LoginAttemptService(Clock clock, AppSecurityProperties properties) {
     this(clock, properties, DEFAULT_MAX_TRACKED_KEYS);
   }
