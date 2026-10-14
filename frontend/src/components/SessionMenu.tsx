@@ -15,16 +15,23 @@ export function SessionMenu() {
   }
 
   async function handleLogout() {
+    let serverLogoutFailed = false;
     try {
       await logout();
-    } finally {
-      // Aunque el servidor no responda, la sesión local se cierra para no dejar datos visibles.
-      queryClient.setQueryData(SESSION_QUERY_KEY, null);
-      queryClient.removeQueries({
-        predicate: (query) => query.queryKey[0] !== SESSION_QUERY_KEY[0],
-      });
-      navigate('/ingresar', { replace: true });
+    } catch {
+      // La cookie podría seguir vigente en el servidor: se avisa al usuario en el ingreso.
+      serverLogoutFailed = true;
     }
+    // Se navega antes de vaciar la sesión: así RequireRole no redirige primero con su propio estado.
+    navigate('/ingresar', {
+      replace: true,
+      state: serverLogoutFailed ? { logoutFailed: true } : null,
+    });
+    // Aunque el servidor no responda, la sesión local se cierra para no dejar datos visibles.
+    queryClient.setQueryData(SESSION_QUERY_KEY, null);
+    queryClient.removeQueries({
+      predicate: (query) => query.queryKey[0] !== SESSION_QUERY_KEY[0],
+    });
   }
 
   return (

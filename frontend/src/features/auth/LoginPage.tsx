@@ -10,7 +10,15 @@ import { login, type LoginRequest } from './auth-api';
 import { homePathFor } from './use-session';
 
 interface LocationState {
-  from?: string;
+  from?: unknown;
+  logoutFailed?: boolean;
+}
+
+/** Solo rutas internas: evita redirecciones abiertas hacia otros sitios. */
+function toInternalPath(value: unknown): string | undefined {
+  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
+    ? value
+    : undefined;
 }
 
 const ACCOUNT_TYPES: ReadonlyArray<{ value: LoginRequest['accountType']; label: string }> = [
@@ -23,7 +31,9 @@ export function LoginPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const [formError, setFormError] = useState<string | null>(null);
-  const redirectTo = (location.state as LocationState | null)?.from;
+  const locationState = location.state as LocationState | null;
+  const redirectTo = toInternalPath(locationState?.from);
+  const logoutFailed = locationState?.logoutFailed === true;
   const {
     register,
     handleSubmit,
@@ -55,6 +65,12 @@ export function LoginPage() {
       {redirectTo && (
         <p role="status" className="mt-4 rounded-lg bg-surface-muted p-3 text-sm">
           Ingrese para continuar.
+        </p>
+      )}
+      {logoutFailed && (
+        <p role="alert" className="mt-4 rounded-lg border border-danger/40 p-3 text-danger">
+          No se pudo cerrar la sesión en el servidor. Cierre el navegador si usa un equipo
+          compartido.
         </p>
       )}
       {formError && (

@@ -8,7 +8,9 @@ export default defineConfig({
   server: {
     port: 5173,
     // Mismo origen en desarrollo: la cookie SameSite=Strict y el CSRF funcionan sin CORS.
-    proxy: { '/api': 'http://localhost:8080' },
+    // changeOrigin en false conserva el Host original; si no, el backend vería Origin distinto
+    // de Host y rechazaría la petición por CORS.
+    proxy: { '/api': { target: 'http://localhost:8080', changeOrigin: false } },
   },
   test: {
     environment: 'jsdom',

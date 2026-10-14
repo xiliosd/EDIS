@@ -1,7 +1,11 @@
-import { screen } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { App } from '../../App';
+import { createAppQueryClient } from '../../services/query-client';
 import { server } from '../../test/msw-server';
 import { renderApp } from '../../test/render-app';
 
@@ -28,12 +32,39 @@ beforeEach(() => {
 
 describe('LoginPage', () => {
   it('valida los campos obligatorios sin llamar al servidor', async () => {
+    let loginCalled = false;
+    server.use(
+      http.post('*/api/v1/auth/login', () => {
+        loginCalled = true;
+        return HttpResponse.json(RESPONDENT_SESSION);
+      }),
+    );
     renderApp('/ingresar');
     await userEvent.click(await screen.findByRole('button', { name: 'Ingresar' }));
 
     expect(await screen.findByText('Ingrese su usuario')).toBeInTheDocument();
     expect(screen.getByText('Ingrese su clave')).toBeInTheDocument();
     expect(screen.getByLabelText('Usuario')).toHaveAttribute('aria-invalid', 'true');
+    expect(loginCalled).toBe(false);
+  });
+
+  it('ignora una redirección externa y usa la pantalla inicial del rol', async () => {
+    server.use(http.post('*/api/v1/auth/login', () => HttpResponse.json(RESPONDENT_SESSION)));
+    render(
+      <QueryClientProvider client={createAppQueryClient()}>
+        <MemoryRouter
+          initialEntries={[{ pathname: '/ingresar', state: { from: '//evil.example' } }]}
+        >
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await userEvent.type(await screen.findByLabelText('Usuario'), 'PRUEBA01');
+    await userEvent.type(screen.getByLabelText('Clave'), 'Clave#01');
+    await userEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
+
+    expect(await screen.findByRole('heading', { name: 'Encuesta EDIN 2026' })).toBeInTheDocument();
   });
 
   it('lleva al encuestado a la encuesta después de ingresar', async () => {
