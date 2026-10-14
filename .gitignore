@@ -1,0 +1,26 @@
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+
+# Front
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Back
+target/
+*.class
+*.log
+
+# Datos de reglas en tiempo de ejecución (el volumen vive fuera del repo)
+rules-data/
+
+# IDE / SO
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
