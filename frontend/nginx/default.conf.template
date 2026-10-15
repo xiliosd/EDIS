@@ -9,6 +9,8 @@ server {
 
     location /api/ {
         proxy_pass ${BACKEND_URL};
+        # Host original (con puerto) para que el backend reconozca las peticiones del mismo origen.
+        # nosemgrep: generic.nginx.security.request-host-used.request-host-used
         proxy_set_header Host $http_host;
         # Se sobrescribe (no se anexa) para que el cliente no pueda falsificar su IP.
         proxy_set_header X-Forwarded-For $remote_addr;

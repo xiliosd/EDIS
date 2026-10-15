@@ -4,15 +4,19 @@ updates:
     directory: /backend
     schedule: { interval: weekly }
     target-branch: develop
+    cooldown: { default-days: 7 }
   - package-ecosystem: npm
     directory: /frontend
     schedule: { interval: weekly }
     target-branch: develop
+    cooldown: { default-days: 7 }
   - package-ecosystem: docker
     directories: [/backend, /frontend]
     schedule: { interval: weekly }
     target-branch: develop
+    cooldown: { default-days: 7 }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
     target-branch: develop
+    cooldown: { default-days: 7 }

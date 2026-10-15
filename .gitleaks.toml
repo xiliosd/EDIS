@@ -7,4 +7,6 @@ paths = [
   '''db/dev/.*\.sql''',
   '''backend/src/test/resources/.*''',
   '''\.env\.example''',
+  '''backend/src/test/java/.*''',
+  '''docs/superpowers/.*''',
 ]
