@@ -1,7 +1,9 @@
 package co.gov.dane.edi.security;
 
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -29,10 +31,15 @@ public record SessionPrincipal(String subject, Set<Role> roles, String departmen
     List<String> roleNames = jwt.getClaimAsStringList(SessionTokenService.ROLES_CLAIM);
     Set<Role> roles = EnumSet.noneOf(Role.class);
     if (roleNames != null) {
-      roleNames.forEach(name -> roles.add(Role.valueOf(name)));
+      // Un rol desconocido (p. ej. de una versión anterior) se ignora en vez de provocar un 500.
+      roleNames.forEach(name -> parseRole(name).ifPresent(roles::add));
     }
     return new SessionPrincipal(
         jwt.getSubject(), roles, jwt.getClaimAsString(SessionTokenService.DEPARTMENT_CLAIM));
+  }
+
+  private static Optional<Role> parseRole(String name) {
+    return Arrays.stream(Role.values()).filter(role -> role.name().equals(name)).findFirst();
   }
 
   public boolean isRespondent() {

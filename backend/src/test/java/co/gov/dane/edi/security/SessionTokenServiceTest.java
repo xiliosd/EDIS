@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.EnumSet;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseCookie;
@@ -42,6 +43,22 @@ class SessionTokenServiceTest {
     assertThat(jwt.getClaimAsStringList(SessionTokenService.ROLES_CLAIM))
         .containsExactly("ADMIN_TERRITORIAL");
     assertThat(SessionPrincipal.fromJwt(jwt)).isEqualTo(principal);
+  }
+
+  @Test
+  void ignoresUnknownRoleNamesInValidlySignedToken() {
+    var principal =
+        SessionPrincipal.administrator("adm.bogota", EnumSet.of(Role.ADMIN_TERRITORIAL), "11");
+    Jwt jwt = decoder.decode(service.issueToken(principal));
+    Jwt withUnknownRole =
+        Jwt.withTokenValue(jwt.getTokenValue())
+            .headers(headers -> headers.putAll(jwt.getHeaders()))
+            .claims(claims -> claims.putAll(jwt.getClaims()))
+            .claim(SessionTokenService.ROLES_CLAIM, List.of("ADMIN_TERRITORIAL", "FANTASMA"))
+            .build();
+
+    assertThat(SessionPrincipal.fromJwt(withUnknownRole).roles())
+        .containsExactly(Role.ADMIN_TERRITORIAL);
   }
 
   @Test

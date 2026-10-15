@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -62,9 +63,11 @@ public class SecurityConfig {
               } else {
                 authorize.requestMatchers(DOCUMENTATION_PATHS).hasRole(Role.ADMIN_NACIONAL.name());
               }
+              // Los administradores del cuestionario solo consultan; responder es del encuestado.
               authorize
-                  .requestMatchers("/api/v1/survey/**")
+                  .requestMatchers(HttpMethod.GET, "/api/v1/survey/**")
                   .hasAnyRole(Role.ENCUESTADO.name(), Role.ADMIN_CUESTIONARIO.name());
+              authorize.requestMatchers("/api/v1/survey/**").hasRole(Role.ENCUESTADO.name());
               authorize.requestMatchers("/api/v1/admin/**").hasAnyRole(administratorRoles);
               authorize.anyRequest().authenticated();
             })

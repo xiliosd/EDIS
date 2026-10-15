@@ -78,6 +78,19 @@ class SecurityConfigIT extends OracleIntegrationTest {
   }
 
   @Test
+  void questionnaireAdministratorCanReadButNotWriteSurvey() throws Exception {
+    Cookie session =
+        sessionFor(
+            SessionPrincipal.administrator(
+                "adm.nacional", EnumSet.of(Role.ADMIN_CUESTIONARIO), null),
+            Instant.now());
+    mockMvc.perform(get("/api/v1/survey/probe").cookie(session)).andExpect(status().isOk());
+    mockMvc
+        .perform(post("/api/v1/survey/probe").cookie(session).with(realCsrf(mockMvc)))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   void tamperedTokenIsRejectedAndCookieCleared() throws Exception {
     Cookie session = sessionFor(SessionPrincipal.respondent("1000000001"), Instant.now());
     Cookie tampered = new Cookie(SessionTokenService.SESSION_COOKIE_NAME, session.getValue() + "x");
