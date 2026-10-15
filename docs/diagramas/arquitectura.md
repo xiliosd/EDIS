@@ -5,5 +5,5 @@ flowchart LR
   navegador[Navegador] -- HTTPS --> nginx[frontend: nginx + React]
   nginx -- "/api (cookie EDI_SESSION + X-XSRF-TOKEN)" --> api[backend: Spring Boot 4]
   api -- "JDBC (DANE_EDI_WEB)" --> oracle[(Oracle DANE_DIRPEN)]
-  api -- "lectura/escritura" --> reglas[(Volumen rules-data: JSON de reglas (Fase 1: solo lectura))]
+  api -. "Fase 2+: lectura/escritura" .-> reglas[("Volumen rules-data: JSON de reglas (sin uso en Fase 1)")]
 ```

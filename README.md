@@ -25,7 +25,7 @@ Prefijo `/api/v1`; errores en RFC 7807 (`application/problem+json`). Swagger UI 
 | Verbo | Ruta | Descripción |
 | :-- | :-- | :-- |
 | `GET` | `/api/v1/auth/csrf` | Entrega la cookie `XSRF-TOKEN` |
-| `POST` | `/api/v1/auth/login` | Inicia sesión (cookie `EDI_SESSION`); cuerpo `username` y `password` |
+| `POST` | `/api/v1/auth/login` | Inicia sesión (cookie `EDI_SESSION`); cuerpo `username`, `password` y `accountType` (`RESPONDENT` \| `ADMINISTRATOR`) |
 | `POST` | `/api/v1/auth/logout` | Cierra la sesión |
 | `GET` | `/api/v1/auth/me` | Consulta la sesión actual |
 | `GET` | `/api/v1/survey/chapters` | Lista los capítulos del cuestionario |
@@ -104,7 +104,7 @@ Imágenes (usuario no root, versión base fija, healthcheck, etiquetas de respon
 - `frontend/Dockerfile`: multi-stage, `node:22.23.3-slim` para compilar y
   `nginxinc/nginx-unprivileged:1.30.3-alpine3.23` para servir; nginx hace de proxy de `/api` hacia
   `BACKEND_URL` y es el borde (`X-Forwarded-For`). No arranca si el host de `BACKEND_URL` no resuelve.
-- Volumen `rules-data` (`/data/rules`, variable `RULES_DIR`): JSON de saltos y validaciones. El backend
+- Volumen `rules-data` (`/data/rules`, variable `RULES_DIR`): JSON de saltos y validaciones (sin uso en la Fase 1; se leerá desde la Fase 2). El backend
   corre en **una sola instancia** (decisión D6).
 
 **Local con contenedores**
@@ -146,6 +146,12 @@ propias (`DB_SCHEMA=DANE_DIRPEN` en el institucional, `COOKIE_SECURE=true`, `SWA
 > **Pendiente:** las etapas de *staging* y producción del pipeline aún no están implementadas; hoy
 > `ci.yml` cubre hasta imágenes y E2E.
 
+**`CORS_ALLOWED_ORIGIN` y nginx.** Debe ser exactamente el origen público con el que el navegador abre
+la aplicación (esquema + host + puerto), incluso cuando entra por nginx. nginx reenvía
+`X-Forwarded-Proto` y el `RemoteIpValve` de Tomcat hace que la petición aparente estar en el puerto por
+defecto; así el backend aplica CORS también a los POST del mismo origen. Si el valor no coincide, el
+ingreso responde 403 «Invalid CORS request».
+
 Detrás de un balanceador delante de nginx, configure los proxies de confianza
 (`server.tomcat.remoteip.*`). Como mitigación real contra la inundación de intentos de ingreso, aplique
 rate limiting en el proxy o balanceador (el bloqueo en memoria es por instancia).
@@ -163,11 +169,11 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `ORACLE_DEV_ADMIN_PASSWORD` | Clave de administrador de la Oracle de desarrollo (solo compose) | Solo dev | sin valor real; cámbiela |
 | `SURVEY_CODE` | Encuesta activa (`EDIN` o `EDID`) | No | `EDIN` |
 | `SURVEY_YEAR` | Año de la encuesta | Sí | `2026` |
-| `RULES_DIR` | Carpeta de los JSON de reglas | No | `/data/rules` |
+| `RULES_DIR` | Carpeta de los JSON de reglas (sin uso en la Fase 1) | No | `/data/rules` |
 | `JWT_SECRET` | Secreto de firma de la sesión (mínimo 32 caracteres aleatorios) | Sí | genere con `openssl rand -base64 48` |
 | `SESSION_MINUTES` | Duración de la sesión | No | `30` |
 | `COOKIE_SECURE` | Atributo `Secure` de la cookie; `true` con HTTPS | No | `true` (`false` en localhost) |
-| `CORS_ALLOWED_ORIGIN` | Origen permitido por CORS | Sí | `http://localhost:8081` |
+| `CORS_ALLOWED_ORIGIN` | Origen público exacto del navegador (esquema+host+puerto), también detrás de nginx; ver Deployment | Sí | `http://localhost:8081` |
 | `SWAGGER_ENABLED` | Habilita OpenAPI y Swagger UI | No | `false` (`true` en dev y QA) |
 | `SWAGGER_PUBLIC` | Swagger abierto sin rol; `false` limita a `ADMIN_NACIONAL` | No | `false` |
 | `LOG_FORMAT` | Formato de logs estructurados | No | `ecs` |
@@ -219,7 +225,7 @@ curl -s -c cookies.txt "$BASE/api/v1/auth/csrf" > /dev/null
 XSRF=$(awk '$6=="XSRF-TOKEN"{print $7}' cookies.txt)
 curl -s -b cookies.txt -c cookies.txt -X POST "$BASE/api/v1/auth/login" \
   -H "Content-Type: application/json" -H "X-XSRF-TOKEN: $XSRF" \
-  -d '{"username":"PRUEBA01","password":"<clave de db/dev/data.sql>"}'
+  -d '{"username":"PRUEBA01","password":"<clave de db/dev/data.sql>","accountType":"RESPONDENT"}'
 curl -s -b cookies.txt "$BASE/api/v1/survey/chapters"
 ```
 

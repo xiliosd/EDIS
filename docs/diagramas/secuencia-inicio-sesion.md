@@ -16,7 +16,7 @@ sequenceDiagram
     O-->>B: Cuenta
     B->>B: Comparación en tiempo constante, TC1 = 1 y ATV = 1
   else Administrador
-    B->>O: SELECT ... FROM GRAL_USUARIOS_ADM WHERE COD_USUA = :usuario
+    B->>O: SELECT ... FROM GRAL_USUARIOS_ADM WHERE UPPER(COD_USUA) = UPPER(:username) AND PROY LIKE :project
     O-->>B: Cuenta y ROL
     B->>B: Comparación en tiempo constante de la clave y mapeo de ROL a roles
   end
