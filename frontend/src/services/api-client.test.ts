@@ -89,4 +89,8 @@ describe('apiClient', () => {
     expect(readCookie('XSRF-TOKEN', 'OTRO=1; XSRF-TOKEN=abc%3D')).toBe('abc=');
     expect(readCookie('XSRF-TOKEN', 'X-XSRF-TOKEN=no')).toBeUndefined();
   });
+
+  it('devuelve undefined si el valor de la cookie está mal codificado', () => {
+    expect(readCookie('XSRF-TOKEN', 'XSRF-TOKEN=%E0%A4%A')).toBeUndefined();
+  });
 });

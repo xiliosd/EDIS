@@ -12,7 +12,12 @@ export function readCookie(
   for (const pair of cookieSource.split(';')) {
     const [rawName, ...rawValue] = pair.trim().split('=');
     if (rawName === name) {
-      return decodeURIComponent(rawValue.join('='));
+      try {
+        return decodeURIComponent(rawValue.join('='));
+      } catch {
+        // Valor con porcentaje mal formado: se trata como ausente en vez de romper la petición.
+        return undefined;
+      }
     }
   }
   return undefined;
