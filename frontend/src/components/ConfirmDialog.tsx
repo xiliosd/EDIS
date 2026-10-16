@@ -25,6 +25,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -51,16 +52,22 @@ export function ConfirmDialog({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      aria-describedby={descriptionId}
       onCancel={(event) => {
         event.preventDefault();
-        onCancel();
+        // Mientras se guarda, Esc no puede cerrar el diálogo: reabriría el botón de guardar.
+        if (!busy) {
+          onCancel();
+        }
       }}
       className="m-auto max-w-md rounded-xl bg-surface p-6 text-ink backdrop:bg-ink/50"
     >
       <h2 id={titleId} className="text-lg font-semibold">
         {title}
       </h2>
-      <div className="mt-2 text-ink-muted">{children}</div>
+      <div id={descriptionId} className="mt-2 text-ink-muted">
+        {children}
+      </div>
       <div className="mt-6 flex flex-wrap justify-end gap-3">
         <Button variant="secondary" onClick={onCancel} disabled={busy}>
           {cancelLabel}

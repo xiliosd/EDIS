@@ -54,7 +54,38 @@ const RULES = {
   validaciones: { C01T: { tipo: 'entero', min: 0, max: 60 } },
 };
 
+const NEXT_PAGE_HEADING = 'C. Página siguiente ficticia';
+
 let savedBody: unknown;
+
+function nextPageHandler() {
+  return http.get('*/api/v1/survey/pages/C2', () =>
+    HttpResponse.json({
+      ...page(),
+      pageCode: 'C2',
+      chapterTitle: 'Página siguiente ficticia',
+      entries: [],
+    }),
+  );
+}
+
+function saveFails(status: number, detail: string) {
+  return http.put('*/api/v1/survey/pages/C1/answers', () =>
+    HttpResponse.json({ title: 'Error', status, detail }, { status }),
+  );
+}
+
+/** Responde la página C1 de forma válida, pide guardar y confirma. */
+async function answerAndConfirm() {
+  const group = await screen.findByRole('radiogroup', { name: /C01A/ });
+  await userEvent.click(within(group).getByRole('radio', { name: 'Sí' }));
+  await userEvent.click(
+    within(screen.getByRole('radiogroup', { name: /C01B/ })).getByRole('radio', { name: 'Sí' }),
+  );
+  await userEvent.type(screen.getByLabelText(/Años en la entidad/), '12');
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar página' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar y continuar' }));
+}
 
 beforeEach(() => {
   savedBody = undefined;
@@ -133,9 +164,7 @@ describe('SurveyPageView', () => {
         savedBody = await request.json();
         return HttpResponse.json({ pageCode: 'C1', nextPageCode: 'C2' });
       }),
-      http.get('*/api/v1/survey/pages/C2', () =>
-        HttpResponse.json({ ...page(), pageCode: 'C2', entries: [] }),
-      ),
+      nextPageHandler(),
     );
     renderApp('/encuesta/pagina/C1');
     const group = await screen.findByRole('radiogroup', { name: /C01A/ });
@@ -149,8 +178,12 @@ describe('SurveyPageView', () => {
     );
     await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar y continuar' }));
 
-    await screen.findByRole('heading', { level: 1, name: 'C. Experiencia personal de trabajo' });
-    expect(savedBody).toEqual({ answers: { C01A: '2', C01B: '', C01T: '12' } });
+    expect(
+      await screen.findByRole('heading', { level: 1, name: NEXT_PAGE_HEADING }),
+    ).toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(savedBody).toEqual({ answers: { C01A: '2', C01B: '', C01T: '12' } }),
+    );
   });
 
   it('pinta los errores que devuelve el backend', async () => {
@@ -228,9 +261,7 @@ describe('SurveyPageView', () => {
         savedBody = await request.json();
         return HttpResponse.json({ pageCode: 'C1', nextPageCode: 'C2' });
       }),
-      http.get('*/api/v1/survey/pages/C2', () =>
-        HttpResponse.json({ ...page(), pageCode: 'C2', entries: [] }),
-      ),
+      nextPageHandler(),
     );
     renderApp('/encuesta/pagina/C1');
 
@@ -242,6 +273,103 @@ describe('SurveyPageView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Guardar página' }));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar y continuar' }));
 
+    expect(
+      await screen.findByRole('heading', { level: 1, name: NEXT_PAGE_HEADING }),
+    ).toBeInTheDocument();
     await vi.waitFor(() => expect(savedBody).toEqual({ answers: { C02S: '8', C02X: '1' } }));
+  });
+
+  it('pasa a terminar la encuesta cuando no hay página siguiente', async () => {
+    server.use(
+      http.put('*/api/v1/survey/pages/C1/answers', () =>
+        HttpResponse.json({ pageCode: 'C1', nextPageCode: null }),
+      ),
+    );
+    renderApp('/encuesta/pagina/C1');
+    await answerAndConfirm();
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Terminar la encuesta' }),
+    ).toBeInTheDocument();
+  });
+
+  it('ante un 409 muestra el detalle y recarga la página ya guardada', async () => {
+    let pageRequests = 0;
+    server.use(
+      http.get('*/api/v1/survey/pages/C1', () => {
+        pageRequests += 1;
+        return HttpResponse.json(
+          pageRequests === 1 ? page() : page('SAVED', { C01A: '1', C01B: '1', C01T: '12' }),
+        );
+      }),
+      saveFails(409, 'Esta página ya fue guardada.'),
+    );
+    renderApp('/encuesta/pagina/C1');
+    await answerAndConfirm();
+
+    expect(await screen.findByRole('list', { name: 'Respuestas guardadas' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Esta página ya fue guardada.');
+    expect(screen.queryByRole('button', { name: 'Guardar página' })).not.toBeInTheDocument();
+  });
+
+  it('muestra un mensaje genérico si el guardado falla por otra causa', async () => {
+    server.use(saveFails(500, 'Error interno.'));
+    renderApp('/encuesta/pagina/C1');
+    await answerAndConfirm();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No fue posible guardar. Intente de nuevo.',
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('muestra el detalle de un 422 que no trae errores por campo', async () => {
+    server.use(saveFails(422, 'Las respuestas no son válidas.'));
+    renderApp('/encuesta/pagina/C1');
+    await answerAndConfirm();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Las respuestas no son válidas.');
+  });
+
+  it('devuelve a cero una casilla que deja de aplicar y vuelve a aplicar', async () => {
+    server.use(
+      http.get('*/api/v1/survey/rules', () =>
+        HttpResponse.json({
+          ...RULES,
+          saltos: [
+            {
+              id: 'legacy-C01A',
+              si: { pregunta: 'C01A', op: 'eq', valor: '2' },
+              entonces: { accion: 'deshabilitar', preguntas: ['C02X'] },
+            },
+          ],
+          validaciones: {},
+        }),
+      ),
+      http.get('*/api/v1/survey/pages/C1', () =>
+        HttpResponse.json({
+          ...page(),
+          entries: [
+            item('C01A', '¿Pregunta ficticia C01A?'),
+            item('C02X', 'Marque si aplica', 'CHECKBOX', []),
+          ],
+        }),
+      ),
+      http.put('*/api/v1/survey/pages/C1/answers', async ({ request }) => {
+        savedBody = await request.json();
+        return HttpResponse.json({ pageCode: 'C1', nextPageCode: 'C2' });
+      }),
+      nextPageHandler(),
+    );
+    renderApp('/encuesta/pagina/C1');
+    const group = await screen.findByRole('radiogroup', { name: /C01A/ });
+    await userEvent.click(screen.getByRole('checkbox', { name: /Marque si aplica/ }));
+    await userEvent.click(within(group).getByRole('radio', { name: 'No' }));
+    await userEvent.click(within(group).getByRole('radio', { name: 'Sí' }));
+
+    expect(screen.getByRole('checkbox', { name: /Marque si aplica/ })).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar página' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar y continuar' }));
+    await vi.waitFor(() => expect(savedBody).toEqual({ answers: { C01A: '1', C02X: '0' } }));
   });
 });

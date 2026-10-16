@@ -39,6 +39,8 @@ export function SurveyPageView() {
   const rules = useQuery({ queryKey: RULES_QUERY_KEY, queryFn: fetchRules, staleTime: Infinity });
   const title = page.data ? `${page.data.chapterCode}. ${page.data.chapterTitle}` : 'Encuesta';
   useDocumentTitle(title);
+  // El 409 recarga la página y desmonta el formulario; el aviso vive aquí para no perderse.
+  const [conflict, setConflict] = useState<{ pageCode: string; message: string } | null>(null);
 
   if (page.isPending || rules.isPending) {
     return <p aria-busy="true">Cargando la página…</p>;
@@ -60,6 +62,14 @@ export function SurveyPageView() {
       <h1 id="titulo-pagina" className="text-2xl font-semibold">
         {title}
       </h1>
+      {conflict?.pageCode === pageCode && (
+        <p
+          role="alert"
+          className="mt-6 rounded-xl border border-danger/40 bg-surface p-4 text-danger"
+        >
+          {conflict.message}
+        </p>
+      )}
       {page.data.state === 'LOCKED' && (
         <div className="mt-6">
           <p>Complete primero las páginas anteriores.</p>
@@ -77,13 +87,24 @@ export function SurveyPageView() {
         </>
       )}
       {page.data.state === 'AVAILABLE' && (
-        <PageForm key={pageCode} page={page.data} rules={rules.data} />
+        <PageForm
+          key={pageCode}
+          page={page.data}
+          rules={rules.data}
+          onConflict={(message) => setConflict({ pageCode, message })}
+        />
       )}
     </section>
   );
 }
 
-function PageForm({ page, rules }: { page: PageDetail; rules: RuleSet }) {
+interface PageFormProps {
+  page: PageDetail;
+  rules: RuleSet;
+  onConflict: (message: string) => void;
+}
+
+function PageForm({ page, rules, onConflict }: PageFormProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const entries = useMemo(() => page.entries ?? [], [page.entries]);
@@ -101,23 +122,34 @@ function PageForm({ page, rules }: { page: PageDetail; rules: RuleSet }) {
   const evaluation = evaluate(rules, values, columns);
   // El archivo de reglas cubre toda la encuesta: solo cuentan las preguntas de esta página.
   const pageDisabled = evaluation.disabled.filter((column) => columns.includes(column));
+  const checkboxColumns = useMemo(
+    () =>
+      new Set(
+        items
+          .filter((entry) => entry.answer?.inputType === 'CHECKBOX')
+          .map((entry) => entry.answer?.columnCode ?? ''),
+      ),
+    [items],
+  );
   const disabled = new Set(pageDisabled);
   const [summary, setSummary] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<PageValues | null>(null);
   const [alertMessage, setAlertMessage] = useState('');
   const summaryRef = useRef<HTMLDivElement>(null);
   const { isDirty } = form.formState;
-  useUnsavedChanges(isDirty && pending === null);
+  useUnsavedChanges(isDirty);
 
-  // Una pregunta que deja de aplicar pierde su valor, como en el formulario heredado.
+  // Una pregunta que deja de aplicar pierde su valor, como en el formulario heredado. La casilla
+  // vuelve a "0" (no marcada) para que, si vuelve a aplicar, no quede vacía y sin responder.
   const disabledKey = pageDisabled.join(',');
   useEffect(() => {
     for (const column of disabledKey ? disabledKey.split(',') : []) {
-      if (form.getValues(column)) {
-        form.setValue(column, '');
+      const clearedValue = checkboxColumns.has(column) ? '0' : '';
+      if (form.getValues(column) !== clearedValue) {
+        form.setValue(column, clearedValue);
       }
     }
-  }, [disabledKey, form]);
+  }, [disabledKey, checkboxColumns, form]);
 
   useEffect(() => {
     if (Object.keys(summary).length > 0) {
@@ -147,9 +179,13 @@ function PageForm({ page, rules }: { page: PageDetail; rules: RuleSet }) {
     onError: (error) => {
       setPending(null);
       if (error instanceof ApiError && error.status === 422) {
-        showErrors(error.fieldErrors);
+        if (Object.keys(error.fieldErrors).length > 0) {
+          showErrors(error.fieldErrors);
+        } else {
+          setAlertMessage(error.detail);
+        }
       } else if (error instanceof ApiError && error.status === 409) {
-        setAlertMessage(error.detail);
+        onConflict(error.detail);
         void queryClient.invalidateQueries({ queryKey: pageQueryKey(page.pageCode ?? '') });
       } else {
         setAlertMessage('No fue posible guardar. Intente de nuevo.');
@@ -247,7 +283,11 @@ function PageForm({ page, rules }: { page: PageDetail; rules: RuleSet }) {
         confirmLabel="Guardar y continuar"
         cancelLabel="Revisar de nuevo"
         busy={save.isPending}
-        onConfirm={() => pending && save.mutate(pending)}
+        onConfirm={() => {
+          if (pending && !save.isPending) {
+            save.mutate(pending);
+          }
+        }}
         onCancel={() => setPending(null)}
       >
         Después de guardar no podrá cambiar las respuestas de esta página.
