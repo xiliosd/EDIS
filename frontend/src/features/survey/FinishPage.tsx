@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../../components/Button';
 import { ErrorState } from '../../components/ErrorState';
 import { LinkButton } from '../../components/LinkButton';
@@ -10,9 +10,19 @@ import { fetchProgress, finishSurvey, PROGRESS_QUERY_KEY } from './survey-api';
 // OBS es VARCHAR2(1100) en EDIN_20_CAP_H_PREV_PRACT.
 const MAX_OBSERVATIONS = 1100;
 
-function ReceiptMessage({ receipt }: { receipt: string }) {
+function ReceiptMessage({ receipt, moveFocus }: { receipt: string; moveFocus: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Al terminar, el formulario desaparece: se mueve el foco al radicado (WCAG 2.4.3).
+  useEffect(() => {
+    if (moveFocus) containerRef.current?.focus();
+  }, [moveFocus]);
   return (
-    <div role="status" className="mt-6 rounded-xl border border-success/40 bg-surface p-4">
+    <div
+      ref={containerRef}
+      tabIndex={-1}
+      role="status"
+      className="mt-6 rounded-xl border border-success/40 bg-surface p-4 outline-offset-2"
+    >
       <p className="font-medium">Encuesta terminada. Gracias por su participación.</p>
       <p className="mt-1">
         Su radicado es <strong className="font-mono">{receipt}</strong>. Guárdelo como constancia.
@@ -57,7 +67,7 @@ export function FinishPage() {
           onRetry={() => void progress.refetch()}
         />
       )}
-      {receipt && <ReceiptMessage receipt={receipt} />}
+      {receipt && <ReceiptMessage receipt={receipt} moveFocus={finish.isSuccess} />}
       {progress.data && !receipt && !allSaved && (
         <div className="mt-6">
           <p>Faltan páginas por guardar.</p>
@@ -97,7 +107,10 @@ export function FinishPage() {
                 aria-invalid={observationsError ? true : undefined}
                 aria-describedby={observationsError ? `${errorId} ${counterId}` : counterId}
                 value={observations}
-                onChange={(event) => setObservations(event.target.value)}
+                onChange={(event) => {
+                  if (finish.isError) finish.reset();
+                  setObservations(event.target.value);
+                }}
                 className="mt-1 block w-full rounded-lg border border-ink-muted/40 bg-surface p-3 text-base text-ink"
               />
               <p id={counterId} className="mt-1 text-sm text-ink-muted">

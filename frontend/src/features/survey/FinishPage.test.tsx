@@ -67,6 +67,7 @@ describe('FinishPage', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('ABCDE-23456');
     expect(finishBody).toEqual({ observations: 'Gracias' });
     expect(screen.queryByLabelText('Observaciones (opcional)')).not.toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveFocus();
   });
 
   it('no permite terminar con páginas pendientes', async () => {
@@ -135,6 +136,21 @@ describe('FinishPage', () => {
     const field = screen.getByLabelText('Observaciones (opcional)');
     expect(field).toHaveAttribute('aria-invalid', 'true');
     expect(field.getAttribute('aria-describedby')).toContain(alert.id);
+  });
+
+  it('limpia el error al editar el campo', async () => {
+    useProgress({});
+    server.use(
+      http.post('*/api/v1/survey/finish', () =>
+        HttpResponse.json({ title: 'Conflicto', status: 409, detail: 'Falla.' }, { status: 409 }),
+      ),
+    );
+    renderApp('/encuesta/terminar');
+    const field = await screen.findByLabelText('Observaciones (opcional)');
+    await userEvent.click(screen.getByRole('button', { name: 'Terminar la encuesta' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await userEvent.type(field, 'a');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('actualiza el título del documento', async () => {
