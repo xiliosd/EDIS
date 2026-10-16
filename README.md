@@ -6,8 +6,8 @@ PHP heredado (`FORMULARIO_WEB`) sobre la misma base Oracle (`DANE_DIRPEN`), sin 
 
 La Fase 1 entrega la base técnica: inicio y cierre de sesión (encuestados y administradores), lectura
 del cuestionario (capítulos B–H) y lista de capítulos. La Fase 2 agrega el flujo del encuestado:
-avance por página, saltos en vivo, guardado único confirmado, observaciones y radicado. Monorepo con dos aplicaciones independientes:
-`backend/` (Spring Boot) y `frontend/` (React).
+avance por página, saltos en vivo, guardado único confirmado, observaciones y radicado. Monorepo con
+dos aplicaciones independientes: `backend/` (Spring Boot) y `frontend/` (React).
 
 ## Enlaces de documentación del proyecto
  - [Especificación de diseño](docs/superpowers/specs/2026-10-14-formulario-web-design.md)
@@ -33,13 +33,19 @@ Prefijo `/api/v1`; errores en RFC 7807 (`application/problem+json`). Swagger UI 
 | `GET` | `/api/v1/auth/me` | Consulta la sesión actual |
 | `GET` | `/api/v1/survey/chapters` | Lista los capítulos del cuestionario |
 | `GET` | `/api/v1/survey/chapters/{chapterCode}` | Consulta un capítulo con sus preguntas |
-| `GET` | `/api/v1/survey/progress` | Avance del encuestado por página (`finished` es `true` con las 9 guardadas) |
+| `GET` | `/api/v1/survey/progress` | Avance por página (`finished`: las 9 guardadas) |
 | `GET` | `/api/v1/survey/rules` | Reglas vigentes (saltos y validaciones) |
 | `GET` | `/api/v1/survey/pages/{pagina}` | Consulta una página con sus respuestas guardadas |
-| `PUT` | `/api/v1/survey/pages/{pagina}/answers` | Guarda una página una sola vez (409 si ya estaba guardada; 422 con `errors`) |
-| `POST` | `/api/v1/survey/finish` | Termina la encuesta y registra las observaciones; entrega el radicado |
+| `PUT` | `/api/v1/survey/pages/{pagina}/answers` | Guarda una página, una sola vez |
+| `POST` | `/api/v1/survey/finish` | Registra las observaciones opcionales; entrega el radicado |
 
 Todo método distinto de `GET`/`HEAD` exige la cabecera `X-XSRF-TOKEN`.
+
+Límites de `PUT .../answers`: como máximo 200 respuestas por página (400 «Envíe como máximo 200
+respuestas por página») y 4000 caracteres por valor (422 con «La respuesta es demasiado larga.» en
+`errors`). Las claves desconocidas se devuelven en `errors` recortadas a 30 caracteres.
+`POST /finish` es idempotente: con las 9 páginas guardadas siempre devuelve el mismo radicado y
+`OBS` solo se escribe la primera vez que llega texto.
 
 ## Autores
 
@@ -89,10 +95,13 @@ Usuarios ficticios de `db/dev/data.sql`:
 Las claves de prueba están en `db/dev/data.sql`. El bloqueo ocurre tras 5 fallos en 15 minutos por
 usuario + IP.
 
-**Cada página se guarda una sola vez.** Para repetir el flujo completo hay que reiniciar el backend,
-que recarga `db/dev/data.sql`. Con compose también hace falta `docker compose down -v`, para que se
-vuelva a sembrar el volumen de reglas. Las pruebas E2E (Playwright) corren con un solo worker y sin
-reintentos, porque los datos son de escritura única y el inicio de sesión se bloquea tras 5 fallos.
+**Cada página se guarda una sola vez.** Para repetir el flujo completo hay que reiniciar el
+backend, que recarga `db/dev/data.sql`. Con compose también hace falta `docker compose down -v`,
+para que se vuelva a sembrar el volumen de reglas. Las pruebas E2E (Playwright) corren con un solo
+worker y sin reintentos, porque los datos son de escritura única y el inicio de sesión se bloquea
+tras 5 fallos. Cada proyecto de Playwright usa su propio usuario (`PRUEBA05` en Chromium,
+`PRUEBA06` en móvil); se cambian con `E2E_FLOW_USER_CHROMIUM` / `E2E_FLOW_PASSWORD_CHROMIUM` y
+`E2E_FLOW_USER_MOVIL` / `E2E_FLOW_PASSWORD_MOVIL`.
 
 Pruebas automatizadas:
 
@@ -156,7 +165,12 @@ backend); en ese caso debe ser el origen del frontend.
 
 **Actualizar las reglas.** Si `RULES_DIR/EDIN-2026.json` ya existe con `"version": 1`, hay que
 respaldarlo y borrarlo para que se siembre la versión 2 de la imagen. Hasta la Fase 3 (editor de
-reglas) es la única forma de actualizarlo.
+reglas) es la única forma de actualizarlo. En la primera carga, el backend registra un WARN si la
+semilla trae una `version` mayor que la del archivo vigente.
+
+**Cambios en las tablas `FRM_*`.** Las preguntas de cada página y las reglas efectivas se guardan en
+memoria (una sola instancia, D6). Hasta la Fase 3, un cambio en el cuestionario (`FRM_*`) o en las
+columnas de las tablas de respuesta exige reiniciar el backend.
 
 **QA y producción.** Entran por el pipeline (lint, build, pruebas, SAST/SCA, imagen, staging,
 aprobación manual, producción, smoke tests). El paso a producción exige el formato FR-FT-GST-02
@@ -190,8 +204,8 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `SURVEY_CODE` | Encuesta activa (`EDIN` o `EDID`) | No | `EDIN` |
 | `SURVEY_YEAR` | Año de la encuesta | Sí | `2026` |
 | `RULES_DIR` | Carpeta de los JSON de reglas | No | `/data/rules` |
-| `RULES_SEED_DIR` | Semilla de reglas ficticias, solo desarrollo; vacía en QA y producción | No | vacía |
-| `RECEIPT_KEY` | Clave del radicado (HMAC); al menos 32 caracteres, distinta por ambiente | Sí | sin valor real; genere una aleatoria |
+| `RULES_SEED_DIR` | Semilla de reglas ficticias; solo desarrollo | No | vacía |
+| `RECEIPT_KEY` | Clave del radicado (HMAC, mín. 32), estable por ambiente | Sí | ver nota |
 | `JWT_SECRET` | Secreto de firma de la sesión (mínimo 32 caracteres aleatorios) | Sí | genere con `openssl rand -base64 48` |
 | `SESSION_MINUTES` | Duración de la sesión | No | `30` |
 | `COOKIE_SECURE` | Atributo `Secure` de la cookie; `true` con HTTPS | No | `true` (`false` en localhost) |
@@ -203,6 +217,14 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `E2E_BASE_URL` | URL base de las pruebas E2E | No | `http://localhost:8081` |
 | `E2E_RESPONDENT_USER` | Usuario ficticio de las pruebas E2E | No | `PRUEBA01` |
 | `E2E_RESPONDENT_PASSWORD` | Clave ficticia de las pruebas E2E | No | ver `db/dev/data.sql` |
+| `E2E_FLOW_USER_CHROMIUM` | Usuario del flujo completo en Chromium | No | `PRUEBA05` |
+| `E2E_FLOW_PASSWORD_CHROMIUM` | Clave de ese usuario | No | ver `db/dev/data.sql` |
+| `E2E_FLOW_USER_MOVIL` | Usuario del flujo completo en móvil | No | `PRUEBA06` |
+| `E2E_FLOW_PASSWORD_MOVIL` | Clave de ese usuario | No | ver `db/dev/data.sql` |
+
+**`JWT_SECRET` y `RECEIPT_KEY`.** Genere cada una con `openssl rand -base64 48`. Fuera de los
+perfiles `dev` y `test`, el backend no arranca si alguna conserva el valor de ejemplo de
+`.env.example`.
 
 En CI se requiere además el secreto `NVD_API_KEY` (OWASP Dependency-Check); en PRs desde forks los
 secretos no están disponibles.
@@ -263,10 +285,15 @@ guardadas.
 2. Página: se responde; los saltos ("No aplica…") y los errores aparecen en vivo.
 3. Confirmar: "Guardar página" pide confirmar porque la escritura es única.
 4. Siguiente: al guardar, el foco pasa a la página siguiente.
-5. Terminar: con las nueve guardadas, "Terminar" ofrece las observaciones (opcionales, hasta 1100
-   caracteres, una sola vez).
-6. Radicado: se muestra el comprobante `XXXXX-XXXXX`, derivado y no reversible. Si se termina sin
-   observaciones, el formulario puede volver a mostrarse después, con el mismo radicado.
+5. Terminada: al guardar la novena página la encuesta queda terminada (D18) y se muestra el
+   radicado `XXXXX-XXXXX`, derivado y no reversible.
+6. Observaciones (opcionales, hasta 1100 caracteres, una sola vez): debajo del radicado, con
+   "Enviar observaciones". Mientras no se registren, el inicio ofrece "Agregar observaciones
+   (opcional)"; el radicado es siempre el mismo.
+
+Si la sesión vence al guardar una página, la aplicación lo avisa con un enlace para ingresar de
+nuevo y conserva las respuestas de esa página en `sessionStorage` (solo los valores, nunca el
+`C_C`) hasta volver a abrirla en la misma pestaña.
 
 Consultar el progreso con `curl` (cookie de la sesión iniciada arriba, sin escribir su valor):
 
@@ -299,13 +326,17 @@ y en la tabla de decisiones del spec.
 
 ## Decisiones de la Fase 2
 
-Detalle en la tabla de decisiones del [spec](docs/superpowers/specs/2026-10-14-formulario-web-design.md).
+Detalle en la tabla de decisiones del
+[spec](docs/superpowers/specs/2026-10-14-formulario-web-design.md).
 
 - **D15.** Las preguntas deshabilitadas por un salto se guardan como `'0'`, igual que el PHP.
 - **D16.** Navegación secuencial y guardado por página, una sola vez; sin autoguardado.
-- **D17.** El `C_C` va cifrado (AES-GCM) en la sesión y nunca se muestra; el radicado es un HMAC no reversible.
-- **D18.** "Terminar" exige las nueve páginas y guarda las observaciones en `OBS`; no se escribe `COMPLETA`.
-- **D19.** Las reglas JSON se validan estructuralmente al cargarlas; el JSON Schema llega en la Fase 3.
+- **D17.** El `C_C` va cifrado (AES-GCM) en la sesión y nunca se muestra; el radicado es un HMAC
+  no reversible.
+- **D18.** La encuesta termina con las nueve páginas guardadas; las observaciones son opcionales y
+  se guardan una sola vez en `OBS`. No se escribe `COMPLETA`.
+- **D19.** Las reglas JSON se validan estructuralmente al cargarlas; el JSON Schema llega en la
+  Fase 3.
 - **D20.** Las reglas especiales de `FrmValida.js` se migran por su intención, no por sus índices
   (ver [reglas de EDIN 2026](docs/reglas/edin-2026.md)).
 
@@ -330,9 +361,13 @@ Un test de respuesta conocida (KAT) fija el algoritmo del radicado; no contiene 
 - **ESLint 9.39.5** (marcado sin soporte por npm) porque `eslint-plugin-jsx-a11y` 6.10.2 no soporta
   ESLint 10.
 - **La EDID no tiene cuestionario 2026 en la base:** la semilla de reglas de la EDID está vacía.
-- **Sin navegación interna bloqueada** (`BrowserRouter` declarativo): solo hay `beforeunload` y una
-  confirmación al volver al inicio.
-- **El radicado depende de `RECEIPT_KEY`:** si se rota, cambian los radicados de quienes ya terminaron.
+- **Sin navegación interna bloqueada** (`BrowserRouter` declarativo, sin `useBlocker`): con
+  respuestas sin guardar solo se confirma al cerrar la pestaña (`beforeunload`), al volver al inicio
+  y al cerrar sesión. El botón Atrás del navegador no pide confirmación.
+- **Cuestionario en memoria:** un cambio en las tablas `FRM_*` exige reiniciar el backend hasta que
+  el editor de la Fase 3 invalide la caché (`QuestionnaireService.evict()`).
+- **El radicado depende de `RECEIPT_KEY`:** si se rota, cambian los radicados de quienes ya
+  terminaron.
 - **Tomcat fijado** en 11.0.26 (`tomcat.version` en `backend/pom.xml`); retirar cuando Spring Boot
   incluya esa versión o superior.
 - **Bloqueo de intentos en memoria**, por instancia; ver rate limiting en Deployment.
