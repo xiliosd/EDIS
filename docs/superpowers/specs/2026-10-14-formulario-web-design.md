@@ -50,6 +50,11 @@ funcionario y generación de claves de la muestra.
 | D12 | Administradores ingresan con COD_USUA + CLAVE (el PHP usaba solo la clave) | Evita confundir administradores con la misma clave |
 | D13 | Rol ADMIN_OPERATIVO para ROL 3 y 4 heredados (grupo operativo) | Acceso a reportes en la Fase 4 |
 | D14 | Códigos de encuesta heredados EDIN / EDID; ambas comparten las tablas EDIN_20_CAP_* | Las tablas de muestra son EDIN_MUESTRA / EDID_MUESTRA |
+| D15 | Preguntas deshabilitadas por salto se guardan como `'0'` (igual que `Buscar_Valores` del PHP) | Compatibilidad con reportes, cargas DMC y series históricas; reemplaza "se guarda NULL" de §5.1 |
+| D16 | Navegación **secuencial** y guardado **por página, una sola vez** (como el PHP): una página se habilita cuando la anterior está guardada; guardada queda en solo lectura | Reemplaza el autoguardado y la navegación libre de §6.1; no hay borradores en el servidor |
+| D17 | El `C_C` es dato personal: no viaja legible en el JWT (se cifra con AES-GCM) ni se muestra; el comprobante al terminar es un **radicado derivado** no reversible (HMAC con `RECEIPT_KEY`) | Ley 1581 |
+| D18 | "Terminar" funciona como el PHP: requiere todas las páginas guardadas y guarda las observaciones (opcionales, una sola vez) en `OBS` de la tabla H; no se escribe `COMPLETA` | La encuesta está terminada cuando todas las páginas están guardadas |
+| D19 | Las reglas JSON se validan estructuralmente al cargarlas; el JSON Schema formal llega con el editor de reglas (Fase 3) | YAGNI: en la Fase 2 las reglas solo vienen de la semilla |
 
 ## 3. Arquitectura
 
@@ -230,10 +235,10 @@ versión exacta.
 - **Ayudas:** ícono (i) con popover accesible en lugar de la ventana emergente.
 - **Saltos:** la pregunta deshabilitada se colapsa con "No aplica por su respuesta en C07A", anunciado con
   `aria-live="polite"`.
-- **Autoguardado:** debounce de 1,5 s; indicador "Guardando… / Guardado / Sin conexión, reintentando";
-  "Siguiente" guarda y avanza.
-- **Terminar:** resumen de pendientes con enlace a cada pregunta faltante; confirmación antes de finalizar;
-  luego solo lectura.
+- **Guardado (D16):** sin autoguardado. "Guardar y continuar" valida la página, pide confirmación
+  ("después no podrá modificar esta página") y guarda; aviso al salir con cambios sin guardar.
+- **Terminar (D18):** con todas las páginas guardadas, campo de observaciones opcional (máx. 1100 caracteres)
+  y pantalla final con el radicado derivado (D17).
 
 ### 6.2 Administración
 
