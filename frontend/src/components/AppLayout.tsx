@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Outlet } from 'react-router';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { Outlet, useLocation } from 'react-router';
 import { AppHeader } from './AppHeader';
 
 interface AppLayoutProps {
@@ -7,6 +7,18 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ headerActions }: AppLayoutProps) {
+  const { pathname } = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+  const previousPath = useRef(pathname);
+
+  useEffect(() => {
+    // Solo al navegar: en la primera carga el foco queda en el enlace "Saltar al contenido".
+    if (previousPath.current !== pathname) {
+      previousPath.current = pathname;
+      mainRef.current?.focus();
+    }
+  }, [pathname]);
+
   return (
     <div className="flex min-h-dvh flex-col bg-surface-muted font-sans text-ink">
       <a
@@ -16,7 +28,12 @@ export function AppLayout({ headerActions }: AppLayoutProps) {
         Saltar al contenido
       </a>
       <AppHeader actions={headerActions} />
-      <main id="contenido" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+      <main
+        ref={mainRef}
+        id="contenido"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-5xl flex-1 px-4 py-8"
+      >
         <Outlet />
       </main>
       <footer className="border-t border-ink-muted/20 py-6 text-center text-sm text-ink-muted">

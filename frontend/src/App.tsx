@@ -6,7 +6,9 @@ import { HomeRedirect } from './features/auth/HomeRedirect';
 import { LoginPage } from './features/auth/LoginPage';
 import { RequireRole } from './features/auth/RequireRole';
 import { ADMIN_ROLES } from './features/auth/use-session';
+import { FinishPage } from './features/survey/FinishPage';
 import { SurveyHomePage } from './features/survey/SurveyHomePage';
+import { SurveyPageView } from './features/survey/SurveyPageView';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
@@ -20,6 +22,22 @@ export function App() {
           element={
             <RequireRole roles={['ENCUESTADO']}>
               <SurveyHomePage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="encuesta/pagina/:pageCode"
+          element={
+            <RequireRole roles={['ENCUESTADO']}>
+              <SurveyPageView />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="encuesta/terminar"
+          element={
+            <RequireRole roles={['ENCUESTADO']}>
+              <FinishPage />
             </RequireRole>
           }
         />
