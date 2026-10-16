@@ -1,6 +1,8 @@
 package co.gov.dane.edi.repository;
 
 import co.gov.dane.edi.config.SurveyProperties;
+import co.gov.dane.edi.model.AnswerColumn;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,11 +17,12 @@ import org.springframework.stereotype.Repository;
 public class AnswerColumnRepository {
 
   private static final String COLUMNS_OF_TABLE =
-      "SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS WHERE OWNER = :owner AND TABLE_NAME = :tableName";
+      "SELECT COLUMN_NAME, DATA_TYPE, DATA_LENGTH FROM ALL_TAB_COLUMNS"
+          + " WHERE OWNER = :owner AND TABLE_NAME = :tableName";
 
   private final NamedParameterJdbcTemplate jdbc;
   private final SurveyProperties survey;
-  private final Map<String, Set<String>> columnsByTable = new ConcurrentHashMap<>();
+  private final Map<String, Map<String, AnswerColumn>> columnsByTable = new ConcurrentHashMap<>();
 
   public AnswerColumnRepository(NamedParameterJdbcTemplate jdbc, SurveyProperties survey) {
     this.jdbc = jdbc;
@@ -27,6 +30,10 @@ public class AnswerColumnRepository {
   }
 
   public Set<String> findColumns(String tableName) {
+    return findColumnDetails(tableName).keySet();
+  }
+
+  public Map<String, AnswerColumn> findColumnDetails(String tableName) {
     return columnsByTable.computeIfAbsent(tableName, this::loadColumns);
   }
 
@@ -34,11 +41,19 @@ public class AnswerColumnRepository {
     columnsByTable.remove(tableName);
   }
 
-  private Set<String> loadColumns(String tableName) {
-    return Set.copyOf(
-        jdbc.queryForList(
-            COLUMNS_OF_TABLE,
-            Map.of("owner", survey.dbSchema(), "tableName", tableName),
-            String.class));
+  private Map<String, AnswerColumn> loadColumns(String tableName) {
+    Map<String, AnswerColumn> columns = new LinkedHashMap<>();
+    jdbc.query(
+        COLUMNS_OF_TABLE,
+        Map.of("owner", survey.dbSchema(), "tableName", tableName),
+        row -> {
+          AnswerColumn column =
+              new AnswerColumn(
+                  row.getString("COLUMN_NAME"),
+                  row.getString("DATA_TYPE"),
+                  row.getInt("DATA_LENGTH"));
+          columns.put(column.name(), column);
+        });
+    return Map.copyOf(columns);
   }
 }
