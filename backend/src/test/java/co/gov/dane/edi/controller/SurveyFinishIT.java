@@ -11,6 +11,7 @@ import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
 import co.gov.dane.edi.support.OracleIntegrationTest;
+import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -48,15 +49,21 @@ class SurveyFinishIT extends OracleIntegrationTest {
     saveAllPagesDirectly();
 
     String receipt =
-        finish("{\"observations\":\"  Gracias por la encuesta\\n \"}")
-            .andExpect(status().isOk())
-            .andExpect(
-                jsonPath("$.receipt")
-                    .value(org.hamcrest.Matchers.matchesPattern("[A-Z2-7]{5}-[A-Z2-7]{5}")))
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
-    finish("{\"observations\":\"Otra cosa\"}").andExpect(status().isOk());
+        receiptOf(
+            finish("{\"observations\":\"  Gracias por la encuesta\\n \"}")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(receipt).matches("[A-Z2-7]{5}-[A-Z2-7]{5}");
+    String repeated =
+        receiptOf(
+            finish("{\"observations\":\"Otra cosa\"}")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(repeated).isEqualTo(receipt);
 
     assertThat(
             jdbc.queryForObject(
@@ -73,9 +80,38 @@ class SurveyFinishIT extends OracleIntegrationTest {
   }
 
   @Test
+  void blankObservationsAreAcceptedAndLeaveObsNull() throws Exception {
+    saveAllPagesDirectly();
+    finish("{\"observations\":\"   \\t \"}").andExpect(status().isOk());
+    assertThat(storedObservations()).isNull();
+  }
+
+  @Test
+  void observationsThatDoNotFitInBytesAreRejectedWith422() throws Exception {
+    saveAllPagesDirectly();
+    finish("{\"observations\":\"" + "ñ".repeat(700) + "\"}")
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(
+            jsonPath("$.errors.observations")
+                .value("Las observaciones superan el espacio disponible. Acórtelas."));
+    assertThat(storedObservations()).isNull();
+  }
+
+  @Test
   void observationsLongerThan1100CharactersAreRejected() throws Exception {
     saveAllPagesDirectly();
     finish("{\"observations\":\"" + "a".repeat(1101) + "\"}").andExpect(status().isBadRequest());
+  }
+
+  private String storedObservations() {
+    return jdbc.queryForObject(
+        "SELECT OBS FROM EDIN_20_CAP_H_PREV_PRACT WHERE C_C = :cc",
+        Map.of("cc", CODE),
+        String.class);
+  }
+
+  private static String receiptOf(String json) {
+    return JsonPath.read(json, "$.receipt");
   }
 
   private void saveAllPagesDirectly() {

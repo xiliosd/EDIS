@@ -1,6 +1,7 @@
 package co.gov.dane.edi.service;
 
 import co.gov.dane.edi.model.AnswerColumn;
+import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.EntryKind;
 import co.gov.dane.edi.model.FinishResult;
 import co.gov.dane.edi.model.InputType;
@@ -34,8 +35,10 @@ public class SurveyAnswerService {
   static final String LOCKED_MESSAGE = "Complete primero las páginas anteriores.";
   // Valor que el PHP heredado guarda para preguntas deshabilitadas o sin respuesta (D15).
   private static final String EMPTY_VALUE = "0";
+  static final String OBSERVATIONS_TOO_LONG_MESSAGE =
+      "Las observaciones superan el espacio disponible. Acórtelas.";
   static final String MISSING_PAGES_MESSAGE = "Faltan páginas por guardar.";
-  private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cntrl}&&[^\\n\\t]]");
+  private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cc}&&[^\\n\\t]]");
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
 
   private final SurveyProgressService progress;
@@ -90,6 +93,12 @@ public class SurveyAnswerService {
             : CONTROL_CHARACTERS.matcher(observations.replace("\r\n", "\n")).replaceAll("").strip();
     // OBS se escribe una sola vez (D18): repetir la llamada no la modifica.
     if (!text.isEmpty() && answers.findObservations(respondentCode) == null) {
+      // @Size cuenta unidades UTF-16, pero OBS puede medirse en bytes: se evita el ORA-12899.
+      AnswerColumn observationsColumn =
+          answerColumns.findColumnDetails(Chapter.H.tableName()).get("OBS");
+      if (observationsColumn != null && checkColumn(text, observationsColumn).isPresent()) {
+        throw new AnswerValidationException(Map.of("observations", OBSERVATIONS_TOO_LONG_MESSAGE));
+      }
       answers.saveObservations(respondentCode, text);
     }
     return new FinishResult(receipts.receiptFor(respondentCode));
