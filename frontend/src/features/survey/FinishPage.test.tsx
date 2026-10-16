@@ -22,9 +22,9 @@ function useProgress(overrides: Record<string, unknown>) {
     http.get('*/api/v1/survey/progress', () =>
       HttpResponse.json({
         pages: SAVED_PAGES,
-        finished: false,
+        finished: true,
         observationsSaved: false,
-        receipt: null,
+        receipt: 'ABCDE-23456',
         ...overrides,
       }),
     ),
@@ -54,53 +54,106 @@ beforeEach(() => {
 });
 
 describe('FinishPage', () => {
-  it('envía las observaciones y muestra el radicado', async () => {
+  it('muestra el radicado y envía las observaciones opcionales', async () => {
     useProgress({});
+    let observationsSaved = false;
+    server.use(
+      http.get('*/api/v1/survey/progress', () =>
+        HttpResponse.json({
+          pages: SAVED_PAGES,
+          finished: true,
+          observationsSaved,
+          receipt: 'ABCDE-23456',
+        }),
+      ),
+      http.post('*/api/v1/survey/finish', async ({ request }) => {
+        finishBody = await request.json();
+        observationsSaved = true;
+        return HttpResponse.json({ receipt: 'ABCDE-23456' });
+      }),
+    );
     renderApp('/encuesta/terminar');
-    const field = await screen.findByLabelText('Observaciones (opcional)');
+    expect(await screen.findByText('ABCDE-23456')).toBeInTheDocument();
+    expect(screen.getByRole('status')).not.toHaveFocus();
+    const field = screen.getByLabelText('Observaciones (opcional)');
     expect(field).toHaveAttribute('maxlength', '1100');
 
     await userEvent.type(field, 'Gracias');
     expect(screen.getByText('7 de 1100 caracteres')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Terminar la encuesta' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar observaciones' }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent('ABCDE-23456');
+    expect(await screen.findByText('Sus observaciones ya fueron registradas.')).toBeInTheDocument();
     expect(finishBody).toEqual({ observations: 'Gracias' });
     expect(screen.queryByLabelText('Observaciones (opcional)')).not.toBeInTheDocument();
-    expect(await screen.findByRole('status')).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('ABCDE-23456');
+    expect(screen.getByRole('status')).toHaveFocus();
   });
 
   it('no permite terminar con páginas pendientes', async () => {
-    useProgress({ pages: [{ ...SAVED_PAGES[0], state: 'AVAILABLE' }] });
+    useProgress({
+      pages: [{ ...SAVED_PAGES[0], state: 'AVAILABLE' }],
+      finished: false,
+      receipt: null,
+    });
     renderApp('/encuesta/terminar');
 
     expect(await screen.findByText('Faltan páginas por guardar.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Volver al inicio' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Terminar la encuesta' })).not.toBeInTheDocument();
-  });
-
-  it('muestra el radicado si la encuesta ya había terminado', async () => {
-    useProgress({ finished: true, observationsSaved: true, receipt: 'ABCDE-23456' });
-    renderApp('/encuesta/terminar');
-
-    expect(await screen.findByText('ABCDE-23456')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Observaciones (opcional)')).not.toBeInTheDocument();
-  });
-
-  it('ofrece las observaciones aunque el backend ya informe todas las páginas guardadas', async () => {
-    useProgress({ finished: true, observationsSaved: false, receipt: 'ABCDE-23456' });
-    renderApp('/encuesta/terminar');
-
-    expect(await screen.findByLabelText('Observaciones (opcional)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enviar observaciones' })).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('oculta el campo si las observaciones ya fueron registradas', async () => {
+  it('con las observaciones registradas muestra el radicado y no el formulario', async () => {
     useProgress({ observationsSaved: true });
     renderApp('/encuesta/terminar');
 
-    expect(await screen.findByText('Sus observaciones ya fueron registradas.')).toBeInTheDocument();
+    expect(await screen.findByText('ABCDE-23456')).toBeInTheDocument();
+    expect(screen.getByText('Sus observaciones ya fueron registradas.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Observaciones (opcional)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enviar observaciones' })).not.toBeInTheDocument();
+  });
+
+  it('sin observaciones muestra el radicado junto con el formulario opcional', async () => {
+    useProgress({});
+    renderApp('/encuesta/terminar');
+
+    expect(await screen.findByText('ABCDE-23456')).toBeInTheDocument();
+    expect(screen.getByLabelText('Observaciones (opcional)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar observaciones' })).toBeInTheDocument();
+  });
+
+  it('avisa que la sesión venció al enviar', async () => {
+    useProgress({});
+    server.use(
+      http.post('*/api/v1/survey/finish', () =>
+        HttpResponse.json({ title: 'No autenticado', status: 401 }, { status: 401 }),
+      ),
+    );
+    renderApp('/encuesta/terminar');
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar observaciones' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Su sesión venció. Vuelva a ingresar');
+    expect(screen.getByRole('link', { name: 'Ingresar de nuevo' })).toHaveAttribute(
+      'href',
+      '/ingresar',
+    );
+  });
+
+  it('pide recargar si el token CSRF ya no corresponde', async () => {
+    useProgress({});
+    server.use(
+      http.post('*/api/v1/survey/finish', () =>
+        HttpResponse.json({ title: 'Prohibido', status: 403 }, { status: 403 }),
+      ),
+    );
+    renderApp('/encuesta/terminar');
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar observaciones' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'La sesión de seguridad cambió. Recargue la página e intente de nuevo.',
+    );
+    expect(screen.queryByRole('link', { name: 'Ingresar de nuevo' })).not.toBeInTheDocument();
   });
 
   it('muestra el conflicto que informa el backend', async () => {
@@ -114,7 +167,7 @@ describe('FinishPage', () => {
       ),
     );
     renderApp('/encuesta/terminar');
-    await userEvent.click(await screen.findByRole('button', { name: 'Terminar la encuesta' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar observaciones' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Faltan páginas por guardar.');
   });
@@ -137,7 +190,7 @@ describe('FinishPage', () => {
     );
     renderApp('/encuesta/terminar');
     await userEvent.type(await screen.findByLabelText('Observaciones (opcional)'), 'ñ');
-    await userEvent.click(screen.getByRole('button', { name: 'Terminar la encuesta' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar observaciones' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(message);
@@ -155,7 +208,7 @@ describe('FinishPage', () => {
     );
     renderApp('/encuesta/terminar');
     const field = await screen.findByLabelText('Observaciones (opcional)');
-    await userEvent.click(screen.getByRole('button', { name: 'Terminar la encuesta' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar observaciones' }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     await userEvent.type(field, 'a');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

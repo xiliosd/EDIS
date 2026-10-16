@@ -147,11 +147,13 @@ describe('SurveyPageView', () => {
     const summary = screen.getByRole('alert');
     expect(summary).toHaveFocus();
     expect(
-      within(summary).getByRole('link', { name: /C01A: Responda esta pregunta\./ }),
+      within(summary).getByRole('link', {
+        name: 'C01A ¿Pregunta ficticia C01A?: Responda esta pregunta.',
+      }),
     ).toHaveAttribute('href', '#campo-C01A');
     expect(
       within(summary).getByRole('link', {
-        name: /C01T: El valor está fuera del rango permitido\./,
+        name: 'C01T Años en la entidad: El valor está fuera del rango permitido.',
       }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/Años en la entidad/)).toHaveAttribute('aria-invalid', 'true');
@@ -211,7 +213,9 @@ describe('SurveyPageView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Guardar y continuar' }));
 
     expect(
-      await screen.findByRole('link', { name: /C01T: La respuesta es demasiado larga\./ }),
+      await screen.findByRole('link', {
+        name: 'C01T Años en la entidad: La respuesta es demasiado larga.',
+      }),
     ).toBeInTheDocument();
   });
 
@@ -321,6 +325,88 @@ describe('SurveyPageView', () => {
       'No fue posible guardar. Intente de nuevo.',
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('si la sesión venció guarda un borrador y lo recupera al volver a la página', async () => {
+    server.use(saveFails(401, 'No autenticado.'));
+    const first = renderApp('/encuesta/pagina/C1');
+    await answerAndConfirm();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Su sesión venció. Vuelva a ingresar; las respuestas de esta página no se guardaron.',
+    );
+    expect(within(alert).getByRole('link', { name: 'Ingresar de nuevo' })).toHaveAttribute(
+      'href',
+      '/ingresar',
+    );
+    const draft = JSON.parse(window.sessionStorage.getItem('edi-borrador-C1') ?? '{}') as Record<
+      string,
+      string
+    >;
+    expect(draft).toEqual({ C01A: '1', C01B: '1', C01T: '12' });
+    first.unmount();
+
+    renderApp('/encuesta/pagina/C1');
+    const group = await screen.findByRole('radiogroup', { name: /C01A/ });
+    await vi.waitFor(() => expect(within(group).getByRole('radio', { name: 'Sí' })).toBeChecked());
+    expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('12');
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
+  });
+
+  it('borra el borrador de la página después de guardarla', async () => {
+    window.sessionStorage.setItem('edi-borrador-C1', JSON.stringify({ C01T: '7', C_X: 1 }));
+    server.use(
+      http.put('*/api/v1/survey/pages/C1/answers', () =>
+        HttpResponse.json({ pageCode: 'C1', nextPageCode: 'C2' }),
+      ),
+      nextPageHandler(),
+    );
+    renderApp('/encuesta/pagina/C1');
+    await screen.findByRole('radiogroup', { name: /C01A/ });
+    await vi.waitFor(() => expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('7'));
+    window.sessionStorage.setItem('edi-borrador-C1', '{}');
+    await userEvent.clear(screen.getByLabelText(/Años en la entidad/));
+    await answerAndConfirm();
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: NEXT_PAGE_HEADING }),
+    ).toBeInTheDocument();
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
+  });
+
+  it('pide recargar si el token CSRF ya no corresponde', async () => {
+    server.use(saveFails(403, 'Prohibido.'));
+    renderApp('/encuesta/pagina/C1');
+    await answerAndConfirm();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'La sesión de seguridad cambió. Recargue la página e intente de nuevo.',
+    );
+    expect(screen.queryByRole('link', { name: 'Ingresar de nuevo' })).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
+  });
+
+  it('pregunta antes de cerrar sesión si hay respuestas sin guardar', async () => {
+    let logouts = 0;
+    server.use(
+      http.post('*/api/v1/auth/logout', () => {
+        logouts += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
+    renderApp('/encuesta/pagina/C1');
+    await userEvent.type(await screen.findByLabelText(/Años en la entidad/), '12');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    expect(confirm).toHaveBeenCalledWith('Tiene respuestas sin guardar. ¿Desea salir?');
+    expect(logouts).toBe(0);
+    expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('12');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await vi.waitFor(() => expect(logouts).toBe(1));
+    confirm.mockRestore();
   });
 
   it('muestra el detalle de un 422 que no trae errores por campo', async () => {

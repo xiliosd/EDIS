@@ -55,13 +55,24 @@ export function SurveyHomePage() {
       )}
       {progress.data && (
         <>
-          {progress.data.finished && progress.data.observationsSaved ? (
-            <div role="status" className="mt-6 rounded-xl border border-success/40 bg-surface p-4">
-              <p className="font-medium">Encuesta terminada. Gracias por su participación.</p>
-              <p className="mt-1">
-                Su radicado es <strong className="font-mono">{progress.data.receipt}</strong>
-              </p>
-            </div>
+          {progress.data.finished ? (
+            // D18: la encuesta termina con las 9 páginas guardadas; las observaciones son opcionales.
+            <>
+              <div
+                role="status"
+                className="mt-6 rounded-xl border border-success/40 bg-surface p-4"
+              >
+                <p className="font-medium">Encuesta terminada. Gracias por su participación.</p>
+                <p className="mt-1">
+                  Su radicado es <strong className="font-mono">{progress.data.receipt}</strong>
+                </p>
+              </div>
+              {!progress.data.observationsSaved && (
+                <LinkButton variant="secondary" className="mt-4" to="/encuesta/terminar">
+                  Agregar observaciones (opcional)
+                </LinkButton>
+              )}
+            </>
           ) : (
             <div className="mt-4">
               <p className="text-ink-muted">

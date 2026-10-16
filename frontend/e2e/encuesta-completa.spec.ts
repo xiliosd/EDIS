@@ -86,11 +86,15 @@ test('el servidor público diligencia toda la encuesta y obtiene su radicado', a
     await saveAndContinue(page);
   }
 
+  // D18: con las 9 páginas guardadas la encuesta ya terminó; las observaciones son opcionales.
   await expect(page).toHaveURL(/\/encuesta\/terminar$/);
+  const receipt = page.getByRole('status').filter({ hasText: 'Encuesta terminada' });
+  await expect(receipt).toContainText(/[A-Z2-7]{5}-[A-Z2-7]{5}/);
   await page.getByLabel('Observaciones (opcional)').fill('Observación ficticia de prueba.');
   await expectAccessible(page);
-  await page.getByRole('button', { name: 'Terminar la encuesta' }).click();
-  await expect(page.getByRole('status')).toContainText(/[A-Z2-7]{5}-[A-Z2-7]{5}/);
+  await page.getByRole('button', { name: 'Enviar observaciones' }).click();
+  await expect(page.getByText('Sus observaciones ya fueron registradas.')).toBeVisible();
+  await expect(receipt).toContainText(/[A-Z2-7]{5}-[A-Z2-7]{5}/);
   await expectAccessible(page);
 
   // Una página guardada queda en solo lectura.

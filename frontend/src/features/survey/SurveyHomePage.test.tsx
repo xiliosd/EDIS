@@ -79,7 +79,7 @@ describe('SurveyHomePage', () => {
     );
   });
 
-  it('ofrece terminar, sin radicado, si el backend informa finished sin observaciones', async () => {
+  it('terminada sin observaciones: muestra el radicado y ofrece agregarlas', async () => {
     const saved = PAGES.map((page) => ({ ...page, state: 'SAVED' }));
     server.use(
       http.get('*/api/v1/survey/progress', () =>
@@ -95,15 +95,18 @@ describe('SurveyHomePage', () => {
     );
     renderApp('/encuesta');
 
-    expect(await screen.findByRole('link', { name: 'Terminar la encuesta' })).toHaveAttribute(
+    expect(await screen.findByText('ABCDE-23456')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Encuesta terminada');
+    expect(screen.getByRole('status')).toHaveTextContent('ABCDE-23456');
+    expect(screen.getByRole('link', { name: 'Agregar observaciones (opcional)' })).toHaveAttribute(
       'href',
       '/encuesta/terminar',
     );
-    expect(screen.queryByText('ABCDE-23456')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Continuar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Terminar la encuesta' })).not.toBeInTheDocument();
   });
 
-  it('muestra el radicado cuando la encuesta ya terminó', async () => {
+  it('terminada con observaciones: muestra el radicado sin más acciones', async () => {
     const saved = PAGES.map((page) => ({ ...page, state: 'SAVED' }));
     server.use(
       http.get('*/api/v1/survey/progress', () =>
@@ -121,6 +124,10 @@ describe('SurveyHomePage', () => {
 
     expect(await screen.findByText('ABCDE-23456')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Continuar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Terminar la encuesta' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Agregar observaciones (opcional)' }),
+    ).not.toBeInTheDocument();
   });
 
   it('permite reintentar cuando falla la carga', async () => {

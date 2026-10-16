@@ -3,11 +3,13 @@ import { fieldId } from './questions/QuestionField';
 
 interface ErrorSummaryProps {
   errors: Record<string, string>;
+  /** Etiqueta visible de cada pregunta; si falta, se muestra el código de la columna. */
+  labels: Record<string, string>;
   ref?: Ref<HTMLDivElement>;
 }
 
 /** Resumen de errores enfocable con enlaces a cada campo (patrón GOV.UK, WCAG 3.3.1). */
-export function ErrorSummary({ errors, ref }: ErrorSummaryProps) {
+export function ErrorSummary({ errors, labels, ref }: ErrorSummaryProps) {
   return (
     <div
       ref={ref}
@@ -20,7 +22,7 @@ export function ErrorSummary({ errors, ref }: ErrorSummaryProps) {
         {Object.entries(errors).map(([column, message]) => (
           <li key={column}>
             <a href={`#${fieldId(column)}`} className="text-primary underline">
-              {column}: {message}
+              {labels[column] ?? column}: {message}
             </a>
           </li>
         ))}

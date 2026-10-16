@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { logout } from '../features/auth/auth-api';
 import { useSession } from '../features/auth/use-session';
+import { hasUnsavedChanges, UNSAVED_CHANGES_MESSAGE } from '../features/survey/use-unsaved-changes';
 import { SESSION_QUERY_KEY } from '../services/query-client';
 import { Button } from './Button';
 
@@ -33,6 +34,9 @@ export function SessionMenu() {
   }
 
   async function handleLogout() {
+    if (hasUnsavedChanges() && !window.confirm(UNSAVED_CHANGES_MESSAGE)) {
+      return;
+    }
     let serverLogoutFailed = false;
     try {
       await logout();

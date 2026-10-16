@@ -10,9 +10,15 @@ import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
 import { messageFor } from './answer-error-messages';
 import { ErrorSummary } from './ErrorSummary';
+import { clearDraft, saveDraft, takeDraft } from './page-drafts';
 import { QuestionField, type PageValues } from './questions/QuestionField';
 import { evaluate, type RuleSet } from './rules/rule-evaluator';
 import { SavedPageSummary } from './SavedPageSummary';
+import {
+  SessionErrorAlert,
+  sessionErrorStatus,
+  type SessionErrorStatus,
+} from './SessionErrorAlert';
 import {
   fetchPage,
   fetchRules,
@@ -23,7 +29,7 @@ import {
   type PageDetail,
   type QuestionnaireEntry,
 } from './survey-api';
-import { useUnsavedChanges } from './use-unsaved-changes';
+import { UNSAVED_CHANGES_MESSAGE, useUnsavedChanges } from './use-unsaved-changes';
 
 function isActiveItem(entry: QuestionnaireEntry): boolean {
   return entry.kind === 'ITEM' && entry.answer?.columnStatus === 'ACTIVE';
@@ -115,6 +121,11 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
   const entries = useMemo(() => page.entries ?? [], [page.entries]);
   const items = useMemo(() => entries.filter(isActiveItem), [entries]);
   const columns = useMemo(() => items.map((entry) => entry.answer?.columnCode ?? ''), [items]);
+  const labels = useMemo(
+    () =>
+      Object.fromEntries(items.map((entry) => [entry.answer?.columnCode ?? '', itemLabel(entry)])),
+    [items],
+  );
   const form = useForm<PageValues>({
     defaultValues: Object.fromEntries(
       items.map((entry) => [
@@ -140,6 +151,7 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
   const [summary, setSummary] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<PageValues | null>(null);
   const [alertMessage, setAlertMessage] = useState('');
+  const [sessionError, setSessionError] = useState<SessionErrorStatus | null>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
   const { isDirty } = form.formState;
   useUnsavedChanges(isDirty);
@@ -155,6 +167,20 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
       }
     }
   }, [disabledKey, checkboxColumns, form]);
+
+  // Si la sesión venció al guardar, las respuestas quedaron en un borrador local: se recuperan
+  // una sola vez y quedan como cambios sin guardar (el aviso de salida sigue activo).
+  useEffect(() => {
+    const draft = takeDraft(page.pageCode ?? '');
+    if (!draft) {
+      return;
+    }
+    for (const column of columns) {
+      if (column in draft) {
+        form.setValue(column, draft[column], { shouldDirty: true });
+      }
+    }
+  }, [page.pageCode, columns, form]);
 
   useEffect(() => {
     if (Object.keys(summary).length > 0) {
@@ -173,6 +199,7 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
   const save = useMutation({
     mutationFn: (answers: PageValues) => savePageAnswers(page.pageCode ?? '', answers),
     onSuccess: async (result) => {
+      clearDraft(page.pageCode ?? '');
       form.reset(form.getValues());
       setPending(null);
       await queryClient.invalidateQueries({ queryKey: PROGRESS_QUERY_KEY });
@@ -183,7 +210,13 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
     },
     onError: (error) => {
       setPending(null);
-      if (error instanceof ApiError && error.status === 422) {
+      const sessionStatus = sessionErrorStatus(error);
+      if (sessionStatus === 401) {
+        saveDraft(page.pageCode ?? '', form.getValues());
+      }
+      if (sessionStatus) {
+        setSessionError(sessionStatus);
+      } else if (error instanceof ApiError && error.status === 422) {
         if (Object.keys(error.fieldErrors).length > 0) {
           showErrors(error.fieldErrors);
         } else {
@@ -200,6 +233,7 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
 
   function onSubmit(data: PageValues) {
     setAlertMessage('');
+    setSessionError(null);
     const result = evaluate(rules, data, columns);
     const messages = Object.fromEntries(
       Object.entries(result.errors).map(([column, code]) => [column, messageFor(code)]),
@@ -219,7 +253,10 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
 
   return (
     <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="mt-6">
-      {Object.keys(summary).length > 0 && <ErrorSummary ref={summaryRef} errors={summary} />}
+      {Object.keys(summary).length > 0 && (
+        <ErrorSummary ref={summaryRef} errors={summary} labels={labels} />
+      )}
+      {sessionError && <SessionErrorAlert status={sessionError} />}
       {alertMessage && (
         <p
           role="alert"
@@ -274,7 +311,7 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
         <Button
           variant="secondary"
           onClick={() => {
-            if (!isDirty || window.confirm('Tiene respuestas sin guardar. ¿Desea salir?')) {
+            if (!isDirty || window.confirm(UNSAVED_CHANGES_MESSAGE)) {
               void navigate('/encuesta');
             }
           }}
