@@ -122,6 +122,20 @@ describe('FinishPage', () => {
     expect(screen.getByRole('button', { name: 'Enviar observaciones' })).toBeInTheDocument();
   });
 
+  it('no permite enviar observaciones vacías o solo con espacios', async () => {
+    useProgress({});
+    renderApp('/encuesta/terminar');
+    const field = await screen.findByLabelText('Observaciones (opcional)');
+    const button = screen.getByRole('button', { name: 'Enviar observaciones' });
+    expect(button).toBeDisabled();
+
+    await userEvent.type(field, '   ');
+    expect(button).toBeDisabled();
+    await userEvent.type(field, 'x');
+    expect(button).toBeEnabled();
+    expect(finishBody).toBeUndefined();
+  });
+
   it('avisa que la sesión venció al enviar', async () => {
     useProgress({});
     server.use(
@@ -130,7 +144,8 @@ describe('FinishPage', () => {
       ),
     );
     renderApp('/encuesta/terminar');
-    await userEvent.click(await screen.findByRole('button', { name: 'Enviar observaciones' }));
+    await userEvent.type(await screen.findByLabelText('Observaciones (opcional)'), 'Nota');
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar observaciones' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Su sesión venció. Vuelva a ingresar');
@@ -148,7 +163,8 @@ describe('FinishPage', () => {
       ),
     );
     renderApp('/encuesta/terminar');
-    await userEvent.click(await screen.findByRole('button', { name: 'Enviar observaciones' }));
+    await userEvent.type(await screen.findByLabelText('Observaciones (opcional)'), 'Nota');
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar observaciones' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'La sesión de seguridad cambió. Recargue la página e intente de nuevo.',
@@ -167,7 +183,8 @@ describe('FinishPage', () => {
       ),
     );
     renderApp('/encuesta/terminar');
-    await userEvent.click(await screen.findByRole('button', { name: 'Enviar observaciones' }));
+    await userEvent.type(await screen.findByLabelText('Observaciones (opcional)'), 'Nota');
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar observaciones' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Faltan páginas por guardar.');
   });
@@ -208,6 +225,7 @@ describe('FinishPage', () => {
     );
     renderApp('/encuesta/terminar');
     const field = await screen.findByLabelText('Observaciones (opcional)');
+    await userEvent.type(field, 'Nota');
     await userEvent.click(screen.getByRole('button', { name: 'Enviar observaciones' }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     await userEvent.type(field, 'a');

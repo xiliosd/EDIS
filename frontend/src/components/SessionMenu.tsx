@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { logout } from '../features/auth/auth-api';
 import { useSession } from '../features/auth/use-session';
+import { clearAllDrafts } from '../features/survey/page-drafts';
 import { hasUnsavedChanges, UNSAVED_CHANGES_MESSAGE } from '../features/survey/use-unsaved-changes';
 import { SESSION_QUERY_KEY } from '../services/query-client';
 import { Button } from './Button';
@@ -44,6 +45,8 @@ export function SessionMenu() {
       // La cookie podría seguir vigente en el servidor: se avisa al usuario en el ingreso.
       serverLogoutFailed = true;
     }
+    // Con o sin respuesta del servidor, ningún borrador queda para el siguiente usuario del equipo.
+    clearAllDrafts();
     clearAfterNavigation.current = true;
     navigate('/ingresar', {
       replace: true,

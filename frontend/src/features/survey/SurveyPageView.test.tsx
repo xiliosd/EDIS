@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../../test/msw-server';
 import { renderApp } from '../../test/render-app';
+import { bindDraftsToUser, DRAFT_OWNER_KEY, draftOwnerFor } from './page-drafts';
 
 const YES_NO = [
   { value: '1', label: 'Sí' },
@@ -85,6 +86,45 @@ async function answerAndConfirm() {
   await userEvent.type(screen.getByLabelText(/Años en la entidad/), '12');
   await userEvent.click(screen.getByRole('button', { name: 'Guardar página' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar y continuar' }));
+}
+
+/** Responde C1, el guardado responde 401 y queda el borrador de la página. */
+async function stashDraftAfterExpiredSession() {
+  server.use(saveFails(401, 'No autenticado.'));
+  const view = renderApp('/encuesta/pagina/C1');
+  await answerAndConfirm();
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Su sesión venció. Vuelva a ingresar; las respuestas de esta página no se guardaron.',
+  );
+  return view;
+}
+
+async function expectDraftRestored() {
+  const view = renderApp('/encuesta/pagina/C1');
+  const group = await screen.findByRole('radiogroup', { name: /C01A/ });
+  await vi.waitFor(() => expect(within(group).getByRole('radio', { name: 'Sí' })).toBeChecked());
+  expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('12');
+  return view;
+}
+
+/** Ingresa por la pantalla de ingreso con un usuario ficticio. */
+async function loginAs(username: string) {
+  server.use(
+    http.post('*/api/v1/auth/login', () =>
+      HttpResponse.json({
+        accountType: 'RESPONDENT',
+        roles: ['ENCUESTADO'],
+        surveyCode: 'EDIN',
+        surveyYear: 2026,
+      }),
+    ),
+  );
+  const view = renderApp('/ingresar');
+  await userEvent.type(await screen.findByLabelText('Usuario'), username);
+  await userEvent.type(screen.getByLabelText('Clave'), 'Clave#ficticia');
+  await userEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
+  expect(await screen.findByRole('heading', { name: 'Encuesta EDIN 2026' })).toBeInTheDocument();
+  view.unmount();
 }
 
 beforeEach(() => {
@@ -328,34 +368,94 @@ describe('SurveyPageView', () => {
   });
 
   it('si la sesión venció guarda un borrador y lo recupera al volver a la página', async () => {
-    server.use(saveFails(401, 'No autenticado.'));
-    const first = renderApp('/encuesta/pagina/C1');
-    await answerAndConfirm();
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+    const first = await stashDraftAfterExpiredSession();
 
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(
-      'Su sesión venció. Vuelva a ingresar; las respuestas de esta página no se guardaron.',
-    );
+    const alert = screen.getByRole('alert');
     expect(within(alert).getByRole('link', { name: 'Ingresar de nuevo' })).toHaveAttribute(
       'href',
       '/ingresar',
     );
-    const draft = JSON.parse(window.sessionStorage.getItem('edi-borrador-C1') ?? '{}') as Record<
-      string,
-      string
-    >;
-    expect(draft).toEqual({ C01A: '1', C01B: '1', C01T: '12' });
+    const stored = JSON.parse(window.sessionStorage.getItem('edi-borrador-C1') ?? '{}') as {
+      owner: string;
+      values: Record<string, string>;
+    };
+    expect(stored.values).toEqual({ C01A: '1', C01B: '1', C01T: '12' });
+    expect(stored.owner).toBe(window.sessionStorage.getItem(DRAFT_OWNER_KEY));
     first.unmount();
 
-    renderApp('/encuesta/pagina/C1');
-    const group = await screen.findByRole('radiogroup', { name: /C01A/ });
-    await vi.waitFor(() => expect(within(group).getByRole('radio', { name: 'Sí' })).toBeChecked());
-    expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('12');
+    await expectDraftRestored();
     expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
   });
 
+  it('el mismo usuario recupera su borrador después de ingresar de nuevo', async () => {
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+    (await stashDraftAfterExpiredSession()).unmount();
+
+    await loginAs(' prueba05 ');
+    await expectDraftRestored();
+  });
+
+  it('otro usuario no recibe el borrador del anterior', async () => {
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+    (await stashDraftAfterExpiredSession()).unmount();
+
+    await loginAs('PRUEBA07');
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
+
+    renderApp('/encuesta/pagina/C1');
+    const group = await screen.findByRole('radiogroup', { name: /C01A/ });
+    expect(within(group).getByRole('radio', { name: 'Sí' })).not.toBeChecked();
+    expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('');
+  });
+
+  it('descarta un borrador cuyo dueño no es el usuario actual', async () => {
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+    window.sessionStorage.setItem(
+      'edi-borrador-C1',
+      JSON.stringify({ owner: 'f'.repeat(64), values: { C01T: '7' } }),
+    );
+    renderApp('/encuesta/pagina/C1');
+    await screen.findByRole('radiogroup', { name: /C01A/ });
+
+    expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('');
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
+  });
+
+  it('cerrar sesión borra los borradores y la huella del usuario', async () => {
+    server.use(http.post('*/api/v1/auth/logout', () => HttpResponse.json({}, { status: 503 })));
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+    await stashDraftAfterExpiredSession();
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).not.toBeNull();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    // El servidor falla al cerrar: aun así no queda nada para el siguiente usuario.
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Ingreso a la encuesta' }),
+    ).toBeInTheDocument();
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
+    expect(window.sessionStorage.getItem(DRAFT_OWNER_KEY)).toBeNull();
+    confirm.mockRestore();
+  });
+
+  it('la huella del usuario es un SHA-256 en hex sin el usuario en claro', async () => {
+    await loginAs('PRUEBA05');
+
+    const owner = window.sessionStorage.getItem(DRAFT_OWNER_KEY) ?? '';
+    expect(owner).toMatch(/^[0-9a-f]{64}$/);
+    expect(owner.toLowerCase()).not.toContain('prueba05');
+    expect(await draftOwnerFor('RESPONDENT', 'PRUEBA05')).toBe(owner);
+  });
+
   it('borra el borrador de la página después de guardarla', async () => {
-    window.sessionStorage.setItem('edi-borrador-C1', JSON.stringify({ C01T: '7', C_X: 1 }));
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+    const owner = window.sessionStorage.getItem(DRAFT_OWNER_KEY);
+    window.sessionStorage.setItem(
+      'edi-borrador-C1',
+      JSON.stringify({ owner, values: { C01T: '7', C_X: 1 } }),
+    );
     server.use(
       http.put('*/api/v1/survey/pages/C1/answers', () =>
         HttpResponse.json({ pageCode: 'C1', nextPageCode: 'C2' }),

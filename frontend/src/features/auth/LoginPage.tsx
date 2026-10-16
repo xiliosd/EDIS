@@ -7,6 +7,7 @@ import { TextField } from '../../components/TextField';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
 import { SESSION_QUERY_KEY } from '../../services/query-client';
+import { bindDraftsToUser } from '../survey/page-drafts';
 import { login, type LoginRequest } from './auth-api';
 import { homePathFor } from './use-session';
 
@@ -48,6 +49,8 @@ export function LoginPage() {
     setFormError(null);
     try {
       const session = await login(values);
+      // Los borradores de otro usuario en esta pestaña se descartan antes de entrar.
+      await bindDraftsToUser(values.accountType, values.username);
       queryClient.setQueryData(SESSION_QUERY_KEY, session);
       navigate(redirectTo ?? homePathFor(session), { replace: true });
     } catch (error) {

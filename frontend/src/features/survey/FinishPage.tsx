@@ -127,7 +127,8 @@ export function FinishPage() {
           <div>
             <Button
               type="submit"
-              disabled={finish.isPending}
+              // Sin texto, el POST no registraría nada: la encuesta ya terminó.
+              disabled={finish.isPending || observations.trim() === ''}
               aria-busy={finish.isPending || undefined}
             >
               Enviar observaciones
