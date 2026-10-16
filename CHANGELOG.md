@@ -14,3 +14,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   lista de capítulos.
 - Imágenes Docker sin root, entorno local con docker compose y pipeline de CI con SAST, SCA, Trivy
   y pruebas E2E.
+- Flujo completo del encuestado: progreso por página, páginas con saltos en vivo, guardado único
+  confirmado, observaciones y radicado.
+- Motor de reglas compartido (backend y frontend) y reglas reales de EDIN 2026.
+- Prueba E2E del flujo del encuestado con verificación de accesibilidad.
+
+### Cambiado
+- El inicio del encuestado muestra el avance por página.
+- El `C_C` viaja cifrado (AES-GCM) en la sesión.
+
+### Corregido
+- `ColumnCodeResolver` completa el cero de los numerales ("C7a." pasa a `C07A`).
+- El bloqueo de inicio de sesión se comprueba con la IP real enviada por el proxy.
+
+### Seguridad
+- El radicado no revela el `C_C`.
+- Las reglas ficticias de desarrollo no viajan en la imagen.

@@ -5,7 +5,8 @@ Aplicación web para que los servidores públicos diligencien la Encuesta de Des
 PHP heredado (`FORMULARIO_WEB`) sobre la misma base Oracle (`DANE_DIRPEN`), sin DDL nuevo.
 
 La Fase 1 entrega la base técnica: inicio y cierre de sesión (encuestados y administradores), lectura
-del cuestionario (capítulos B–H) y lista de capítulos. Monorepo con dos aplicaciones independientes:
+del cuestionario (capítulos B–H) y lista de capítulos. La Fase 2 agrega el flujo del encuestado:
+avance por página, saltos en vivo, guardado único confirmado, observaciones y radicado. Monorepo con dos aplicaciones independientes:
 `backend/` (Spring Boot) y `frontend/` (React).
 
 ## Enlaces de documentación del proyecto
@@ -13,6 +14,8 @@ del cuestionario (capítulos B–H) y lista de capítulos. Monorepo con dos apli
  - [Plan de la Fase 1](docs/superpowers/plans/2026-10-14-fase-1-base.md)
  - [Diagrama de arquitectura](docs/diagramas/arquitectura.md)
  - [Diagrama de secuencia del inicio de sesión](docs/diagramas/secuencia-inicio-sesion.md)
+ - [Diagrama de secuencia de guardar una página](docs/diagramas/secuencia-guardar-pagina.md)
+ - [Reglas de EDIN 2026](docs/reglas/edin-2026.md)
  - [MER de las tablas usadas](docs/diagramas/mer-tablas-usadas.md)
  - [Contrato OpenAPI](docs/api/openapi.yaml)
  - [Changelog](CHANGELOG.md)
@@ -30,6 +33,11 @@ Prefijo `/api/v1`; errores en RFC 7807 (`application/problem+json`). Swagger UI 
 | `GET` | `/api/v1/auth/me` | Consulta la sesión actual |
 | `GET` | `/api/v1/survey/chapters` | Lista los capítulos del cuestionario |
 | `GET` | `/api/v1/survey/chapters/{chapterCode}` | Consulta un capítulo con sus preguntas |
+| `GET` | `/api/v1/survey/progress` | Avance del encuestado por página (`finished` es `true` con las 9 guardadas) |
+| `GET` | `/api/v1/survey/rules` | Reglas vigentes (saltos y validaciones) |
+| `GET` | `/api/v1/survey/pages/{pagina}` | Consulta una página con sus respuestas guardadas |
+| `PUT` | `/api/v1/survey/pages/{pagina}/answers` | Guarda una página una sola vez (409 si ya estaba guardada; 422 con `errors`) |
+| `POST` | `/api/v1/survey/finish` | Termina la encuesta y registra las observaciones; entrega el radicado |
 
 Todo método distinto de `GET`/`HEAD` exige la cabecera `X-XSRF-TOKEN`.
 
@@ -72,12 +80,19 @@ Usuarios ficticios de `db/dev/data.sql`:
 | Encuestado | `PRUEBA02` | Inactivo (debe rechazarse) |
 | Encuestado | `PRUEBA03` | Año 2025 (no pertenece a la encuesta activa; debe rechazarse) |
 | Encuestado | `PRUEBA04` | Para pruebas de bloqueo |
+| Encuestado | `PRUEBA05` | Flujo E2E (Chromium) |
+| Encuestado | `PRUEBA06` | Pruebas de integración y E2E móvil |
 | Administrador | `adm.nacional` | ROL 1 |
 | Administrador | `adm.bogota` | ROL 2, departamento 11 |
 | Administrador | `adm.edid` | Otra encuesta (EDID); no debe ingresar a EDIN |
 
 Las claves de prueba están en `db/dev/data.sql`. El bloqueo ocurre tras 5 fallos en 15 minutos por
 usuario + IP.
+
+**Cada página se guarda una sola vez.** Para repetir el flujo completo hay que reiniciar el backend,
+que recarga `db/dev/data.sql`. Con compose también hace falta `docker compose down -v`, para que se
+vuelva a sembrar el volumen de reglas. Las pruebas E2E (Playwright) corren con un solo worker y sin
+reintentos, porque los datos son de escritura única y el inicio de sesión se bloquea tras 5 fallos.
 
 Pruebas automatizadas:
 
@@ -104,8 +119,9 @@ Imágenes (usuario no root, versión base fija, healthcheck, etiquetas de respon
 - `frontend/Dockerfile`: multi-stage, `node:22.23.3-slim` para compilar y
   `nginxinc/nginx-unprivileged:1.30.3-alpine3.23` para servir; nginx hace de proxy de `/api` hacia
   `BACKEND_URL` y es el borde (`X-Forwarded-For`). No arranca si el host de `BACKEND_URL` no resuelve.
-- Volumen `rules-data` (`/data/rules`, variable `RULES_DIR`): JSON de saltos y validaciones (sin uso en la Fase 1; se leerá desde la Fase 2). El backend
-  corre en **una sola instancia** (decisión D6).
+- Volumen `rules-data` (`/data/rules`, variable `RULES_DIR`): JSON de saltos y validaciones. Si no
+  existe `EDIN-2026.json`, el backend siembra el de la imagen. El backend corre en **una sola
+  instancia** (decisión D6).
 
 **Local con contenedores**
 
@@ -138,6 +154,10 @@ cd ../frontend && npm ci && npx vite
 `CORS_ALLOWED_ORIGIN` solo importa si el frontend no se sirve por el proxy de Vite (acceso directo al
 backend); en ese caso debe ser el origen del frontend.
 
+**Actualizar las reglas.** Si `RULES_DIR/EDIN-2026.json` ya existe con `"version": 1`, hay que
+respaldarlo y borrarlo para que se siembre la versión 2 de la imagen. Hasta la Fase 3 (editor de
+reglas) es la única forma de actualizarlo.
+
 **QA y producción.** Entran por el pipeline (lint, build, pruebas, SAST/SCA, imagen, staging,
 aprobación manual, producción, smoke tests). El paso a producción exige el formato FR-FT-GST-02
 (`Requisitos_Entrega.xlsx`, versión vigente), RFC y aprobación del CAB. Cada ambiente usa credenciales
@@ -169,7 +189,9 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `ORACLE_DEV_ADMIN_PASSWORD` | Clave de administrador de la Oracle de desarrollo (solo compose) | Solo dev | sin valor real; cámbiela |
 | `SURVEY_CODE` | Encuesta activa (`EDIN` o `EDID`) | No | `EDIN` |
 | `SURVEY_YEAR` | Año de la encuesta | Sí | `2026` |
-| `RULES_DIR` | Carpeta de los JSON de reglas (sin uso en la Fase 1) | No | `/data/rules` |
+| `RULES_DIR` | Carpeta de los JSON de reglas | No | `/data/rules` |
+| `RULES_SEED_DIR` | Semilla de reglas ficticias, solo desarrollo; vacía en QA y producción | No | vacía |
+| `RECEIPT_KEY` | Clave del radicado (HMAC); al menos 32 caracteres, distinta por ambiente | Sí | sin valor real; genere una aleatoria |
 | `JWT_SECRET` | Secreto de firma de la sesión (mínimo 32 caracteres aleatorios) | Sí | genere con `openssl rand -base64 48` |
 | `SESSION_MINUTES` | Duración de la sesión | No | `30` |
 | `COOKIE_SECURE` | Atributo `Secure` de la cookie; `true` con HTTPS | No | `true` (`false` en localhost) |
@@ -192,6 +214,10 @@ Capturadas con Playwright contra el entorno local con datos ficticios.
 ![Pantalla de ingreso](docs/screenshots/ingreso.png)
 
 ![Lista de capítulos](docs/screenshots/capitulos.png)
+
+![Página de la encuesta con un salto activo](docs/screenshots/pagina-encuesta.png)
+
+![Radicado al terminar la encuesta](docs/screenshots/radicado.png)
 
 ## Tech Stack
 
@@ -229,6 +255,25 @@ curl -s -b cookies.txt -c cookies.txt -X POST "$BASE/api/v1/auth/login" \
 curl -s -b cookies.txt "$BASE/api/v1/survey/chapters"
 ```
 
+**Recorrido del encuestado.** Tras ingresar, el inicio muestra el avance por página. Orden de las
+páginas: `B1, C1, C2, D1, D2, E1, F1, G1, H1`; cada una se habilita cuando las anteriores están
+guardadas.
+
+1. Progreso: el inicio lista las nueve páginas y cuál sigue.
+2. Página: se responde; los saltos ("No aplica…") y los errores aparecen en vivo.
+3. Confirmar: "Guardar página" pide confirmar porque la escritura es única.
+4. Siguiente: al guardar, el foco pasa a la página siguiente.
+5. Terminar: con las nueve guardadas, "Terminar" ofrece las observaciones (opcionales, hasta 1100
+   caracteres, una sola vez).
+6. Radicado: se muestra el comprobante `XXXXX-XXXXX`, derivado y no reversible. Si se termina sin
+   observaciones, el formulario puede volver a mostrarse después, con el mismo radicado.
+
+Consultar el progreso con `curl` (cookie de la sesión iniciada arriba, sin escribir su valor):
+
+```bash
+curl -s -b cookies.txt "$BASE/api/v1/survey/progress"
+```
+
 **Regenerar el contrato y los tipos.** El contrato lo genera el backend durante `./mvnw verify`
 (CI falla si `docs/api/openapi.yaml` no coincide). Los tipos del frontend:
 
@@ -252,6 +297,20 @@ y en la tabla de decisiones del spec.
 - `overrides` de `playwright-core` 1.63.0 en `frontend/package.json` para alinear `@axe-core/playwright`
   con `@playwright/test`.
 
+## Decisiones de la Fase 2
+
+Detalle en la tabla de decisiones del [spec](docs/superpowers/specs/2026-10-14-formulario-web-design.md).
+
+- **D15.** Las preguntas deshabilitadas por un salto se guardan como `'0'`, igual que el PHP.
+- **D16.** Navegación secuencial y guardado por página, una sola vez; sin autoguardado.
+- **D17.** El `C_C` va cifrado (AES-GCM) en la sesión y nunca se muestra; el radicado es un HMAC no reversible.
+- **D18.** "Terminar" exige las nueve páginas y guarda las observaciones en `OBS`; no se escribe `COMPLETA`.
+- **D19.** Las reglas JSON se validan estructuralmente al cargarlas; el JSON Schema llega en la Fase 3.
+- **D20.** Las reglas especiales de `FrmValida.js` se migran por su intención, no por sus índices
+  (ver [reglas de EDIN 2026](docs/reglas/edin-2026.md)).
+
+Un test de respuesta conocida (KAT) fija el algoritmo del radicado; no contiene ninguna clave real.
+
 ## Excepciones a los lineamientos de nombres
 
 - Paquetes Java en minúscula (`co.gov.dane.edi...`) y clases en PascalCase, según la convención de Java.
@@ -270,6 +329,10 @@ y en la tabla de decisiones del spec.
 - **Etapas de despliegue pendientes:** *staging* y producción del pipeline.
 - **ESLint 9.39.5** (marcado sin soporte por npm) porque `eslint-plugin-jsx-a11y` 6.10.2 no soporta
   ESLint 10.
+- **La EDID no tiene cuestionario 2026 en la base:** la semilla de reglas de la EDID está vacía.
+- **Sin navegación interna bloqueada** (`BrowserRouter` declarativo): solo hay `beforeunload` y una
+  confirmación al volver al inicio.
+- **El radicado depende de `RECEIPT_KEY`:** si se rota, cambian los radicados de quienes ya terminaron.
 - **Tomcat fijado** en 11.0.26 (`tomcat.version` en `backend/pom.xml`); retirar cuando Spring Boot
   incluya esa versión o superior.
 - **Bloqueo de intentos en memoria**, por instancia; ver rate limiting en Deployment.

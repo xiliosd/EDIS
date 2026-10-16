@@ -55,6 +55,7 @@ funcionario y generación de claves de la muestra.
 | D17 | El `C_C` es dato personal: no viaja legible en el JWT (se cifra con AES-GCM) ni se muestra; el comprobante al terminar es un **radicado derivado** no reversible (HMAC con `RECEIPT_KEY`) | Ley 1581 |
 | D18 | "Terminar" funciona como el PHP: requiere todas las páginas guardadas y guarda las observaciones (opcionales, una sola vez) en `OBS` de la tabla H; no se escribe `COMPLETA` | La encuesta está terminada cuando todas las páginas están guardadas |
 | D19 | Las reglas JSON se validan estructuralmente al cargarlas; el JSON Schema formal llega con el editor de reglas (Fase 3) | YAGNI: en la Fase 2 las reglas solo vienen de la semilla |
+| D20 | Las reglas especiales de `FrmValida.js` se migran por su intención (comentario más disparador de `FRM_SALTO`), no por sus índices: dos estaban corridas respecto a 2026. Una regla del archivo con id `legacy-<COL>` reemplaza al salto genérico de esa columna. | El cuestionario de 2026 cambió el orden de los ítems y el JS conservó índices de 2024 |
 
 ## 3. Arquitectura
 
