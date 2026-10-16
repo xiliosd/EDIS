@@ -55,7 +55,7 @@ export function SurveyHomePage() {
       )}
       {progress.data && (
         <>
-          {progress.data.finished ? (
+          {progress.data.finished && progress.data.observationsSaved ? (
             <div role="status" className="mt-6 rounded-xl border border-success/40 bg-surface p-4">
               <p className="font-medium">Encuesta terminada. Gracias por su participación.</p>
               <p className="mt-1">

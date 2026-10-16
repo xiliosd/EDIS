@@ -79,6 +79,30 @@ describe('SurveyHomePage', () => {
     );
   });
 
+  it('ofrece terminar, sin radicado, si el backend informa finished sin observaciones', async () => {
+    const saved = PAGES.map((page) => ({ ...page, state: 'SAVED' }));
+    server.use(
+      http.get('*/api/v1/survey/progress', () =>
+        HttpResponse.json(
+          progress({
+            pages: saved,
+            finished: true,
+            observationsSaved: false,
+            receipt: 'ABCDE-23456',
+          }),
+        ),
+      ),
+    );
+    renderApp('/encuesta');
+
+    expect(await screen.findByRole('link', { name: 'Terminar la encuesta' })).toHaveAttribute(
+      'href',
+      '/encuesta/terminar',
+    );
+    expect(screen.queryByText('ABCDE-23456')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Continuar' })).not.toBeInTheDocument();
+  });
+
   it('muestra el radicado cuando la encuesta ya terminó', async () => {
     const saved = PAGES.map((page) => ({ ...page, state: 'SAVED' }));
     server.use(

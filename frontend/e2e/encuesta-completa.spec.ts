@@ -26,7 +26,12 @@ async function saveAndContinue(page: Page) {
 test('el servidor público diligencia toda la encuesta y obtiene su radicado', async ({
   page,
 }, testInfo) => {
-  const fallback = FLOW_USERS[testInfo.project.name] ?? FLOW_USERS.chromium;
+  const fallback = FLOW_USERS[testInfo.project.name];
+  if (!fallback) {
+    throw new Error(
+      `Proyecto de Playwright sin usuario de flujo asignado: ${testInfo.project.name}`,
+    );
+  }
   const user = process.env.E2E_FLOW_USER ?? fallback.user;
   const password = process.env.E2E_FLOW_PASSWORD ?? fallback.password;
 
