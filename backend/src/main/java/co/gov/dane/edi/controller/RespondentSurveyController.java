@@ -1,5 +1,7 @@
 package co.gov.dane.edi.controller;
 
+import co.gov.dane.edi.model.FinishRequest;
+import co.gov.dane.edi.model.FinishResult;
 import co.gov.dane.edi.model.PageAnswersRequest;
 import co.gov.dane.edi.model.PageDetail;
 import co.gov.dane.edi.model.PageSaveResult;
@@ -22,6 +24,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -106,6 +109,22 @@ public class RespondentSurveyController {
       @Valid @RequestBody PageAnswersRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
     return answersService.savePage(respondentCode(jwt), pageCode, request.answers());
+  }
+
+  @Operation(summary = "Terminar la encuesta y obtener el radicado")
+  @ApiResponse(responseCode = "200", description = "Radicado de la encuesta")
+  @ApiResponse(
+      responseCode = "409",
+      description = "Faltan páginas por guardar",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @PostMapping(value = "/finish", produces = MediaType.APPLICATION_JSON_VALUE)
+  public FinishResult finish(
+      @Valid @RequestBody FinishRequest request,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    return answersService.finish(respondentCode(jwt), request.observations());
   }
 
   private String respondentCode(Jwt jwt) {

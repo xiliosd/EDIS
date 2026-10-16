@@ -132,6 +132,31 @@ paths:
       summary: Consultar un capítulo
       tags:
       - Encuesta
+  /api/v1/survey/finish:
+    post:
+      operationId: finish
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinishRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinishResult"
+          description: Radicado de la encuesta
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Faltan páginas por guardar
+      summary: Terminar la encuesta y obtener el radicado
+      tags:
+      - Encuesta
   /api/v1/survey/pages/{pageCode}:
     get:
       operationId: page
@@ -325,6 +350,18 @@ components:
         obligatoria:
           type: boolean
         tipo:
+          type: string
+    FinishRequest:
+      type: object
+      properties:
+        observations:
+          type: string
+          maxLength: 1100
+          minLength: 0
+    FinishResult:
+      type: object
+      properties:
+        receipt:
           type: string
     LegacySkip:
       type: object

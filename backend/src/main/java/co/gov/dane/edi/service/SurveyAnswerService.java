@@ -2,6 +2,7 @@ package co.gov.dane.edi.service;
 
 import co.gov.dane.edi.model.AnswerColumn;
 import co.gov.dane.edi.model.EntryKind;
+import co.gov.dane.edi.model.FinishResult;
 import co.gov.dane.edi.model.InputType;
 import co.gov.dane.edi.model.PageSaveResult;
 import co.gov.dane.edi.model.PageState;
@@ -33,6 +34,8 @@ public class SurveyAnswerService {
   static final String LOCKED_MESSAGE = "Complete primero las páginas anteriores.";
   // Valor que el PHP heredado guarda para preguntas deshabilitadas o sin respuesta (D15).
   private static final String EMPTY_VALUE = "0";
+  static final String MISSING_PAGES_MESSAGE = "Faltan páginas por guardar.";
+  private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cntrl}&&[^\\n\\t]]");
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
 
   private final SurveyProgressService progress;
@@ -41,6 +44,7 @@ public class SurveyAnswerService {
   private final AnswerRepository answers;
   private final AnswerColumnRepository answerColumns;
   private final SaveLocks locks;
+  private final ReceiptService receipts;
 
   public SurveyAnswerService(
       SurveyProgressService progress,
@@ -48,13 +52,15 @@ public class SurveyAnswerService {
       EffectiveRulesService rules,
       AnswerRepository answers,
       AnswerColumnRepository answerColumns,
-      SaveLocks locks) {
+      SaveLocks locks,
+      ReceiptService receipts) {
     this.progress = progress;
     this.questionnaire = questionnaire;
     this.rules = rules;
     this.answers = answers;
     this.answerColumns = answerColumns;
     this.locks = locks;
+    this.receipts = receipts;
   }
 
   public PageSaveResult savePage(
@@ -64,6 +70,29 @@ public class SurveyAnswerService {
             .orElseThrow(() -> new ResourceNotFoundException("La página solicitada no existe."));
     Map<String, String> safeSubmitted = submitted == null ? Map.of() : submitted;
     return locks.withLock(respondentCode, () -> save(respondentCode, page, safeSubmitted));
+  }
+
+  /** Termina la encuesta: exige las 9 páginas, guarda OBS una sola vez y devuelve el radicado. */
+  public FinishResult finish(String respondentCode, String observations) {
+    return locks.withLock(respondentCode, () -> doFinish(respondentCode, observations));
+  }
+
+  private FinishResult doFinish(String respondentCode, String observations) {
+    boolean allSaved =
+        SurveyPage.ordered().stream()
+            .allMatch(page -> progress.stateOf(respondentCode, page) == PageState.SAVED);
+    if (!allSaved) {
+      throw new ConflictException(MISSING_PAGES_MESSAGE);
+    }
+    String text =
+        observations == null
+            ? ""
+            : CONTROL_CHARACTERS.matcher(observations.replace("\r\n", "\n")).replaceAll("").strip();
+    // OBS se escribe una sola vez (D18): repetir la llamada no la modifica.
+    if (!text.isEmpty() && answers.findObservations(respondentCode) == null) {
+      answers.saveObservations(respondentCode, text);
+    }
+    return new FinishResult(receipts.receiptFor(respondentCode));
   }
 
   private PageSaveResult save(
