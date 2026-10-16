@@ -29,7 +29,10 @@ class SessionTokenServiceTest {
     // El decodificador valida la expiración con el reloj real, por eso el token se emite "ahora".
     service =
         new SessionTokenService(
-            config.jwtEncoder(key), Clock.fixed(Instant.now(), ZoneOffset.UTC), properties);
+            config.jwtEncoder(key),
+            Clock.fixed(Instant.now(), ZoneOffset.UTC),
+            properties,
+            new SubjectCipher(properties));
     decoder = config.jwtDecoder(key);
   }
 
@@ -104,5 +107,29 @@ class SessionTokenServiceTest {
             SessionPrincipal.administrator("a", EnumSet.of(Role.ADMIN_NACIONAL), null)
                 .isRespondent())
         .isFalse();
+  }
+
+  @Test
+  void respondentTokenDoesNotCarryTheReadableCode() {
+    Jwt jwt = decoder.decode(service.issueToken(SessionPrincipal.respondent("1000000001")));
+    assertThat(jwt.getSubject()).startsWith("encuestado:").doesNotContain("1000000001");
+    SessionPrincipal principal = service.principalFrom(jwt);
+    assertThat(principal.respondentCode()).isEqualTo("1000000001");
+    assertThat(principal.roles()).containsExactly(Role.ENCUESTADO);
+  }
+
+  @Test
+  void administratorTokenIsUnchanged() {
+    SessionPrincipal admin =
+        SessionPrincipal.administrator("adm.bogota", EnumSet.of(Role.ADMIN_TERRITORIAL), "11");
+    assertThat(service.principalFrom(decoder.decode(service.issueToken(admin)))).isEqualTo(admin);
+  }
+
+  @Test
+  void respondentCodeIsOnlyAvailableForRespondents() {
+    SessionPrincipal admin =
+        SessionPrincipal.administrator("adm", EnumSet.of(Role.ADMIN_NACIONAL), null);
+    org.assertj.core.api.Assertions.assertThatThrownBy(admin::respondentCode)
+        .isInstanceOf(IllegalStateException.class);
   }
 }

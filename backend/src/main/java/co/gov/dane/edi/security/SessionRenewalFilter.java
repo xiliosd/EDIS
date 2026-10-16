@@ -27,7 +27,7 @@ public class SessionRenewalFilter extends OncePerRequestFilter {
     if (authentication instanceof JwtAuthenticationToken jwtAuthentication
         && !request.getRequestURI().endsWith("/auth/logout")
         && tokens.needsRenewal(jwtAuthentication.getToken())) {
-      String renewed = tokens.issueToken(SessionPrincipal.fromJwt(jwtAuthentication.getToken()));
+      String renewed = tokens.issueToken(tokens.principalFrom(jwtAuthentication.getToken()));
       response.addHeader(HttpHeaders.SET_COOKIE, tokens.sessionCookie(renewed).toString());
     }
     chain.doFilter(request, response);

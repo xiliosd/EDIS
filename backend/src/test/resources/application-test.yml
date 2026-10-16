@@ -17,6 +17,8 @@ app:
     cookie-secure: false
     allowed-origin: http://localhost:5173
     swagger-public: true
+  receipt:
+    key: clave-de-radicado-solo-para-pruebas-automatizadas
 
 springdoc:
   api-docs:

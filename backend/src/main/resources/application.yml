@@ -48,6 +48,8 @@ app:
     max-login-attempts: 5
     lockout-minutes: 15
     swagger-public: ${SWAGGER_PUBLIC:false}
+  receipt:
+    key: ${RECEIPT_KEY}
 
 springdoc:
   api-docs:

@@ -92,7 +92,7 @@ public class AuthController {
               schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(value = "/me", produces = MediaType.APPLICATION_JSON_VALUE)
   public SessionResponse me(@AuthenticationPrincipal Jwt jwt) {
-    return toResponse(SessionPrincipal.fromJwt(jwt));
+    return toResponse(tokens.principalFrom(jwt));
   }
 
   private SessionResponse toResponse(SessionPrincipal principal) {

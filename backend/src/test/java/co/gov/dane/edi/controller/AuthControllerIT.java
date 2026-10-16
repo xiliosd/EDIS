@@ -48,6 +48,13 @@ class AuthControllerIT extends OracleIntegrationTest {
         .doesNotContain("1000000001")
         .doesNotContain("Clave#01")
         .doesNotContain("PRUEBA01");
+    String token =
+        result.getResponse().getCookie(SessionTokenService.SESSION_COOKIE_NAME).getValue();
+    String payload =
+        new String(
+            java.util.Base64.getUrlDecoder().decode(token.split("\\.")[1]),
+            java.nio.charset.StandardCharsets.UTF_8);
+    assertThat(payload).doesNotContain("1000000001");
   }
 
   @Test

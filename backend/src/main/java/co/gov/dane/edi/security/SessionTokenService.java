@@ -23,11 +23,17 @@ public class SessionTokenService {
   private final JwtEncoder encoder;
   private final Clock clock;
   private final AppSecurityProperties properties;
+  private final SubjectCipher subjectCipher;
 
-  public SessionTokenService(JwtEncoder encoder, Clock clock, AppSecurityProperties properties) {
+  public SessionTokenService(
+      JwtEncoder encoder,
+      Clock clock,
+      AppSecurityProperties properties,
+      SubjectCipher subjectCipher) {
     this.encoder = encoder;
     this.clock = clock;
     this.properties = properties;
+    this.subjectCipher = subjectCipher;
   }
 
   public String issueToken(SessionPrincipal principal) {
@@ -38,7 +44,7 @@ public class SessionTokenService {
     JwtClaimsSet.Builder claims =
         JwtClaimsSet.builder()
             .issuer(ISSUER)
-            .subject(principal.subject())
+            .subject(tokenSubject(principal))
             .issuedAt(issuedAt)
             .expiresAt(issuedAt.plus(properties.sessionDuration()))
             .claim(ROLES_CLAIM, principal.roles().stream().map(Role::name).sorted().toList());
@@ -61,6 +67,23 @@ public class SessionTokenService {
   public boolean needsRenewal(Jwt jwt) {
     Duration remaining = Duration.between(clock.instant(), jwt.getExpiresAt());
     return remaining.compareTo(properties.sessionDuration().dividedBy(2)) < 0;
+  }
+
+  /** Reconstruye la identidad de la sesión, descifrando el C_C del encuestado. */
+  public SessionPrincipal principalFrom(Jwt jwt) {
+    SessionPrincipal raw = SessionPrincipal.fromJwt(jwt);
+    if (!raw.isRespondent()) {
+      return raw;
+    }
+    String code = subjectCipher.decrypt(raw.respondentCode());
+    return new SessionPrincipal(
+        SessionPrincipal.RESPONDENT_PREFIX + code, raw.roles(), raw.departmentCode());
+  }
+
+  private String tokenSubject(SessionPrincipal principal) {
+    return principal.isRespondent()
+        ? SessionPrincipal.RESPONDENT_PREFIX + subjectCipher.encrypt(principal.respondentCode())
+        : principal.subject();
   }
 
   private ResponseCookie.ResponseCookieBuilder baseCookie(String value) {

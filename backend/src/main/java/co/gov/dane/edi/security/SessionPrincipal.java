@@ -10,7 +10,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 /** Identidad de la sesión, reconstruible desde el JWT para no consultar Oracle en cada petición. */
 public record SessionPrincipal(String subject, Set<Role> roles, String departmentCode) {
 
-  private static final String RESPONDENT_PREFIX = "encuestado:";
+  public static final String RESPONDENT_PREFIX = "encuestado:";
   private static final String ADMIN_PREFIX = "admin:";
 
   public SessionPrincipal {
@@ -44,6 +44,14 @@ public record SessionPrincipal(String subject, Set<Role> roles, String departmen
 
   public boolean isRespondent() {
     return subject.startsWith(RESPONDENT_PREFIX);
+  }
+
+  /** C_C del encuestado; dato personal (D17): no se registra ni se devuelve en respuestas. */
+  public String respondentCode() {
+    if (!isRespondent()) {
+      throw new IllegalStateException("La sesión no es de un encuestado");
+    }
+    return subject.substring(RESPONDENT_PREFIX.length());
   }
 
   @Override
