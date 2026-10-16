@@ -25,6 +25,10 @@ public class AnswerRepository {
   private static final String YEAR_COLUMN = "ANIO";
   private static final String OBSERVATIONS_COLUMN = "OBS";
 
+  /** Columnas del sistema: las fija el repositorio o tienen su propio camino de escritura. */
+  private static final Set<String> SYSTEM_COLUMNS =
+      Set.of("C_C", "ESTADO", "TC", YEAR_COLUMN, "FECHA", "COMPLETA", OBSERVATIONS_COLUMN);
+
   private final NamedParameterJdbcTemplate jdbc;
   private final AnswerColumnRepository answerColumns;
   private final SurveyProperties survey;
@@ -64,7 +68,7 @@ public class AnswerRepository {
   }
 
   public void insertPage(Chapter chapter, String respondentCode, Map<String, String> values) {
-    List<String> safe = requireColumns(chapter, values.keySet());
+    List<String> safe = requireWritableColumns(chapter, values.keySet());
     List<String> names = new ArrayList<>(List.of("C_C", "ESTADO", "TC"));
     List<String> params = new ArrayList<>(List.of(":cc", "1", "1"));
     MapSqlParameterSource parameters = new MapSqlParameterSource("cc", respondentCode);
@@ -92,8 +96,13 @@ public class AnswerRepository {
   /** Escritura única (D16): solo actualiza si la columna guarda de la página sigue en NULL. */
   public int updatePage(
       Chapter chapter, String respondentCode, Map<String, String> values, String guardColumn) {
-    List<String> safe = requireColumns(chapter, values.keySet());
+    List<String> safe = requireWritableColumns(chapter, values.keySet());
     String guard = requireColumns(chapter, List.of(guardColumn)).get(0);
+    String guardValue = values.get(guard);
+    if (guardValue == null || guardValue.isBlank()) {
+      // Oracle guarda "" como NULL: la página seguiría sin guardar y podría reescribirse (D16).
+      throw new IllegalArgumentException("La columna guarda debe escribirse con valor");
+    }
     MapSqlParameterSource parameters = new MapSqlParameterSource("cc", respondentCode);
     List<String> assignments = new ArrayList<>();
     for (int i = 0; i < safe.size(); i++) {
@@ -126,6 +135,16 @@ public class AnswerRepository {
             + OBSERVATIONS_COLUMN
             + " IS NULL",
         Map.of("obs", text, "cc", respondentCode));
+  }
+
+  private List<String> requireWritableColumns(Chapter chapter, Collection<String> columns) {
+    List<String> safe = requireColumns(chapter, columns);
+    for (String column : safe) {
+      if (SYSTEM_COLUMNS.contains(column)) {
+        throw new IllegalArgumentException("Columna reservada del sistema: " + column);
+      }
+    }
+    return safe;
   }
 
   private List<String> requireColumns(Chapter chapter, Collection<String> columns) {

@@ -78,6 +78,29 @@ class AnswerRepositoryIT extends OracleIntegrationTest {
   }
 
   @Test
+  void updateRequiresTheGuardColumnWithANonBlankValue() {
+    answers.insertPage(Chapter.C, CODE, Map.of("C01A", "1", "C01B", "1"));
+    assertThatThrownBy(() -> answers.updatePage(Chapter.C, CODE, Map.of("C13", " "), "C13"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> answers.updatePage(Chapter.C, CODE, Map.of("C01B", "2"), "C13"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> answers.updatePage(Chapter.C, CODE, Map.of(), "C13"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void systemColumnsCannotBeWrittenAsAnswers() {
+    answers.insertPage(Chapter.H, CODE, Map.of("H01", "1"));
+    for (String column : List.of("C_C", "ESTADO", "TC", "COMPLETA", "OBS")) {
+      assertThatThrownBy(
+              () -> answers.updatePage(Chapter.H, CODE, Map.of("H01", "1", column, "x"), "H01"))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+    assertThatThrownBy(() -> answers.insertPage(Chapter.B, CODE, Map.of("ANIO", "1999")))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void exposesColumnTypeAndLength() {
     assertThat(columns.findColumnDetails("EDIN_20_CAP_B_UBICA").get("B02").dataLength())
         .isEqualTo(1);
