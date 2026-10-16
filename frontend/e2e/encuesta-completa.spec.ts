@@ -32,8 +32,10 @@ test('el servidor público diligencia toda la encuesta y obtiene su radicado', a
       `Proyecto de Playwright sin usuario de flujo asignado: ${testInfo.project.name}`,
     );
   }
-  const user = process.env.E2E_FLOW_USER ?? fallback.user;
-  const password = process.env.E2E_FLOW_PASSWORD ?? fallback.password;
+  // Cada proyecto necesita su propio usuario: E2E_FLOW_USER_CHROMIUM, E2E_FLOW_USER_MOVIL, etc.
+  const suffix = testInfo.project.name.toUpperCase();
+  const user = process.env[`E2E_FLOW_USER_${suffix}`] ?? fallback.user;
+  const password = process.env[`E2E_FLOW_PASSWORD_${suffix}`] ?? fallback.password;
 
   await page.goto('/ingresar');
   await page.getByLabel('Usuario').fill(user);
