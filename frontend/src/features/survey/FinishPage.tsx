@@ -44,7 +44,10 @@ export function FinishPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRESS_QUERY_KEY }),
   });
 
-  const receipt = finish.data?.receipt ?? (progress.data?.finished ? progress.data.receipt : null);
+  // El backend informa `finished` en cuanto las 9 páginas están guardadas, antes de las
+  // observaciones: el radicado solo se muestra al cerrar o si ya hay observaciones registradas.
+  const receipt =
+    finish.data?.receipt ?? (progress.data?.observationsSaved ? progress.data.receipt : null);
   const allSaved = (progress.data?.pages ?? []).every((page) => page.state === 'SAVED');
   const observationsError =
     finish.error instanceof ApiError ? finish.error.fieldErrors.observations : undefined;

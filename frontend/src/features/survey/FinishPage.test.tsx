@@ -87,6 +87,14 @@ describe('FinishPage', () => {
     expect(screen.queryByLabelText('Observaciones (opcional)')).not.toBeInTheDocument();
   });
 
+  it('ofrece las observaciones aunque el backend ya informe todas las páginas guardadas', async () => {
+    useProgress({ finished: true, observationsSaved: false, receipt: 'ABCDE-23456' });
+    renderApp('/encuesta/terminar');
+
+    expect(await screen.findByLabelText('Observaciones (opcional)')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('oculta el campo si las observaciones ya fueron registradas', async () => {
     useProgress({ observationsSaved: true });
     renderApp('/encuesta/terminar');
