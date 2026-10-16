@@ -30,4 +30,10 @@ class ReceiptServiceTest {
     assertThat(new ReceiptProperties("clave-secreta-de-radicado-0123456789").toString())
         .doesNotContain("clave-secreta");
   }
+
+  @Test
+  void receiptMatchesIndependentlyComputedKnownAnswer() {
+    // Calculado aparte con Python: hmac sha256 + base32, 10 primeros caracteres (D17).
+    assertThat(service.receiptFor("1000000001")).isEqualTo("VBDCT-2PSS6");
+  }
 }

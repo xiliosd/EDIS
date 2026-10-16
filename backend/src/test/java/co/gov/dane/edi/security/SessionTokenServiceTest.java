@@ -132,4 +132,16 @@ class SessionTokenServiceTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(admin::respondentCode)
         .isInstanceOf(IllegalStateException.class);
   }
+
+  @Test
+  void principalFromRejectsRespondentSubjectThatIsNotEncrypted() {
+    Jwt jwt =
+        Jwt.withTokenValue("t")
+            .header("alg", "HS256")
+            .subject("encuestado:1000000001")
+            .claim(SessionTokenService.ROLES_CLAIM, List.of("ENCUESTADO"))
+            .build();
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.principalFrom(jwt))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
 }

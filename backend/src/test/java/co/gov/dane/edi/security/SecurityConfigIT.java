@@ -24,6 +24,7 @@ class SecurityConfigIT extends OracleIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private SessionTokenService tokens;
+  @Autowired private org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder;
 
   @Test
   void healthIsPublic() throws Exception {
@@ -155,5 +156,32 @@ class SecurityConfigIT extends OracleIntegrationTest {
   private Cookie sessionFor(SessionPrincipal principal, Instant issuedAt) {
     return new Cookie(
         SessionTokenService.SESSION_COOKIE_NAME, tokens.issueToken(principal, issuedAt));
+  }
+
+  @Test
+  void respondentTokenWithUnreadableSubjectGetsProblem401() throws Exception {
+    var claims =
+        org.springframework.security.oauth2.jwt.JwtClaimsSet.builder()
+            .issuer(SessionTokenService.ISSUER)
+            .subject("encuestado:1000000001")
+            .issuedAt(Instant.now())
+            .expiresAt(Instant.now().plusSeconds(600))
+            .claim(SessionTokenService.ROLES_CLAIM, java.util.List.of("ENCUESTADO"))
+            .build();
+    String forged =
+        jwtEncoder
+            .encode(
+                org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(
+                    org.springframework.security.oauth2.jwt.JwsHeader.with(
+                            org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256)
+                        .build(),
+                    claims))
+            .getTokenValue();
+    mockMvc
+        .perform(
+            get("/api/v1/auth/me")
+                .cookie(new Cookie(SessionTokenService.SESSION_COOKIE_NAME, forged)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentTypeCompatibleWith("application/problem+json"));
   }
 }

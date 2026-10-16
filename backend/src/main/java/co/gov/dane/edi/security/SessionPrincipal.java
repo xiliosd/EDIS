@@ -27,7 +27,10 @@ public record SessionPrincipal(String subject, Set<Role> roles, String departmen
     return new SessionPrincipal(ADMIN_PREFIX + username, roles, departmentCode);
   }
 
-  public static SessionPrincipal fromJwt(Jwt jwt) {
+  /**
+   * Identidad cruda: en un encuestado el C_C sigue cifrado; use SessionTokenService.principalFrom.
+   */
+  static SessionPrincipal fromJwt(Jwt jwt) {
     List<String> roleNames = jwt.getClaimAsStringList(SessionTokenService.ROLES_CLAIM);
     Set<Role> roles = EnumSet.noneOf(Role.class);
     if (roleNames != null) {

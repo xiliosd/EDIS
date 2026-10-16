@@ -4,13 +4,17 @@ import java.util.Arrays;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -93,7 +97,7 @@ public class SecurityConfig {
                         referrer ->
                             referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN)))
         .addFilterAt(
-            sessionAuthenticationFilter(jwtDecoder, entryPoint),
+            sessionAuthenticationFilter(jwtDecoder, entryPoint, tokens),
             BearerTokenAuthenticationFilter.class)
         .addFilterAfter(new SessionRenewalFilter(tokens), BearerTokenAuthenticationFilter.class);
     return http.build();
@@ -104,9 +108,11 @@ public class SecurityConfig {
    * toda petición con token resuelto, y aquí el token viaja en una cookie, que sí exige CSRF.
    */
   private static BearerTokenAuthenticationFilter sessionAuthenticationFilter(
-      JwtDecoder jwtDecoder, ProblemAuthenticationEntryPoint entryPoint) {
+      JwtDecoder jwtDecoder,
+      ProblemAuthenticationEntryPoint entryPoint,
+      SessionTokenService tokens) {
     JwtAuthenticationProvider provider = new JwtAuthenticationProvider(jwtDecoder);
-    provider.setJwtAuthenticationConverter(jwtAuthenticationConverter());
+    provider.setJwtAuthenticationConverter(jwtAuthenticationConverter(tokens));
     BearerTokenAuthenticationFilter filter =
         new BearerTokenAuthenticationFilter(new ProviderManager(provider));
     filter.setBearerTokenResolver(new CookieBearerTokenResolver(publicPathsMatcher()));
@@ -135,12 +141,24 @@ public class SecurityConfig {
     return new OrRequestMatcher(matchers);
   }
 
-  static JwtAuthenticationConverter jwtAuthenticationConverter() {
+  /**
+   * El sujeto del encuestado se descifra aquí, al autenticar: un token bien firmado pero con un
+   * sujeto ilegible (p. ej. emitido antes del cifrado del C_C) responde 401 y no 500.
+   */
+  static Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter(
+      SessionTokenService tokens) {
     JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
     authorities.setAuthoritiesClaimName(SessionTokenService.ROLES_CLAIM);
     authorities.setAuthorityPrefix("ROLE_");
     JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
     converter.setJwtGrantedAuthoritiesConverter(authorities);
-    return converter;
+    return jwt -> {
+      try {
+        tokens.principalFrom(jwt);
+      } catch (IllegalArgumentException exception) {
+        throw new InvalidBearerTokenException("Sesión inválida", exception);
+      }
+      return converter.convert(jwt);
+    };
   }
 }
