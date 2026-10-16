@@ -63,6 +63,12 @@ public class SecurityConfig {
               } else {
                 authorize.requestMatchers(DOCUMENTATION_PATHS).hasRole(Role.ADMIN_NACIONAL.name());
               }
+              // Rutas con datos del propio encuestado: ni el administrador del cuestionario las
+              // lee.
+              authorize
+                  .requestMatchers(
+                      "/api/v1/survey/progress", "/api/v1/survey/pages/**", "/api/v1/survey/finish")
+                  .hasRole(Role.ENCUESTADO.name());
               // Los administradores del cuestionario solo consultan; responder es del encuestado.
               authorize
                   .requestMatchers(HttpMethod.GET, "/api/v1/survey/**")

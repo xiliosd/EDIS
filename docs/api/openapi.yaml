@@ -13,6 +13,8 @@ tags:
   name: Autenticación
 - description: Lectura del cuestionario
   name: Encuesta
+- description: Diligenciamiento del cuestionario
+  name: Encuesta
 paths:
   /api/v1/auth/csrf:
     get:
@@ -132,6 +134,19 @@ paths:
       summary: Consultar un capítulo
       tags:
       - Encuesta
+  /api/v1/survey/rules:
+    get:
+      operationId: rules
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleSet"
+          description: Reglas del archivo más saltos heredados
+      summary: Consultar las reglas de saltos y validaciones vigentes
+      tags:
+      - Encuesta
 components:
   schemas:
     AnswerOption:
@@ -184,10 +199,53 @@ components:
           type: string
         title:
           type: string
+    Condition:
+      type: object
+      properties:
+        alguna:
+          type: array
+          items:
+            type: string
+        o:
+          type: array
+          items:
+            $ref: "#/components/schemas/Condition"
+        op:
+          type: string
+        pregunta:
+          type: string
+        todas:
+          type: array
+          items:
+            type: string
+        valor:
+          type: string
+        valores:
+          type: array
+          items:
+            type: string
+        "y":
+          type: array
+          items:
+            $ref: "#/components/schemas/Condition"
     CsrfTokenResponse:
       type: object
       properties:
         token:
+          type: string
+    FieldValidation:
+      type: object
+      properties:
+        longitudMax:
+          type: integer
+          format: int32
+        max:
+          type: number
+        min:
+          type: number
+        obligatoria:
+          type: boolean
+        tipo:
           type: string
     LegacySkip:
       type: object
@@ -263,6 +321,25 @@ components:
           type: string
         text:
           type: string
+    RuleSet:
+      type: object
+      properties:
+        anio:
+          type: integer
+          format: int32
+        encuesta:
+          type: string
+        saltos:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkipRule"
+        validaciones:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/FieldValidation"
+        version:
+          type: integer
+          format: int32
     SectionHeader:
       type: object
       properties:
@@ -292,6 +369,26 @@ components:
         surveyYear:
           type: integer
           format: int32
+    SkipAction:
+      type: object
+      properties:
+        accion:
+          type: string
+        preguntas:
+          type: array
+          items:
+            type: string
+    SkipRule:
+      type: object
+      properties:
+        descripcion:
+          type: string
+        entonces:
+          $ref: "#/components/schemas/SkipAction"
+        id:
+          type: string
+        si:
+          $ref: "#/components/schemas/Condition"
   securitySchemes:
     sessionCookie:
       in: cookie
