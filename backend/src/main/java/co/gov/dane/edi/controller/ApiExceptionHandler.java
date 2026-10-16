@@ -1,10 +1,13 @@
 package co.gov.dane.edi.controller;
 
+import co.gov.dane.edi.service.error.AnswerValidationException;
+import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidCredentialsException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.TooManyLoginAttemptsException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -29,6 +32,22 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(ResourceNotFoundException.class)
   ProblemDetail handleNotFound(ResourceNotFoundException exception) {
     return problem(HttpStatus.NOT_FOUND, "Recurso no encontrado", exception.getMessage());
+  }
+
+  @ExceptionHandler(ConflictException.class)
+  ProblemDetail handleConflict(ConflictException exception) {
+    return problem(HttpStatus.CONFLICT, "Conflicto", exception.getMessage());
+  }
+
+  @ExceptionHandler(AnswerValidationException.class)
+  ProblemDetail handleInvalidAnswers(AnswerValidationException exception) {
+    ProblemDetail body =
+        problem(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "Respuestas inválidas",
+            "Revise las preguntas marcadas.");
+    body.setProperty("errors", new TreeMap<>(exception.fieldMessages()));
+    return body;
   }
 
   @ExceptionHandler(InvalidCredentialsException.class)

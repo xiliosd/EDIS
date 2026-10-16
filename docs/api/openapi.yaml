@@ -157,6 +157,49 @@ paths:
       summary: "Consultar una página con sus preguntas y, si ya se guardó, sus respuestas"
       tags:
       - Encuesta
+  /api/v1/survey/pages/{pageCode}/answers:
+    put:
+      operationId: saveAnswers
+      parameters:
+      - in: path
+        name: pageCode
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageAnswersRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageSaveResult"
+          description: Página guardada; indica la siguiente
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La página no existe
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Página ya guardada o bloqueada
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Respuestas inválidas (errors: columna → mensaje)"
+      summary: Guardar las respuestas de una página (una sola vez)
+      tags:
+      - Encuesta
   /api/v1/survey/progress:
     get:
       operationId: progress
@@ -311,6 +354,15 @@ components:
       - accountType
       - password
       - username
+    PageAnswersRequest:
+      type: object
+      properties:
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+      - answers
     PageDetail:
       type: object
       properties:
@@ -336,6 +388,13 @@ components:
           - SAVED
           - AVAILABLE
           - LOCKED
+    PageSaveResult:
+      type: object
+      properties:
+        nextPageCode:
+          type: string
+        pageCode:
+          type: string
     PageStatus:
       type: object
       properties:

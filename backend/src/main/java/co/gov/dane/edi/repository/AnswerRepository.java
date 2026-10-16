@@ -67,6 +67,15 @@ public class AnswerRepository {
     return rows.isEmpty() ? Map.of() : Map.copyOf(rows.get(0));
   }
 
+  public boolean rowExists(Chapter chapter, String respondentCode) {
+    Integer rows =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM " + chapter.tableName() + " WHERE C_C = :cc",
+            Map.of("cc", respondentCode),
+            Integer.class);
+    return rows != null && rows > 0;
+  }
+
   public void insertPage(Chapter chapter, String respondentCode, Map<String, String> values) {
     List<String> safe = requireWritableColumns(chapter, values.keySet());
     List<String> names = new ArrayList<>(List.of("C_C", "ESTADO", "TC"));
