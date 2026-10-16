@@ -1,0 +1,17 @@
+{
+  "descripcion": "Cascada: A=2 deshabilita B; B deshabilitada cuenta como vacía y su regla no aplica",
+  "reglas": {
+    "encuesta": "EDIN", "anio": 2026, "version": 1,
+    "saltos": [
+      { "id": "a-no", "si": { "pregunta": "A01", "op": "eq", "valor": "2" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["B01"] } },
+      { "id": "b-si", "si": { "pregunta": "B01", "op": "eq", "valor": "1" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["C01"] } }
+    ],
+    "validaciones": {}
+  },
+  "columnas": ["A01", "B01", "C01"],
+  "respuestas": { "A01": "2", "B01": "1" },
+  "deshabilitadas": ["B01"],
+  "errores": { "C01": "REQUERIDA" }
+}

@@ -1,0 +1,17 @@
+{
+  "descripcion": "todas=2 deshabilita C10; alguna en {1,9} deshabilita F04I",
+  "reglas": {
+    "encuesta": "EDIN", "anio": 2026, "version": 1,
+    "saltos": [
+      { "id": "c09-todas-no", "si": { "todas": ["C09A", "C09B"], "op": "eq", "valor": "2" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["C10"] } },
+      { "id": "f04-alguna-si", "si": { "alguna": ["F04A", "F04B"], "op": "in", "valores": ["1", "9"] },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["F04I"] } }
+    ],
+    "validaciones": {}
+  },
+  "columnas": ["C09A", "C09B", "C10", "F04A", "F04B", "F04I"],
+  "respuestas": { "C09A": "2", "C09B": "2", "F04A": "2", "F04B": "9" },
+  "deshabilitadas": ["C10", "F04I"],
+  "errores": {}
+}

@@ -1,0 +1,18 @@
+{
+  "descripcion": "Validaciones: entero fuera de rango, tipo inválido, longitud y opcional vacío",
+  "reglas": {
+    "encuesta": "EDIN", "anio": 2026, "version": 1,
+    "saltos": [],
+    "validaciones": {
+      "B06": { "tipo": "entero", "min": 15, "max": 99 },
+      "B07": { "tipo": "entero" },
+      "B08": { "tipo": "texto", "longitudMax": 3 },
+      "B09": { "obligatoria": false, "tipo": "decimal" },
+      "B10": { "tipo": "decimal", "max": 10.5 }
+    }
+  },
+  "columnas": ["B06", "B07", "B08", "B09", "B10"],
+  "respuestas": { "B06": "14", "B07": "doce", "B08": "abcd", "B09": " ", "B10": "10.5" },
+  "deshabilitadas": [],
+  "errores": { "B06": "FUERA_DE_RANGO", "B07": "TIPO_INVALIDO", "B08": "LONGITUD" }
+}

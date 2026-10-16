@@ -1,5 +1,6 @@
 package co.gov.dane.edi.rules;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ public record FieldValidation(
     @JsonProperty("max") BigDecimal max,
     @JsonProperty("longitudMax") Integer maxLength) {
 
+  @JsonIgnore
   public boolean isRequired() {
     return required == null || required;
   }

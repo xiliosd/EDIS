@@ -1,0 +1,15 @@
+{
+  "descripcion": "Un salto deshabilita C01B cuando C01A es 2; la deshabilitada no se exige",
+  "reglas": {
+    "encuesta": "EDIN", "anio": 2026, "version": 1,
+    "saltos": [
+      { "id": "c01a-no", "si": { "pregunta": "C01A", "op": "eq", "valor": "2" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["C01B"] } }
+    ],
+    "validaciones": {}
+  },
+  "columnas": ["C01A", "C01B"],
+  "respuestas": { "C01A": "2" },
+  "deshabilitadas": ["C01B"],
+  "errores": {}
+}

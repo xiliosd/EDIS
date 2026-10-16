@@ -1,0 +1,22 @@
+{
+  "descripcion": "y/o anidados, gt/lt numéricos (no numérico = falso), ne, notIn, empty",
+  "reglas": {
+    "encuesta": "EDIN", "anio": 2026, "version": 1,
+    "saltos": [
+      { "id": "g05-mayor-1", "si": { "pregunta": "G05", "op": "gt", "valor": "1" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["G06"] } },
+      { "id": "y-o", "si": { "y": [
+          { "pregunta": "D09", "op": "notIn", "valores": ["1", "2"] },
+          { "o": [ { "pregunta": "X01", "op": "lt", "valor": "5" }, { "pregunta": "X02", "op": "empty" } ] }
+        ] },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["D11"] } },
+      { "id": "ne", "si": { "pregunta": "X03", "op": "ne", "valor": "1" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["X04"] } }
+    ],
+    "validaciones": {}
+  },
+  "columnas": ["G05", "G06", "D09", "D11", "X01", "X02", "X03", "X04"],
+  "respuestas": { "G05": "3", "D09": "3", "X01": "no-numero", "X03": "" },
+  "deshabilitadas": ["D11", "G06"],
+  "errores": { "X02": "REQUERIDA", "X03": "REQUERIDA", "X04": "REQUERIDA" }
+}
