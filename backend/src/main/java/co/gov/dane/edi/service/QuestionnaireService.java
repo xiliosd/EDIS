@@ -11,6 +11,7 @@ import co.gov.dane.edi.model.InputType;
 import co.gov.dane.edi.model.LegacySkip;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SectionHeader;
+import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.repository.QuestionnaireRepository;
 import co.gov.dane.edi.repository.QuestionnaireRow;
@@ -48,10 +49,34 @@ public class QuestionnaireService {
         Chapter.fromCode(chapterCode)
             .orElseThrow(() -> new ResourceNotFoundException("El capítulo solicitado no existe."));
     Set<String> columns = answerColumns.findColumns(chapter.tableName());
-    List<QuestionnaireRow> rows =
+    List<QuestionnaireEntry> entries =
         chapter.pageCodes().stream()
-            .flatMap(page -> questionnaire.findRowsByPage(page).stream())
+            .flatMap(page -> buildEntries(page, columns, includePendingColumns).stream())
             .toList();
+    return new ChapterDetail(chapter.code(), chapter.title(), chapter.module(), entries);
+  }
+
+  /** Preguntas que ve el encuestado en una página, sin columnas pendientes de crear. */
+  public List<QuestionnaireEntry> pageEntries(SurveyPage page) {
+    Set<String> columns = answerColumns.findColumns(page.chapter().tableName());
+    return buildEntries(page.code(), columns, false);
+  }
+
+  /** Columnas de respuesta de los ítems activos, en el orden de la página. */
+  public static List<String> activeItemColumns(List<QuestionnaireEntry> entries) {
+    return entries.stream()
+        .filter(
+            e ->
+                e.kind() == EntryKind.ITEM
+                    && e.answer() != null
+                    && e.answer().columnStatus() == ColumnStatus.ACTIVE)
+        .map(e -> e.answer().columnCode())
+        .toList();
+  }
+
+  private List<QuestionnaireEntry> buildEntries(
+      String pageCode, Set<String> columns, boolean includePendingColumns) {
+    List<QuestionnaireRow> rows = questionnaire.findRowsByPage(pageCode);
     Map<Long, List<SectionHeader>> headers =
         questionnaire.findHeaders(rows.stream().map(QuestionnaireRow::entryId).toList());
     Map<Integer, List<AnswerOption>> options =
@@ -61,12 +86,10 @@ public class QuestionnaireService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList());
-    List<QuestionnaireEntry> entries =
-        rows.stream()
-            .map(row -> toEntry(row, headers, options, columns))
-            .filter(entry -> includePendingColumns || !isPending(entry))
-            .toList();
-    return new ChapterDetail(chapter.code(), chapter.title(), chapter.module(), entries);
+    return rows.stream()
+        .map(row -> toEntry(pageCode, row, headers, options, columns))
+        .filter(entry -> includePendingColumns || !isPending(entry))
+        .toList();
   }
 
   private static boolean isPending(QuestionnaireEntry entry) {
@@ -74,6 +97,7 @@ public class QuestionnaireService {
   }
 
   private static QuestionnaireEntry toEntry(
+      String pageCode,
       QuestionnaireRow row,
       Map<Long, List<SectionHeader>> headers,
       Map<Integer, List<AnswerOption>> options,
@@ -86,7 +110,15 @@ public class QuestionnaireService {
     String text = QuestionTextSanitizer.toPlainText(row.text());
     if (STATEMENT_TYPE.equals(row.type())) {
       return new QuestionnaireEntry(
-          row.entryId(), EntryKind.STATEMENT, numeral, numeral, text, entryHeaders, null, null);
+          row.entryId(),
+          pageCode,
+          EntryKind.STATEMENT,
+          numeral,
+          numeral,
+          text,
+          entryHeaders,
+          null,
+          null);
     }
     Optional<String> column = ColumnCodeResolver.fromNumeral(numeral);
     ColumnStatus status =
@@ -109,6 +141,7 @@ public class QuestionnaireService {
             : new LegacySkip(row.legacySkipCount(), row.legacySkipValue());
     return new QuestionnaireEntry(
         row.entryId(),
+        pageCode,
         EntryKind.ITEM,
         numeral,
         ColumnCodeResolver.displayLabel(numeral),

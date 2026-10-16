@@ -11,6 +11,11 @@ class ColumnCodeResolverTest {
     assertThat(ColumnCodeResolver.fromNumeral("C07A.")).contains("C07A");
     assertThat(ColumnCodeResolver.fromNumeral("B02*.")).contains("B02");
     assertThat(ColumnCodeResolver.fromNumeral(" e01b.  ")).contains("E01B");
+    assertThat(ColumnCodeResolver.fromNumeral("C7a.")).contains("C07A");
+    assertThat(ColumnCodeResolver.fromNumeral("B2*.")).contains("B02");
+    assertThat(ColumnCodeResolver.fromNumeral("H1*.")).contains("H01");
+    assertThat(ColumnCodeResolver.fromNumeral("C10.")).contains("C10");
+    assertThat(ColumnCodeResolver.fromNumeral("C11C.")).contains("C11C");
   }
 
   @Test

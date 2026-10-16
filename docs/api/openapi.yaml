@@ -259,6 +259,8 @@ components:
           $ref: "#/components/schemas/LegacySkip"
         numeral:
           type: string
+        pageCode:
+          type: string
         text:
           type: string
     SectionHeader:

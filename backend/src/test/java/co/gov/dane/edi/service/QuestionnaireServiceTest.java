@@ -15,6 +15,7 @@ import co.gov.dane.edi.model.HeaderKind;
 import co.gov.dane.edi.model.InputType;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SectionHeader;
+import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.repository.QuestionnaireRepository;
 import co.gov.dane.edi.repository.QuestionnaireRow;
@@ -94,6 +95,13 @@ class QuestionnaireServiceTest {
     QuestionnaireEntry pending = service.getChapter("B", true).entries().get(2);
     assertThat(pending.answer().columnStatus()).isEqualTo(ColumnStatus.PENDING_COLUMN);
     assertThat(pending.text()).isEqualTo("Nueva sin columna");
+  }
+
+  @Test
+  void pageEntriesExcludePendingColumnsAndKeepThePage() {
+    List<QuestionnaireEntry> entries = service.pageEntries(SurveyPage.find("B1").orElseThrow());
+    assertThat(entries).extracting(QuestionnaireEntry::pageCode).containsOnly("B1");
+    assertThat(QuestionnaireService.activeItemColumns(entries)).containsExactly("B02");
   }
 
   @Test
