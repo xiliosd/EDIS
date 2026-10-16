@@ -1,6 +1,8 @@
 import { Link } from 'react-router';
+import { useDocumentTitle } from '../hooks/use-document-title';
 
 export function NotFoundPage() {
+  useDocumentTitle('Página no encontrada');
   return (
     <section aria-labelledby="titulo-no-encontrada" className="rounded-2xl bg-surface p-8">
       <h1 id="titulo-no-encontrada" className="text-2xl font-semibold">

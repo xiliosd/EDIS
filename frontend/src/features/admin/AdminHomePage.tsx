@@ -1,3 +1,5 @@
+import { useDocumentTitle } from '../../hooks/use-document-title';
+
 const UPCOMING_MODULES = [
   { name: 'Cuestionario', description: 'Textos, preguntas y orden.' },
   { name: 'Reglas', description: 'Saltos y valores mínimos y máximos.' },
@@ -6,6 +8,7 @@ const UPCOMING_MODULES = [
 ];
 
 export function AdminHomePage() {
+  useDocumentTitle('Administración');
   return (
     <section aria-labelledby="titulo-admin">
       <h1 id="titulo-admin" className="text-2xl font-semibold">

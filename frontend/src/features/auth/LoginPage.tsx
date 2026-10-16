@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router';
 import { Button } from '../../components/Button';
 import { TextField } from '../../components/TextField';
+import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
 import { SESSION_QUERY_KEY } from '../../services/query-client';
 import { login, type LoginRequest } from './auth-api';
@@ -27,6 +28,7 @@ const ACCOUNT_TYPES: ReadonlyArray<{ value: LoginRequest['accountType']; label: 
 ];
 
 export function LoginPage() {
+  useDocumentTitle('Ingreso a la encuesta');
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
