@@ -41,6 +41,11 @@ export function SurveyPageView() {
   useDocumentTitle(title);
   // El 409 recarga la página y desmonta el formulario; el aviso vive aquí para no perderse.
   const [conflict, setConflict] = useState<{ pageCode: string; message: string } | null>(null);
+  // La vista sigue montada al cambiar de página: el aviso se descarta para que no reaparezca
+  // si el encuestado vuelve a la página que lo produjo.
+  if (conflict && conflict.pageCode !== pageCode) {
+    setConflict(null);
+  }
 
   if (page.isPending || rules.isPending) {
     return <p aria-busy="true">Cargando la página…</p>;
@@ -62,7 +67,7 @@ export function SurveyPageView() {
       <h1 id="titulo-pagina" className="text-2xl font-semibold">
         {title}
       </h1>
-      {conflict?.pageCode === pageCode && (
+      {conflict && (
         <p
           role="alert"
           className="mt-6 rounded-xl border border-danger/40 bg-surface p-4 text-danger"
