@@ -5,6 +5,7 @@ import co.gov.dane.edi.service.QuestionnaireService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -15,18 +16,34 @@ public class EffectiveRulesService {
   private final RulesFileRepository rulesFile;
   private final QuestionnaireService questionnaire;
 
+  /** Una sola instancia (D6): las reglas efectivas se calculan una vez por generación. */
+  private final AtomicReference<CachedRules> cached = new AtomicReference<>();
+
   public EffectiveRulesService(RulesFileRepository rulesFile, QuestionnaireService questionnaire) {
     this.rulesFile = rulesFile;
     this.questionnaire = questionnaire;
   }
 
   public RuleSet effectiveRules() {
+    long generation = questionnaire.cacheGeneration();
+    CachedRules current = cached.get();
+    if (current != null && current.generation() == generation) {
+      return current.rules();
+    }
+    RuleSet computed = compute();
+    cached.set(new CachedRules(generation, computed));
+    return computed;
+  }
+
+  private RuleSet compute() {
     List<SkipRule> legacy = new ArrayList<>();
     for (SurveyPage page : SurveyPage.ordered()) {
       legacy.addAll(LegacySkipTranslator.translate(questionnaire.pageEntries(page)));
     }
     return merge(rulesFile.load(), legacy);
   }
+
+  private record CachedRules(long generation, RuleSet rules) {}
 
   /** Una regla del archivo con el id de una heredada la reemplaza (así se corrige FRM_SALTO). */
   static RuleSet merge(RuleSet fromFile, List<SkipRule> legacy) {

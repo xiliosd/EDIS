@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -33,6 +35,14 @@ public class QuestionnaireService {
 
   private final QuestionnaireRepository questionnaire;
   private final AnswerColumnRepository answerColumns;
+
+  /**
+   * Preguntas por página en memoria: cada consulta del encuestado las necesita varias veces. Los
+   * cambios en las tablas FRM exigen reiniciar hasta que el editor de la Fase 3 llame a evict().
+   */
+  private final Map<SurveyPage, List<QuestionnaireEntry>> entriesByPage = new ConcurrentHashMap<>();
+
+  private final AtomicLong cacheGeneration = new AtomicLong();
 
   public QuestionnaireService(
       QuestionnaireRepository questionnaire, AnswerColumnRepository answerColumns) {
@@ -58,8 +68,21 @@ public class QuestionnaireService {
 
   /** Preguntas que ve el encuestado en una página, sin columnas pendientes de crear. */
   public List<QuestionnaireEntry> pageEntries(SurveyPage page) {
-    Set<String> columns = answerColumns.findColumns(page.chapter().tableName());
-    return buildEntries(page.code(), columns, false);
+    return entriesByPage.computeIfAbsent(
+        page,
+        key ->
+            buildEntries(key.code(), answerColumns.findColumns(key.chapter().tableName()), false));
+  }
+
+  /** Descarta las preguntas en memoria; las cachés derivadas comparan la generación. */
+  public void evict() {
+    entriesByPage.clear();
+    cacheGeneration.incrementAndGet();
+  }
+
+  /** Cambia en cada evict(): permite a EffectiveRulesService invalidar su copia a la vez. */
+  public long cacheGeneration() {
+    return cacheGeneration.get();
   }
 
   /** Columnas de respuesta de los ítems activos, en el orden de la página. */

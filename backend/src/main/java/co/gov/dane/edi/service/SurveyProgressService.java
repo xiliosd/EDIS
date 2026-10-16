@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -86,22 +87,37 @@ public class SurveyProgressService {
   }
 
   private Map<SurveyPage, PageState> states(String respondentCode) {
+    Map<SurveyPage, Boolean> saved = savedPages(respondentCode);
     Map<SurveyPage, PageState> states = new LinkedHashMap<>();
     boolean previousSaved = true;
     for (SurveyPage page : SurveyPage.ordered()) {
-      List<String> columns =
-          QuestionnaireService.activeItemColumns(questionnaire.pageEntries(page));
-      // Página sin preguntas activas: no hay nada que guardar, cuenta como guardada.
-      boolean saved =
-          columns.isEmpty()
-              || answers
-                  .findAnswers(page.chapter(), respondentCode, columns.subList(0, 1))
-                  .containsKey(columns.get(0));
+      boolean pageSaved = saved.get(page);
       PageState state =
-          saved ? PageState.SAVED : previousSaved ? PageState.AVAILABLE : PageState.LOCKED;
+          pageSaved ? PageState.SAVED : previousSaved ? PageState.AVAILABLE : PageState.LOCKED;
       states.put(page, state);
-      previousSaved = previousSaved && saved;
+      previousSaved = previousSaved && pageSaved;
     }
     return states;
+  }
+
+  /** Una consulta por capítulo: las columnas del primer ítem activo de todas sus páginas. */
+  private Map<SurveyPage, Boolean> savedPages(String respondentCode) {
+    Map<SurveyPage, Boolean> saved = new HashMap<>();
+    for (Chapter chapter : Chapter.values()) {
+      Map<SurveyPage, String> firstColumns = new LinkedHashMap<>();
+      for (SurveyPage page : SurveyPage.ordered()) {
+        if (page.chapter() == chapter) {
+          List<String> columns =
+              QuestionnaireService.activeItemColumns(questionnaire.pageEntries(page));
+          firstColumns.put(page, columns.isEmpty() ? null : columns.get(0));
+        }
+      }
+      List<String> guards = firstColumns.values().stream().filter(Objects::nonNull).toList();
+      Map<String, String> found = answers.findAnswers(chapter, respondentCode, guards);
+      // Página sin preguntas activas: no hay nada que guardar, cuenta como guardada.
+      firstColumns.forEach(
+          (page, column) -> saved.put(page, column == null || found.containsKey(column)));
+    }
+    return saved;
   }
 }

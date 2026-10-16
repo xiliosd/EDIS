@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import co.gov.dane.edi.model.AnswerOption;
@@ -102,6 +104,20 @@ class QuestionnaireServiceTest {
     List<QuestionnaireEntry> entries = service.pageEntries(SurveyPage.find("B1").orElseThrow());
     assertThat(entries).extracting(QuestionnaireEntry::pageCode).containsOnly("B1");
     assertThat(QuestionnaireService.activeItemColumns(entries)).containsExactly("B02");
+  }
+
+  @Test
+  void pageEntriesAreCachedUntilEvicted() {
+    SurveyPage page = SurveyPage.find("B1").orElseThrow();
+    long generation = service.cacheGeneration();
+
+    assertThat(service.pageEntries(page)).isSameAs(service.pageEntries(page));
+    verify(questionnaire, times(1)).findRowsByPage("B1");
+
+    service.evict();
+    service.pageEntries(page);
+    verify(questionnaire, times(2)).findRowsByPage("B1");
+    assertThat(service.cacheGeneration()).isGreaterThan(generation);
   }
 
   @Test
