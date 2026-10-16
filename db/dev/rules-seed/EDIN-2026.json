@@ -1,0 +1,9 @@
+{
+  "encuesta": "EDIN",
+  "anio": 2026,
+  "version": 1,
+  "saltos": [],
+  "validaciones": {
+    "B06": { "obligatoria": true, "tipo": "entero", "min": 15, "max": 99 }
+  }
+}

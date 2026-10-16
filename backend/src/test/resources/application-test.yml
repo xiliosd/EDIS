@@ -9,7 +9,9 @@ app:
   survey:
     code: EDIN
     year: 2026
-    rules-dir: ${java.io.tmpdir}/edi-rules-test
+    rules-dir: ${java.io.tmpdir}/edi-rules-test-${random.uuid}
+  rules-seed:
+    dir: ../db/dev/rules-seed
   security:
     jwt-secret: solo-para-pruebas-automatizadas-no-usar-en-ningun-ambiente
     cookie-secure: false

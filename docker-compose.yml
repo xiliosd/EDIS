@@ -23,6 +23,7 @@ services:
       SPRING_SQL_INIT_MODE: always
       SPRING_SQL_INIT_SCHEMA_LOCATIONS: file:/db/dev/schema.sql
       SPRING_SQL_INIT_DATA_LOCATIONS: file:/db/dev/data.sql
+      RULES_SEED_DIR: /db/dev/rules-seed
     volumes:
       - ./db/dev:/db/dev:ro
       - rules-data:/data/rules

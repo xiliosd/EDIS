@@ -38,6 +38,8 @@ app:
     year: ${SURVEY_YEAR}
     db-schema: ${DB_SCHEMA:DANE_DIRPEN}
     rules-dir: ${RULES_DIR:/data/rules}
+  rules-seed:
+    dir: ${RULES_SEED_DIR:}
   security:
     jwt-secret: ${JWT_SECRET}
     session-minutes: ${SESSION_MINUTES:30}
