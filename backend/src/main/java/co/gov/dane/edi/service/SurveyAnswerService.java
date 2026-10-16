@@ -16,6 +16,7 @@ import co.gov.dane.edi.rules.RuleEvaluator;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -148,13 +149,38 @@ public class SurveyAnswerService {
     if (type == InputType.CHECKBOX && !value.equals("1") && !value.equals(EMPTY_VALUE)) {
       return Optional.of(RuleErrorCodes.INVALID_OPTION);
     }
-    if (column != null && "NUMBER".equals(column.dataType()) && !NUMBER.matcher(value).matches()) {
+    return column == null ? Optional.empty() : checkColumn(value, column);
+  }
+
+  /** Rechaza lo que Oracle no aceptaría o redondearía (ORA-12899, ORA-01438). */
+  static Optional<String> checkColumn(String value, AnswerColumn column) {
+    if (!"NUMBER".equals(column.dataType())) {
+      // Sin CHAR_USED = 'C' la longitud es en bytes: "ññ" ocupa 4 en AL32UTF8.
+      boolean tooLong =
+          column.charSemantics()
+              ? value.codePointCount(0, value.length()) > column.charLength()
+              : value.getBytes(StandardCharsets.UTF_8).length > column.dataLength();
+      return tooLong ? Optional.of(RuleErrorCodes.TOO_LONG) : Optional.empty();
+    }
+    if (!NUMBER.matcher(value).matches()) {
       return Optional.of(RuleErrorCodes.INVALID_TYPE);
     }
-    if (column != null
-        && !"NUMBER".equals(column.dataType())
-        && value.length() > column.dataLength()) {
-      return Optional.of(RuleErrorCodes.TOO_LONG);
+    if (column.dataPrecision() == null && column.dataScale() == null) {
+      return Optional.empty();
+    }
+    int scale = column.dataScale() == null ? 0 : column.dataScale();
+    String unsigned = value.startsWith("-") ? value.substring(1) : value;
+    int point = unsigned.indexOf('.');
+    String integerPart = point < 0 ? unsigned : unsigned.substring(0, point);
+    String decimalPart = point < 0 ? "" : unsigned.substring(point + 1);
+    // Oracle redondearía los decimales sobrantes en silencio: se piden como dato inválido.
+    if (decimalPart.replaceFirst("0+$", "").length() > Math.max(scale, 0)) {
+      return Optional.of(RuleErrorCodes.INVALID_TYPE);
+    }
+    String significantInteger = integerPart.replaceFirst("^0+", "");
+    if (column.dataPrecision() != null
+        && significantInteger.length() > column.dataPrecision() - scale) {
+      return Optional.of(RuleErrorCodes.OUT_OF_RANGE);
     }
     return Optional.empty();
   }

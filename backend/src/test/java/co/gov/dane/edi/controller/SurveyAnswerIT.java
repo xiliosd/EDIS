@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -25,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 class SurveyAnswerIT extends OracleIntegrationTest {
 
@@ -84,6 +86,32 @@ class SurveyAnswerIT extends OracleIntegrationTest {
     save("D1", "{\"answers\":{\"D01A\":\"1\",\"D05\":\"123\"}}")
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.errors.D05").value("La respuesta es demasiado larga."));
+    // D05 es VARCHAR2(2) en bytes: "ññ" son 2 caracteres pero 4 bytes (ORA-12899, no 503).
+    save("D1", "{\"answers\":{\"D01A\":\"1\",\"D05\":\"ññ\"}}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors.D05").value("La respuesta es demasiado larga."));
+  }
+
+  @Test
+  void unknownPageIs404() throws Exception {
+    save("Z9", "{\"answers\":{}}").andExpect(status().isNotFound());
+  }
+
+  @Test
+  void nullAnswerIsTreatedLikeABlankOne() throws Exception {
+    save("B1", "{\"answers\":{\"B02\":null,\"B06\":\"30\"}}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors.B02").value("Responda esta pregunta."));
+  }
+
+  @Test
+  void malformedBodyIs400InSpanish() throws Exception {
+    save("B1", "{\"answers\":{\"B02\":{}}}")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Solicitud inválida"))
+        .andExpect(
+            jsonPath("$.detail").value("El cuerpo de la solicitud no tiene el formato esperado."));
+    save("B1", "{\"answers\":").andExpect(status().isBadRequest());
   }
 
   @Test
@@ -105,18 +133,26 @@ class SurveyAnswerIT extends OracleIntegrationTest {
 
   @Test
   void concurrentSavesOfSamePageWriteOnce() throws Exception {
+    // CSRF y cookie se preparan antes: los hilos solo esperan la señal y disparan el PUT juntos.
+    CountDownLatch start = new CountDownLatch(1);
     List<Callable<Integer>> attempts = new ArrayList<>();
     for (int i = 0; i < 4; i++) {
+      MockHttpServletRequestBuilder request =
+          saveRequest("B1", "{\"answers\":{\"B02\":\"1\",\"B06\":\"30\"}}");
       attempts.add(
-          () ->
-              save("B1", "{\"answers\":{\"B02\":\"1\",\"B06\":\"30\"}}")
-                  .andReturn()
-                  .getResponse()
-                  .getStatus());
+          () -> {
+            start.await();
+            return mockMvc.perform(request).andReturn().getResponse().getStatus();
+          });
     }
     ExecutorService pool = Executors.newFixedThreadPool(4);
+    List<Future<Integer>> results = new ArrayList<>();
+    for (Callable<Integer> attempt : attempts) {
+      results.add(pool.submit(attempt));
+    }
+    start.countDown();
     List<Integer> statuses = new ArrayList<>();
-    for (Future<Integer> result : pool.invokeAll(attempts)) {
+    for (Future<Integer> result : results) {
       statuses.add(result.get());
     }
     pool.shutdown();
@@ -130,15 +166,18 @@ class SurveyAnswerIT extends OracleIntegrationTest {
   }
 
   private ResultActions save(String page, String body) throws Exception {
-    return mockMvc.perform(
-        put("/api/v1/survey/pages/" + page + "/answers")
-            .with(realCsrf(mockMvc))
-            .cookie(
-                new Cookie(
-                    SessionTokenService.SESSION_COOKIE_NAME,
-                    tokens.issueToken(SessionPrincipal.respondent(CODE))))
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body));
+    return mockMvc.perform(saveRequest(page, body));
+  }
+
+  private MockHttpServletRequestBuilder saveRequest(String page, String body) {
+    return put("/api/v1/survey/pages/" + page + "/answers")
+        .with(realCsrf(mockMvc))
+        .cookie(
+            new Cookie(
+                SessionTokenService.SESSION_COOKIE_NAME,
+                tokens.issueToken(SessionPrincipal.respondent(CODE))))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(body);
   }
 
   private void insertDirect(String table, String columns, String values) {

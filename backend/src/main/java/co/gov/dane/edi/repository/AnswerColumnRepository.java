@@ -2,6 +2,8 @@ package co.gov.dane.edi.repository;
 
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerColumn;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -17,8 +19,8 @@ import org.springframework.stereotype.Repository;
 public class AnswerColumnRepository {
 
   private static final String COLUMNS_OF_TABLE =
-      "SELECT COLUMN_NAME, DATA_TYPE, DATA_LENGTH FROM ALL_TAB_COLUMNS"
-          + " WHERE OWNER = :owner AND TABLE_NAME = :tableName";
+      "SELECT COLUMN_NAME, DATA_TYPE, DATA_LENGTH, CHAR_LENGTH, CHAR_USED, DATA_PRECISION,"
+          + " DATA_SCALE FROM ALL_TAB_COLUMNS WHERE OWNER = :owner AND TABLE_NAME = :tableName";
 
   private final NamedParameterJdbcTemplate jdbc;
   private final SurveyProperties survey;
@@ -51,9 +53,18 @@ public class AnswerColumnRepository {
               new AnswerColumn(
                   row.getString("COLUMN_NAME"),
                   row.getString("DATA_TYPE"),
-                  row.getInt("DATA_LENGTH"));
+                  row.getInt("DATA_LENGTH"),
+                  row.getInt("CHAR_LENGTH"),
+                  "C".equals(row.getString("CHAR_USED")),
+                  nullableInt(row, "DATA_PRECISION"),
+                  nullableInt(row, "DATA_SCALE"));
           columns.put(column.name(), column);
         });
     return Map.copyOf(columns);
+  }
+
+  private static Integer nullableInt(ResultSet row, String column) throws SQLException {
+    int value = row.getInt(column);
+    return row.wasNull() ? null : value;
   }
 }

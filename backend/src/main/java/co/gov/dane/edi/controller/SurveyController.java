@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/survey")
-@Tag(name = "Encuesta", description = "Lectura del cuestionario")
+@Tag(name = "Encuesta", description = "Lectura y diligenciamiento del cuestionario")
 public class SurveyController {
 
   private final QuestionnaireService questionnaireService;

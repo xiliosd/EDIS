@@ -3,6 +3,7 @@ package co.gov.dane.edi.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import co.gov.dane.edi.model.AnswerColumn;
 import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.support.OracleIntegrationTest;
 import java.util.List;
@@ -101,8 +102,11 @@ class AnswerRepositoryIT extends OracleIntegrationTest {
   }
 
   @Test
-  void exposesColumnTypeAndLength() {
-    assertThat(columns.findColumnDetails("EDIN_20_CAP_B_UBICA").get("B02").dataLength())
-        .isEqualTo(1);
+  void exposesColumnTypeLengthAndPrecision() {
+    Map<String, AnswerColumn> details = columns.findColumnDetails("EDIN_20_CAP_B_UBICA");
+    // VARCHAR2(1) en semántica de bytes (la de la base heredada); NUMBER(3) entero.
+    assertThat(details.get("B02"))
+        .isEqualTo(new AnswerColumn("B02", "VARCHAR2", 1, 1, false, null, null));
+    assertThat(details.get("B01")).isEqualTo(new AnswerColumn("B01", "NUMBER", 22, 0, false, 3, 0));
   }
 }
