@@ -63,7 +63,7 @@ public class SecurityConfig {
               } else {
                 authorize.requestMatchers(DOCUMENTATION_PATHS).hasRole(Role.ADMIN_NACIONAL.name());
               }
-              // Rutas con datos del propio encuestado: ni el administrador del cuestionario las
+              // Rutas con datos del propio encuestado: el administrador del cuestionario no las
               // lee.
               authorize
                   .requestMatchers(
