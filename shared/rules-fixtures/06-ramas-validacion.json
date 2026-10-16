@@ -1,0 +1,29 @@
+{
+  "descripcion": "Ramas de validación y condiciones: máximo excedido, mínimo inclusivo, entero decimal, min/max en texto, in y notEmpty como salto directo, todas que falla",
+  "reglas": {
+    "encuesta": "EDIN", "anio": 2026, "version": 1,
+    "saltos": [
+      { "id": "s01-in", "si": { "pregunta": "S01", "op": "in", "valores": ["1", "2"] },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["D01"] } },
+      { "id": "s02-notempty", "si": { "pregunta": "S02", "op": "notEmpty" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["D02"] } },
+      { "id": "t-todas", "si": { "todas": ["T01", "T02"], "op": "eq", "valor": "1" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["D03"] } }
+    ],
+    "validaciones": {
+      "V01": { "tipo": "entero", "max": 10 },
+      "V02": { "tipo": "entero", "min": 5, "max": 9 },
+      "V03": { "tipo": "entero" },
+      "V04": { "tipo": "texto", "min": 1 }
+    }
+  },
+  "columnas": ["V01", "V02", "V03", "V04", "S01", "S02", "T01", "T02", "D01", "D02", "D03"],
+  "respuestas": {
+    "V01": "11", "V02": "5", "V03": "1.5", "V04": "abc",
+    "S01": "2", "S02": "x", "T01": "1", "T02": "2"
+  },
+  "deshabilitadas": ["D01", "D02"],
+  "errores": {
+    "D03": "REQUERIDA", "V01": "FUERA_DE_RANGO", "V03": "TIPO_INVALIDO", "V04": "TIPO_INVALIDO"
+  }
+}

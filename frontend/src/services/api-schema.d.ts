@@ -115,6 +115,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Terminar la encuesta y obtener el radicado */
+        post: operations["finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey/pages/{pageCode}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consultar una página con sus preguntas y, si ya se guardó, sus respuestas */
+        get: operations["page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey/pages/{pageCode}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Guardar las respuestas de una página (una sola vez) */
+        put: operations["saveAnswers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consultar el avance del encuestado */
+        get: operations["progress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consultar las reglas de saltos y validaciones vigentes */
+        get: operations["rules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -142,8 +227,32 @@ export interface components {
             module?: string;
             title?: string;
         };
+        Condition: {
+            alguna?: string[];
+            o?: components["schemas"]["Condition"][];
+            op?: string;
+            pregunta?: string;
+            todas?: string[];
+            valor?: string;
+            valores?: string[];
+            y?: components["schemas"]["Condition"][];
+        };
         CsrfTokenResponse: {
             token?: string;
+        };
+        FieldValidation: {
+            /** Format: int32 */
+            longitudMax?: number;
+            max?: number;
+            min?: number;
+            obligatoria?: boolean;
+            tipo?: string;
+        };
+        FinishRequest: {
+            observations?: string;
+        };
+        FinishResult: {
+            receipt?: string;
         };
         LegacySkip: {
             /** Format: int32 */
@@ -155,6 +264,35 @@ export interface components {
             accountType: "RESPONDENT" | "ADMINISTRATOR";
             password: string;
             username: string;
+        };
+        PageAnswersRequest: {
+            answers: {
+                [key: string]: string;
+            };
+        };
+        PageDetail: {
+            answers?: {
+                [key: string]: string;
+            };
+            chapterCode?: string;
+            chapterTitle?: string;
+            entries?: components["schemas"]["QuestionnaireEntry"][];
+            module?: string;
+            pageCode?: string;
+            /** @enum {string} */
+            state?: "SAVED" | "AVAILABLE" | "LOCKED";
+        };
+        PageSaveResult: {
+            nextPageCode?: string;
+            pageCode?: string;
+        };
+        PageStatus: {
+            chapterCode?: string;
+            chapterTitle?: string;
+            module?: string;
+            pageCode?: string;
+            /** @enum {string} */
+            state?: "SAVED" | "AVAILABLE" | "LOCKED";
         };
         ProblemDetail: {
             detail?: string;
@@ -179,7 +317,19 @@ export interface components {
             label?: string;
             legacySkip?: components["schemas"]["LegacySkip"];
             numeral?: string;
+            pageCode?: string;
             text?: string;
+        };
+        RuleSet: {
+            /** Format: int32 */
+            anio?: number;
+            encuesta?: string;
+            saltos?: components["schemas"]["SkipRule"][];
+            validaciones?: {
+                [key: string]: components["schemas"]["FieldValidation"];
+            };
+            /** Format: int32 */
+            version?: number;
         };
         SectionHeader: {
             /** @enum {string} */
@@ -194,6 +344,22 @@ export interface components {
             surveyCode?: string;
             /** Format: int32 */
             surveyYear?: number;
+        };
+        SkipAction: {
+            accion?: string;
+            preguntas?: string[];
+        };
+        SkipRule: {
+            descripcion?: string;
+            entonces?: components["schemas"]["SkipAction"];
+            id?: string;
+            si?: components["schemas"]["Condition"];
+        };
+        SurveyProgress: {
+            finished?: boolean;
+            observationsSaved?: boolean;
+            pages?: components["schemas"]["PageStatus"][];
+            receipt?: string;
         };
     };
     responses: never;
@@ -360,6 +526,163 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    finish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinishRequest"];
+            };
+        };
+        responses: {
+            /** @description Radicado de la encuesta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinishResult"];
+                };
+            };
+            /** @description Faltan páginas por guardar */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageDetail"];
+                };
+            };
+            /** @description La página no existe */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    saveAnswers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageAnswersRequest"];
+            };
+        };
+        responses: {
+            /** @description Página guardada; indica la siguiente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageSaveResult"];
+                };
+            };
+            /** @description La página no existe */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Página ya guardada o bloqueada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Respuestas inválidas (errors: columna → mensaje) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    progress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Estado de las 9 páginas y radicado si terminó */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyProgress"];
+                };
+            };
+        };
+    };
+    rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reglas del archivo más saltos heredados */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleSet"];
                 };
             };
         };
