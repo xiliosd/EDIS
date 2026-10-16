@@ -132,6 +132,44 @@ paths:
       summary: Consultar un capítulo
       tags:
       - Encuesta
+  /api/v1/survey/pages/{pageCode}:
+    get:
+      operationId: page
+      parameters:
+      - in: path
+        name: pageCode
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageDetail"
+          description: Página
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La página no existe
+      summary: "Consultar una página con sus preguntas y, si ya se guardó, sus respuestas"
+      tags:
+      - Encuesta
+  /api/v1/survey/progress:
+    get:
+      operationId: progress
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyProgress"
+          description: Estado de las 9 páginas y radicado si terminó
+      summary: Consultar el avance del encuestado
+      tags:
+      - Encuesta
   /api/v1/survey/rules:
     get:
       operationId: rules
@@ -273,6 +311,48 @@ components:
       - accountType
       - password
       - username
+    PageDetail:
+      type: object
+      properties:
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+        chapterCode:
+          type: string
+        chapterTitle:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionnaireEntry"
+        module:
+          type: string
+        pageCode:
+          type: string
+        state:
+          type: string
+          enum:
+          - SAVED
+          - AVAILABLE
+          - LOCKED
+    PageStatus:
+      type: object
+      properties:
+        chapterCode:
+          type: string
+        chapterTitle:
+          type: string
+        module:
+          type: string
+        pageCode:
+          type: string
+        state:
+          type: string
+          enum:
+          - SAVED
+          - AVAILABLE
+          - LOCKED
     ProblemDetail:
       type: object
       properties:
@@ -387,6 +467,19 @@ components:
           type: string
         si:
           $ref: "#/components/schemas/Condition"
+    SurveyProgress:
+      type: object
+      properties:
+        finished:
+          type: boolean
+        observationsSaved:
+          type: boolean
+        pages:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageStatus"
+        receipt:
+          type: string
   securitySchemes:
     sessionCookie:
       in: cookie
