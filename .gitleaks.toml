@@ -10,3 +10,8 @@ paths = [
   '''backend/src/test/java/.*''',
   '''docs/superpowers/.*''',
 ]
+# Valores de ejemplo públicos de .env.example; PlaceholderSecretsGuard los rechaza al arrancar.
+regexes = [
+  '''^genere-un-secreto-aleatorio-de-al-menos-32-caracteres$''',
+  '''^genere-otra-clave-aleatoria-de-al-menos-32-caracteres$''',
+]

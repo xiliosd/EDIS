@@ -26,10 +26,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class SurveyAnswerService {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(SurveyAnswerService.class);
 
   static final String SAVED_MESSAGE = "Esta página ya fue guardada.";
   static final String LOCKED_MESSAGE = "Complete primero las páginas anteriores.";
@@ -40,6 +44,10 @@ public class SurveyAnswerService {
   static final String MISSING_PAGES_MESSAGE = "Faltan páginas por guardar.";
   private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cc}&&[^\\n\\t]]");
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
+  // 4000 es el máximo de VARCHAR2: un valor más largo no cabe en ninguna columna de respuesta.
+  static final int MAX_VALUE_LENGTH = 4000;
+  // Las claves desconocidas se devuelven en el 422; se recortan para no reflejar textos largos.
+  static final int MAX_ECHOED_KEY_LENGTH = 30;
 
   private final SurveyProgressService progress;
   private final QuestionnaireService questionnaire;
@@ -72,6 +80,7 @@ public class SurveyAnswerService {
         SurveyPage.find(pageCode)
             .orElseThrow(() -> new ResourceNotFoundException("La página solicitada no existe."));
     Map<String, String> safeSubmitted = submitted == null ? Map.of() : submitted;
+    rejectOversizedValues(safeSubmitted);
     return locks.withLock(respondentCode, () -> save(respondentCode, page, safeSubmitted));
   }
 
@@ -99,7 +108,10 @@ public class SurveyAnswerService {
       if (observationsColumn != null && checkColumn(text, observationsColumn).isPresent()) {
         throw new AnswerValidationException(Map.of("observations", OBSERVATIONS_TOO_LONG_MESSAGE));
       }
-      answers.saveObservations(respondentCode, text);
+      if (answers.saveObservations(respondentCode, text) == 0) {
+        // OBS estaba en NULL y nada se actualizó: falta la fila de H. Sin texto ni C_C en el log.
+        LOGGER.warn("Las observaciones no se guardaron: ninguna fila de H se actualizó");
+      }
     }
     return new FinishResult(receipts.receiptFor(respondentCode));
   }
@@ -118,7 +130,7 @@ public class SurveyAnswerService {
     Map<String, String> errors = new TreeMap<>();
     submitted.keySet().stream()
         .filter(key -> !items.contains(key))
-        .forEach(key -> errors.put(key, RuleErrorCodes.UNKNOWN_QUESTION));
+        .forEach(key -> errors.put(echoedKey(key), RuleErrorCodes.UNKNOWN_QUESTION));
 
     Map<String, String> combined = new HashMap<>(progress.allAnswers(respondentCode));
     items.forEach(column -> combined.remove(column));
@@ -160,6 +172,23 @@ public class SurveyAnswerService {
     }
     write(respondentCode, page, values, items);
     return new PageSaveResult(page.code(), page.next().map(SurveyPage::code).orElse(null));
+  }
+
+  private static void rejectOversizedValues(Map<String, String> submitted) {
+    Map<String, String> messages = new TreeMap<>();
+    submitted.forEach(
+        (key, value) -> {
+          if (value != null && value.length() > MAX_VALUE_LENGTH) {
+            messages.put(echoedKey(key), AnswerErrorMessages.messageFor(RuleErrorCodes.TOO_LONG));
+          }
+        });
+    if (!messages.isEmpty()) {
+      throw new AnswerValidationException(messages);
+    }
+  }
+
+  static String echoedKey(String key) {
+    return key.length() > MAX_ECHOED_KEY_LENGTH ? key.substring(0, MAX_ECHOED_KEY_LENGTH) : key;
   }
 
   private void write(

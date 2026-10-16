@@ -132,6 +132,28 @@ class SurveyAnswerIT extends OracleIntegrationTest {
   }
 
   @Test
+  void oversizedRequestsAreRejectedWithoutEchoingLongKeys() throws Exception {
+    StringBuilder many = new StringBuilder("{\"answers\":{");
+    for (int i = 0; i < 201; i++) {
+      many.append(i == 0 ? "" : ",").append("\"K").append(i).append("\":\"1\"");
+    }
+    save("B1", many.append("}}").toString())
+        .andExpect(status().isBadRequest())
+        .andExpect(
+            jsonPath("$.errors.answers").value("Envíe como máximo 200 respuestas por página"));
+
+    save("B1", "{\"answers\":{\"B02\":\"1\",\"B06\":\"" + "9".repeat(4001) + "\"}}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors.B06").value("La respuesta es demasiado larga."));
+
+    String longKey = "X".repeat(30) + "SOBRANTE";
+    save("B1", "{\"answers\":{\"B02\":\"1\",\"B06\":\"30\",\"" + longKey + "\":\"1\"}}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors." + "X".repeat(30)).value("Pregunta desconocida."))
+        .andExpect(jsonPath("$.errors." + longKey).doesNotExist());
+  }
+
+  @Test
   void concurrentSavesOfSamePageWriteOnce() throws Exception {
     // CSRF y cookie se preparan antes: los hilos solo esperan la señal y disparan el PUT juntos.
     CountDownLatch start = new CountDownLatch(1);
