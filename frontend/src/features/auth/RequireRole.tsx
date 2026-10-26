@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { ErrorState } from '../../components/ErrorState';
 import { AccessDeniedPage } from '../../pages/AccessDeniedPage';
-import { hasAnyRole, useSession } from './use-session';
+import { hasAnyRole, LOGIN_PATH, useSession } from './use-session';
 
 interface RequireRoleProps {
   roles: readonly string[];
@@ -26,7 +26,7 @@ export function RequireRole({ roles, children }: RequireRoleProps) {
     );
   }
   if (!session) {
-    return <Navigate to="/ingresar" replace state={{ from: location.pathname }} />;
+    return <Navigate to={LOGIN_PATH} replace state={{ from: location.pathname }} />;
   }
   if (!hasAnyRole(session, roles)) {
     return <AccessDeniedPage />;

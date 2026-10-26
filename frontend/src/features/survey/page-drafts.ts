@@ -107,7 +107,9 @@ export async function bindDraftsToUser(accountType: string, username: string): P
   try {
     owner = await draftOwnerFor(accountType, username);
   } catch {
+    // Sin huella no habrá borradores aquí, pero las demás pestañas igual deben descartar los suyos.
     clearAllDrafts();
+    rotateSessionGeneration();
     return;
   }
   if (currentOwner() !== owner) {
@@ -140,6 +142,22 @@ export function saveDraft(pageCode: string, values: Record<string, string>): voi
     window.sessionStorage.setItem(draftKey(pageCode), JSON.stringify(draft));
   } catch {
     // Sin almacenamiento disponible (modo privado o cuota llena): no hay borrador que guardar.
+  }
+}
+
+/** Indica, sin consumirlo, si hay un borrador de la página que se recuperaría al volver. */
+export function hasRecoverableDraft(pageCode: string): boolean {
+  const generation = tabGeneration();
+  const owner = currentOwner();
+  if (!generation || !owner || generation !== sharedGeneration()) {
+    return false;
+  }
+  try {
+    const raw = window.sessionStorage.getItem(draftKey(pageCode));
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    return typeof parsed === 'object' && parsed !== null && (parsed as StoredDraft).owner === owner;
+  } catch {
+    return false;
   }
 }
 

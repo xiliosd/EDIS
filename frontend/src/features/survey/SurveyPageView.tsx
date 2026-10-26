@@ -10,7 +10,8 @@ import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
 import { messageFor } from './answer-error-messages';
 import { ErrorSummary } from './ErrorSummary';
-import { clearDraft, saveDraft, takeDraft } from './page-drafts';
+import { LOGIN_PATH } from '../auth/use-session';
+import { clearDraft, hasRecoverableDraft, saveDraft, takeDraft } from './page-drafts';
 import { QuestionField, type PageValues } from './questions/QuestionField';
 import { evaluate, type RuleSet } from './rules/rule-evaluator';
 import { SavedPageSummary } from './SavedPageSummary';
@@ -159,14 +160,19 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
   // que el formulario limpio vuelva a pintarse. Se reactiva si el guardado falla.
   const savingRef = useRef(false);
   // Tras un 401 las respuestas quedan en el borrador local (y se mantiene al día abajo): ir a
-  // ingresar de nuevo no las pierde, así que no se pregunta.
+  // ingresar de nuevo no las pierde, así que no se pregunta. Solo si el borrador sigue ahí: con
+  // el almacenamiento bloqueado o descartado por otra pestaña, se pregunta como siempre.
   const draftStashed = sessionError === 401;
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       isDirty &&
       !savingRef.current &&
       !isLeaveConfirmed(nextLocation.state) &&
-      !(draftStashed && nextLocation.pathname === '/ingresar') &&
+      !(
+        draftStashed &&
+        nextLocation.pathname === LOGIN_PATH &&
+        hasRecoverableDraft(page.pageCode ?? '')
+      ) &&
       // Los enlaces del resumen de errores (#campo-…) no salen de la página.
       currentLocation.pathname !== nextLocation.pathname,
   );
@@ -201,9 +207,10 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
   const valuesKey = JSON.stringify(values);
   useEffect(() => {
     if (draftStashed) {
-      saveDraft(page.pageCode ?? '', JSON.parse(valuesKey) as PageValues);
+      saveDraft(page.pageCode ?? '', form.getValues());
     }
-  }, [draftStashed, valuesKey, page.pageCode]);
+    // valuesKey cambia con cada respuesta: es lo que dispara el guardado del borrador.
+  }, [draftStashed, valuesKey, page.pageCode, form]);
 
   useEffect(() => {
     if (Object.keys(summary).length > 0) {

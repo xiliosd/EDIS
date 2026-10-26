@@ -17,6 +17,8 @@ export function hasAnyRole(session: Session | null | undefined, roles: readonly 
   return Boolean(session?.roles?.some((role) => roles.includes(role)));
 }
 
+export const LOGIN_PATH = '/ingresar';
+
 export function homePathFor(session: Session): string {
   return hasAnyRole(session, ['ENCUESTADO']) ? '/encuesta' : '/admin';
 }

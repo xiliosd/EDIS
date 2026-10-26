@@ -659,6 +659,27 @@ describe('SurveyPageView', () => {
       expect(stored.values.C01T).toBe('15');
     });
 
+    it('tras un 401 sin borrador recuperable sí pide confirmar al ir a ingresar', async () => {
+      await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+      await stashDraftAfterExpiredSession();
+      // El mismo usuario ingresa en otra pestaña: esta descarta su borrador.
+      act(() => {
+        window.localStorage.setItem(SESSION_GENERATION_KEY, 'generacion-ficticia-2');
+        window.dispatchEvent(
+          new StorageEvent('storage', {
+            key: SESSION_GENERATION_KEY,
+            newValue: 'generacion-ficticia-2',
+            storageArea: window.localStorage,
+          }),
+        );
+      });
+
+      await userEvent.click(screen.getByRole('link', { name: 'Ingresar de nuevo' }));
+
+      expect(screen.getByRole('dialog', { name: LEAVE_DIALOG })).toBeInTheDocument();
+      expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('12');
+    });
+
     it('no bloquea el paso a la página siguiente después de guardar', async () => {
       server.use(
         http.put('*/api/v1/survey/pages/C1/answers', () =>

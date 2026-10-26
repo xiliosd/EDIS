@@ -78,6 +78,17 @@ describe('borradores de página y generación de sesión', () => {
     expect(Object.values(window.localStorage).join(' ').toLowerCase()).not.toContain('prueba05');
   });
 
+  it('el ingreso estrena generación aunque no se pueda calcular la huella', async () => {
+    window.localStorage.setItem(SESSION_GENERATION_KEY, 'generacion-ficticia-1');
+    vi.spyOn(globalThis.crypto.subtle, 'digest').mockRejectedValue(new Error('Sin SubtleCrypto'));
+
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+
+    expect(window.localStorage.getItem(SESSION_GENERATION_KEY)).not.toBe('generacion-ficticia-1');
+    saveDraft('C1', { C01T: '12' });
+    expect(takeDraft('C1')).toBeNull();
+  });
+
   it('sin localStorage disponible no recupera borradores', async () => {
     await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
     saveDraft('C1', { C01T: '12' });

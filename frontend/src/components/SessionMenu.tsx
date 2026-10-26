@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { logout } from '../features/auth/auth-api';
-import { useSession } from '../features/auth/use-session';
+import { LOGIN_PATH, useSession } from '../features/auth/use-session';
 import { clearAllDrafts, rotateSessionGeneration } from '../features/survey/page-drafts';
 import {
   hasUnsavedChanges,
@@ -55,7 +55,7 @@ export function SessionMenu() {
     rotateSessionGeneration();
     clearAfterNavigation.current = true;
     // La salida ya se confirmó arriba: la página con respuestas sin guardar no vuelve a preguntar.
-    navigate('/ingresar', {
+    navigate(LOGIN_PATH, {
       replace: true,
       state: withLeaveConfirmed(serverLogoutFailed ? { logoutFailed: true } : {}),
     });

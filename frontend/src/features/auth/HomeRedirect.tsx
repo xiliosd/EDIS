@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router';
 import { ErrorState } from '../../components/ErrorState';
-import { homePathFor, useSession } from './use-session';
+import { homePathFor, LOGIN_PATH, useSession } from './use-session';
 
 export function HomeRedirect() {
   const { data: session, isPending, isError, refetch } = useSession();
@@ -16,5 +16,5 @@ export function HomeRedirect() {
       <ErrorState message="No fue posible verificar su sesión." onRetry={() => void refetch()} />
     );
   }
-  return <Navigate to={session ? homePathFor(session) : '/ingresar'} replace />;
+  return <Navigate to={session ? homePathFor(session) : LOGIN_PATH} replace />;
 }
