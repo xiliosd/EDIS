@@ -166,7 +166,12 @@ class RulesFileRepositoryTest {
     RuleSet current = repository.load("EDIN", 2027);
 
     RuleSet saved =
-        repository.save(current.withTables(Map.of("B", "OTRA_TABLA")), 3, "admin1", "tablas");
+        repository.save(
+            current.withTables(Map.of("B", "OTRA_TABLA")),
+            3,
+            "admin1",
+            "guardar-tablas",
+            List.of("B"));
 
     assertThat(saved.version()).isEqualTo(4);
     assertThat(repository.load("EDIN", 2027)).isSameAs(saved);
@@ -192,7 +197,7 @@ class RulesFileRepositoryTest {
     RulesFileRepository repository = repository(tempDir, "EDIN");
     RuleSet current = repository.load("EDIN", 2027);
 
-    assertThatThrownBy(() -> repository.save(current, 2, "admin1", "x"))
+    assertThatThrownBy(() -> repository.save(current, 2, "admin1", "x", List.of()))
         .isInstanceOf(ConflictException.class)
         .hasMessage("Otro usuario modificó el cuestionario. Recargue la página.");
     assertThat(repository.load("EDIN", 2027).version()).isEqualTo(3);
@@ -216,7 +221,7 @@ class RulesFileRepositoryTest {
         };
     RuleSet current = failing.load("EDIN", 2027);
 
-    assertThatThrownBy(() -> failing.save(current, 3, "admin1", "x"))
+    assertThatThrownBy(() -> failing.save(current, 3, "admin1", "x", List.of()))
         .isInstanceOf(UncheckedIOException.class);
 
     assertThat(Files.readString(tempDir.resolve("EDIN-2027.json"), StandardCharsets.UTF_8))
@@ -263,5 +268,54 @@ class RulesFileRepositoryTest {
     RulesFileRepository repository = repository(tempDir, "EDIN");
     assertThatThrownBy(() -> repository.load("../X", 2027))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void findIsEmptyForAYearLoadedWithoutSeedOrFile() {
+    RulesFileRepository repository = repository(tempDir, "ZZZZ");
+    assertThat(repository.load("ZZZZ", 2030).skips()).isEmpty();
+    assertThat(repository.find("ZZZZ", 2030)).isEmpty();
+  }
+
+  @Test
+  void rejectsYearsOutsideFourDigits() {
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    assertThatThrownBy(() -> repository.load("EDIN", 999))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> repository.find("EDIN", 10000))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void auditOperationAndCodesMustBeFixedKeys() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet current = repository.load("EDIN", 2027);
+    assertThatThrownBy(() -> repository.save(current, 1, "u", "Texto Libre", List.of()))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> repository.save(current, 1, "u", "ok", List.of("B 1; x")))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(repository.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void auditLineCarriesOperationAndCodes(CapturedOutput output) throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    repository.save(repository.load("EDIN", 2027), 1, "admin1", "reordenar", List.of("B06"));
+    assertThat(output).contains("operacion=reordenar codigos=[B06]");
+  }
+
+  @Test
+  void rapidSavesNeverOverwriteHistoryCopies() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet rules = repository.load("EDIN", 2027);
+    for (int version = 1; version <= 8; version++) {
+      rules = repository.save(rules, version, "admin1", "guardar", List.of());
+    }
+    try (var history = Files.list(tempDir.resolve("historial"))) {
+      assertThat(history.count()).isEqualTo(8);
+    }
   }
 }

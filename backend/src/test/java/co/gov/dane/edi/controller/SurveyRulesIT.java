@@ -31,6 +31,15 @@ class SurveyRulesIT extends OracleIntegrationTest {
   }
 
   @Test
+  void publishedYearExposesNeitherStateNorTables() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/survey/rules").cookie(session(SessionPrincipal.respondent("1"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.estado").doesNotExist())
+        .andExpect(jsonPath("$.tablas").doesNotExist());
+  }
+
+  @Test
   void respondentOnlyEndpointsRejectQuestionnaireAdministrators() throws Exception {
     Cookie admin =
         session(SessionPrincipal.administrator("adm", EnumSet.of(Role.ADMIN_CUESTIONARIO), null));

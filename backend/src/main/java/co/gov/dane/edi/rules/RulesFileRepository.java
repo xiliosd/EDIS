@@ -36,6 +36,8 @@ public class RulesFileRepository {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RulesFileRepository.class);
   private static final Pattern SURVEY_CODE = Pattern.compile("[A-Z]{4}");
+  private static final Pattern OPERATION = Pattern.compile("[a-z][a-z0-9-]{0,40}");
+  private static final Pattern AUDIT_CODE = Pattern.compile("[A-Za-z0-9_-]{1,40}");
   private static final String HISTORY_DIR = "historial";
 
   private final JsonMapper jsonMapper;
@@ -67,10 +69,7 @@ public class RulesFileRepository {
   /** Reglas de un año solo si su archivo existe: nunca siembra. */
   public Optional<RuleSet> find(String surveyCode, int year) {
     String key = fileName(surveyCode, year);
-    RuleSet current = cache.get(key);
-    if (current != null) {
-      return Optional.of(current);
-    }
+    // Primero el archivo: load() cachea reglas vacías cuando no hay semilla y eso no es un año.
     if (Files.notExists(rulesDir().resolve(key))) {
       return Optional.empty();
     }
@@ -99,11 +98,20 @@ public class RulesFileRepository {
 
   /**
    * Guarda las reglas con control de versión (spec §5.3): copia el archivo vigente al historial,
-   * escribe un temporal con la versión + 1 y lo mueve de forma atómica. {@code reason} es la clave
-   * corta de la operación que queda en la auditoría. Si el año aún no tiene archivo, la versión
-   * esperada es 0 y no hay historial que copiar.
+   * escribe un temporal con la versión + 1 y lo mueve de forma atómica. {@code operation} es una
+   * clave fija y {@code codes} códigos de columna o ids de regla: ningún texto libre llega a la
+   * auditoría. Si el año aún no tiene archivo, la versión esperada es 0 y no hay historial.
    */
-  public synchronized RuleSet save(RuleSet rules, int expectedVersion, String user, String reason) {
+  public synchronized RuleSet save(
+      RuleSet rules, int expectedVersion, String user, String operation, List<String> codes) {
+    if (operation == null || !OPERATION.matcher(operation).matches()) {
+      throw new IllegalArgumentException("Operación de auditoría inválida");
+    }
+    for (String code : codes) {
+      if (code == null || !AUDIT_CODE.matcher(code).matches()) {
+        throw new IllegalArgumentException("Código de auditoría inválido");
+      }
+    }
     RuleSetValidator.validate(rules);
     String name = fileName(rules.survey(), rules.year());
     Path file = rulesDir().resolve(name);
@@ -117,12 +125,7 @@ public class RulesFileRepository {
       Files.createDirectories(file.getParent());
       if (Files.exists(file)) {
         Path history = Files.createDirectories(file.getParent().resolve(HISTORY_DIR));
-        String historyName =
-            name.substring(0, name.length() - ".json".length())
-                + "."
-                + System.currentTimeMillis()
-                + ".json";
-        Files.copy(file, history.resolve(historyName), StandardCopyOption.REPLACE_EXISTING);
+        copyToHistory(file, history, name);
       }
       temporary = Files.createTempFile(file.getParent(), name, ".tmp");
       writeFile(temporary, toSave);
@@ -133,8 +136,23 @@ public class RulesFileRepository {
       deleteQuietly(temporary);
     }
     cache.put(name, toSave);
-    audit.record(user, toSave.survey(), toSave.year(), reason, List.of());
+    audit.record(user, toSave.survey(), toSave.year(), operation, codes);
     return toSave;
+  }
+
+  /** Nunca reemplaza una copia previa: dos guardados en el mismo milisegundo no se pisan. */
+  private static void copyToHistory(Path file, Path history, String name) throws IOException {
+    String base =
+        name.substring(0, name.length() - ".json".length()) + "." + System.currentTimeMillis();
+    for (int attempt = 0; ; attempt++) {
+      String suffix = attempt == 0 ? "" : "-" + attempt;
+      try {
+        Files.copy(file, history.resolve(base + suffix + ".json"));
+        return;
+      } catch (FileAlreadyExistsException exception) {
+        // Otro guardado del mismo milisegundo: se prueba el siguiente sufijo.
+      }
+    }
   }
 
   /** Descarta la caché para releer los archivos del disco. */
@@ -156,7 +174,9 @@ public class RulesFileRepository {
       Files.move(
           source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
     } catch (AtomicMoveNotSupportedException exception) {
-      // Sistemas de archivos sin movimiento atómico: se conserva el reemplazo del archivo.
+      LOGGER.warn(
+          "El sistema de archivos no soporta movimiento atómico; se reemplaza {} sin él",
+          target.getFileName());
       Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
     }
   }
@@ -180,6 +200,9 @@ public class RulesFileRepository {
   private static String fileName(String surveyCode, int year) {
     if (surveyCode == null || !SURVEY_CODE.matcher(surveyCode).matches()) {
       throw new IllegalArgumentException("Código de encuesta inválido");
+    }
+    if (year < 1000 || year > 9999) {
+      throw new IllegalArgumentException("Año inválido");
     }
     return surveyCode + "-" + year + ".json";
   }
