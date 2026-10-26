@@ -640,6 +640,25 @@ describe('SurveyPageView', () => {
       expect(screen.queryByRole('dialog', { name: LEAVE_DIALOG })).not.toBeInTheDocument();
     });
 
+    it('tras un 401 deja ir a ingresar sin preguntar y el borrador incluye lo editado', async () => {
+      await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+      await stashDraftAfterExpiredSession();
+      const years = screen.getByLabelText(/Años en la entidad/);
+      await userEvent.clear(years);
+      await userEvent.type(years, '15');
+
+      await userEvent.click(screen.getByRole('link', { name: 'Ingresar de nuevo' }));
+
+      expect(
+        await screen.findByRole('heading', { name: 'Ingreso a la encuesta' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: LEAVE_DIALOG })).not.toBeInTheDocument();
+      const stored = JSON.parse(window.sessionStorage.getItem('edi-borrador-C1') ?? '{}') as {
+        values: Record<string, string>;
+      };
+      expect(stored.values.C01T).toBe('15');
+    });
+
     it('no bloquea el paso a la página siguiente después de guardar', async () => {
       server.use(
         http.put('*/api/v1/survey/pages/C1/answers', () =>

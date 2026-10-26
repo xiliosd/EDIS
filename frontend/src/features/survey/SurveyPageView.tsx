@@ -158,11 +158,15 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
   // Desde que se confirma el guardado no se bloquea: el paso a la página siguiente ocurre antes de
   // que el formulario limpio vuelva a pintarse. Se reactiva si el guardado falla.
   const savingRef = useRef(false);
+  // Tras un 401 las respuestas quedan en el borrador local (y se mantiene al día abajo): ir a
+  // ingresar de nuevo no las pierde, así que no se pregunta.
+  const draftStashed = sessionError === 401;
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       isDirty &&
       !savingRef.current &&
       !isLeaveConfirmed(nextLocation.state) &&
+      !(draftStashed && nextLocation.pathname === '/ingresar') &&
       // Los enlaces del resumen de errores (#campo-…) no salen de la página.
       currentLocation.pathname !== nextLocation.pathname,
   );
@@ -192,6 +196,14 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
       }
     }
   }, [page.pageCode, columns, form]);
+
+  // Lo editado después del 401 también entra al borrador: se recupera al volver a ingresar.
+  const valuesKey = JSON.stringify(values);
+  useEffect(() => {
+    if (draftStashed) {
+      saveDraft(page.pageCode ?? '', JSON.parse(valuesKey) as PageValues);
+    }
+  }, [draftStashed, valuesKey, page.pageCode]);
 
   useEffect(() => {
     if (Object.keys(summary).length > 0) {
