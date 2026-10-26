@@ -324,7 +324,12 @@ export interface components {
             /** Format: int32 */
             anio?: number;
             encuesta?: string;
+            /** @enum {string} */
+            estado?: "borrador" | "publicado";
             saltos?: components["schemas"]["SkipRule"][];
+            tablas?: {
+                [key: string]: string;
+            };
             validaciones?: {
                 [key: string]: components["schemas"]["FieldValidation"];
             };

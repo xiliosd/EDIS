@@ -1,5 +1,6 @@
 package co.gov.dane.edi.rules;
 
+import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.service.QuestionnaireService;
 import java.util.ArrayList;
@@ -15,13 +16,16 @@ public class EffectiveRulesService {
 
   private final RulesFileRepository rulesFile;
   private final QuestionnaireService questionnaire;
+  private final SurveyProperties survey;
 
   /** Una sola instancia (D6): las reglas efectivas se calculan una vez por generación. */
   private final AtomicReference<CachedRules> cached = new AtomicReference<>();
 
-  public EffectiveRulesService(RulesFileRepository rulesFile, QuestionnaireService questionnaire) {
+  public EffectiveRulesService(
+      RulesFileRepository rulesFile, QuestionnaireService questionnaire, SurveyProperties survey) {
     this.rulesFile = rulesFile;
     this.questionnaire = questionnaire;
+    this.survey = survey;
   }
 
   public RuleSet effectiveRules() {
@@ -40,7 +44,7 @@ public class EffectiveRulesService {
     for (SurveyPage page : SurveyPage.ordered()) {
       legacy.addAll(LegacySkipTranslator.translate(questionnaire.pageEntries(page)));
     }
-    return merge(rulesFile.load(), legacy);
+    return merge(rulesFile.load(survey.code(), survey.year()), legacy);
   }
 
   private record CachedRules(long generation, RuleSet rules) {}
@@ -51,6 +55,12 @@ public class EffectiveRulesService {
     List<SkipRule> skips = new ArrayList<>(fromFile.skips());
     legacy.stream().filter(rule -> !fileIds.contains(rule.id())).forEach(skips::add);
     return new RuleSet(
-        fromFile.survey(), fromFile.year(), fromFile.version(), skips, fromFile.validations());
+        fromFile.survey(),
+        fromFile.year(),
+        fromFile.version(),
+        skips,
+        fromFile.validations(),
+        fromFile.state(),
+        fromFile.tables());
   }
 }

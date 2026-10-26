@@ -503,10 +503,19 @@ components:
           format: int32
         encuesta:
           type: string
+        estado:
+          type: string
+          enum:
+          - borrador
+          - publicado
         saltos:
           type: array
           items:
             $ref: "#/components/schemas/SkipRule"
+        tablas:
+          type: object
+          additionalProperties:
+            type: string
         validaciones:
           type: object
           additionalProperties:

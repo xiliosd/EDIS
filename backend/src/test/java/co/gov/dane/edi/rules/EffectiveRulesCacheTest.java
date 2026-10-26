@@ -7,6 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.service.QuestionnaireService;
 import java.util.List;
@@ -18,16 +19,18 @@ class EffectiveRulesCacheTest {
   void effectiveRulesAreCachedUntilTheQuestionnaireIsEvicted() {
     RulesFileRepository rulesFile = mock(RulesFileRepository.class);
     QuestionnaireService questionnaire = mock(QuestionnaireService.class);
-    when(rulesFile.load()).thenReturn(RuleSet.empty("EDIN", 2026));
+    when(rulesFile.load("EDIN", 2026)).thenReturn(RuleSet.empty("EDIN", 2026));
     when(questionnaire.pageEntries(any(SurveyPage.class))).thenReturn(List.of());
     when(questionnaire.cacheGeneration()).thenReturn(0L, 0L, 1L);
-    EffectiveRulesService service = new EffectiveRulesService(rulesFile, questionnaire);
+    EffectiveRulesService service =
+        new EffectiveRulesService(
+            rulesFile, questionnaire, new SurveyProperties("EDIN", 2026, "S", "d"));
 
     RuleSet first = service.effectiveRules();
     assertThat(service.effectiveRules()).isSameAs(first);
-    verify(rulesFile, times(1)).load();
+    verify(rulesFile, times(1)).load("EDIN", 2026);
 
     assertThat(service.effectiveRules()).isNotSameAs(first);
-    verify(rulesFile, times(2)).load();
+    verify(rulesFile, times(2)).load("EDIN", 2026);
   }
 }

@@ -14,7 +14,7 @@ class RuleSetValidatorTest {
   }
 
   private static RuleSet withSkip(SkipRule rule) {
-    return new RuleSet("EDIN", 2026, 1, List.of(rule), Map.of());
+    return new RuleSet("EDIN", 2026, 1, List.of(rule), Map.of(), null, Map.of());
   }
 
   @Test
@@ -67,7 +67,8 @@ class RuleSetValidatorTest {
   void rejectsDuplicateIdsAndInvalidColumnNames() {
     SkipRule first =
         new SkipRule("dup", null, eq("C01A", "2"), new SkipAction("deshabilitar", List.of("C01B")));
-    RuleSet duplicated = new RuleSet("EDIN", 2026, 1, List.of(first, first), Map.of());
+    RuleSet duplicated =
+        new RuleSet("EDIN", 2026, 1, List.of(first, first), Map.of(), null, Map.of());
     SkipRule badColumn =
         new SkipRule(
             "col", null, eq("C01A; DROP", "2"), new SkipAction("deshabilitar", List.of("C01B")));
@@ -91,7 +92,21 @@ class RuleSetValidatorTest {
                     "entero",
                     new java.math.BigDecimal("99"),
                     new java.math.BigDecimal("15"),
-                    null)));
+                    null)),
+            null,
+            Map.of());
     assertThatThrownBy(() -> RuleSetValidator.validate(rules)).hasMessageContaining("B06");
+  }
+
+  @Test
+  void validatorRejectsUnknownChapterOrBadTableName() {
+    RuleSet base = RuleSet.empty("EDIN", 2027);
+    assertThatThrownBy(() -> RuleSetValidator.validate(base.withTables(Map.of("Z", "TABLA_OK"))))
+        .hasMessageContaining("capítulo");
+    assertThatThrownBy(() -> RuleSetValidator.validate(base.withTables(Map.of("B", "X; DROP"))))
+        .hasMessageContaining("tabla");
+    assertThatThrownBy(() -> RuleSetValidator.validate(base.withTables(Map.of("B", "tabla_b"))))
+        .hasMessageContaining("tabla");
+    RuleSetValidator.validate(base.withTables(Map.of("B", "EDIN_21_CAP_B")));
   }
 }

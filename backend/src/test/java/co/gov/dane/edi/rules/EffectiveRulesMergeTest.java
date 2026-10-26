@@ -2,6 +2,7 @@ package co.gov.dane.edi.rules;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import co.gov.dane.edi.admin.YearState;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,9 @@ class EffectiveRulesMergeTest {
             2026,
             3,
             List.of(rule("legacy-C09G", "C09A", "C10"), rule("propia", "B10", "B11")),
-            Map.of());
+            Map.of(),
+            YearState.BORRADOR,
+            Map.of("B", "TABLA_B"));
     List<SkipRule> legacy =
         List.of(rule("legacy-C09G", "C09G", "C10"), rule("legacy-E05", "E05", "E06A"));
 
@@ -35,5 +38,7 @@ class EffectiveRulesMergeTest {
         .containsExactly("legacy-C09G", "propia", "legacy-E05");
     assertThat(merged.skips().get(0).when().question()).isEqualTo("C09A");
     assertThat(merged.version()).isEqualTo(3);
+    assertThat(merged.state()).isEqualTo(YearState.BORRADOR);
+    assertThat(merged.tables()).containsEntry("B", "TABLA_B");
   }
 }

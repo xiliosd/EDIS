@@ -1,5 +1,6 @@
 package co.gov.dane.edi.rules;
 
+import co.gov.dane.edi.model.Chapter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -17,6 +18,7 @@ public final class RuleSetValidator {
   static final Set<String> TYPES = Set.of("entero", "decimal", "texto", "opcion");
   private static final String DISABLE = "deshabilitar";
   private static final Pattern COLUMN = Pattern.compile("[A-Z][0-9A-Z_]{1,29}");
+  private static final Pattern TABLE = Pattern.compile("[A-Z][A-Z0-9_]{1,29}");
 
   private RuleSetValidator() {}
 
@@ -61,6 +63,15 @@ public final class RuleSetValidator {
           && validation.max() != null
           && validation.min().compareTo(validation.max()) > 0) {
         problems.add("Validación " + entry.getKey() + ": min mayor que max");
+      }
+    }
+    for (Map.Entry<String, String> entry : rules.tables().entrySet()) {
+      if (Chapter.fromCode(entry.getKey()).isEmpty()
+          || !Chapter.fromCode(entry.getKey()).get().code().equals(entry.getKey())) {
+        problems.add("Tablas: capítulo desconocido " + entry.getKey());
+      }
+      if (entry.getValue() == null || !TABLE.matcher(entry.getValue()).matches()) {
+        problems.add("Tablas: nombre de tabla inválido para el capítulo " + entry.getKey());
       }
     }
     if (!problems.isEmpty()) {
