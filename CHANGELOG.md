@@ -22,6 +22,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   `E2E_FLOW_PASSWORD_<PROYECTO>`.
 - Aviso de sesión vencida (401) al guardar una página o enviar las observaciones, con enlace para
   ingresar de nuevo y borrador local de la página; aviso de recarga ante un 403 de CSRF.
+- Prueba de carga reproducible del flujo del encuestado (`loadtest/`, k6 2.2.0 en Docker) con 200
+  usuarios ficticios `CARGA001..200` (`db/dev/loadtest-users.sql`) y script de reinicio.
 - "Cerrar sesión" pide confirmación si la página tiene respuestas sin guardar.
 - Salir de una página con respuestas sin guardar (botón Atrás del navegador o navegación interna)
   pide confirmar en un diálogo accesible ("¿Salir sin guardar?"); el frontend usa un enrutador de

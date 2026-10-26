@@ -73,6 +73,10 @@ Entorno local con datos **ficticios** (`db/dev/`), nunca contra la Oracle instit
 
 > **Pendiente:** URL del ambiente de QA.
 
+**Prueba de carga** del flujo del encuestado (k6 en Docker, solo local): ver
+[loadtest/README.md](loadtest/README.md); resultados en
+[loadtest/resultados-2026-10.md](loadtest/resultados-2026-10.md).
+
 ```bash
 cp .env.example .env        # cambie TODAS las claves y genere JWT_SECRET
 docker compose up --build   # http://localhost:8081
