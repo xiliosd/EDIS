@@ -1,5 +1,6 @@
 package co.gov.dane.edi.service;
 
+import co.gov.dane.edi.admin.AnswerTableResolver;
 import co.gov.dane.edi.model.AnswerColumn;
 import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.EntryKind;
@@ -56,6 +57,7 @@ public class SurveyAnswerService {
   private final AnswerColumnRepository answerColumns;
   private final SaveLocks locks;
   private final ReceiptService receipts;
+  private final AnswerTableResolver tables;
 
   public SurveyAnswerService(
       SurveyProgressService progress,
@@ -64,7 +66,8 @@ public class SurveyAnswerService {
       AnswerRepository answers,
       AnswerColumnRepository answerColumns,
       SaveLocks locks,
-      ReceiptService receipts) {
+      ReceiptService receipts,
+      AnswerTableResolver tables) {
     this.progress = progress;
     this.questionnaire = questionnaire;
     this.rules = rules;
@@ -72,6 +75,7 @@ public class SurveyAnswerService {
     this.answerColumns = answerColumns;
     this.locks = locks;
     this.receipts = receipts;
+    this.tables = tables;
   }
 
   public PageSaveResult savePage(
@@ -104,7 +108,7 @@ public class SurveyAnswerService {
     if (!text.isEmpty() && answers.findObservations(respondentCode) == null) {
       // @Size cuenta unidades UTF-16, pero OBS puede medirse en bytes: se evita el ORA-12899.
       AnswerColumn observationsColumn =
-          answerColumns.findColumnDetails(Chapter.H.tableName()).get("OBS");
+          answerColumns.findColumnDetails(tables.activeTableFor(Chapter.H)).get("OBS");
       if (observationsColumn != null && checkColumn(text, observationsColumn).isPresent()) {
         throw new AnswerValidationException(Map.of("observations", OBSERVATIONS_TOO_LONG_MESSAGE));
       }
@@ -142,7 +146,8 @@ public class SurveyAnswerService {
         });
     Evaluation evaluation = RuleEvaluator.evaluate(rules.effectiveRules(), combined, items);
     errors.putAll(evaluation.errors());
-    Map<String, AnswerColumn> columns = answerColumns.findColumnDetails(page.chapter().tableName());
+    Map<String, AnswerColumn> columns =
+        answerColumns.findColumnDetails(tables.activeTableFor(page.chapter()));
     for (QuestionnaireEntry entry : entries) {
       if (entry.kind() != EntryKind.ITEM || !items.contains(entry.answer().columnCode())) {
         continue;

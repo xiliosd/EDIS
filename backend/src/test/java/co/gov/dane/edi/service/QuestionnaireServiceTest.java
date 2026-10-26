@@ -9,7 +9,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import co.gov.dane.edi.admin.AnswerTableResolver;
 import co.gov.dane.edi.model.AnswerOption;
+import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.ChapterDetail;
 import co.gov.dane.edi.model.ColumnStatus;
 import co.gov.dane.edi.model.EntryKind;
@@ -33,6 +35,13 @@ class QuestionnaireServiceTest {
   private QuestionnaireRepository questionnaire;
   private QuestionnaireService service;
 
+  private static AnswerTableResolver defaultTables() {
+    AnswerTableResolver tables = mock(AnswerTableResolver.class);
+    when(tables.activeTableFor(org.mockito.ArgumentMatchers.any(Chapter.class)))
+        .thenAnswer(call -> call.<Chapter>getArgument(0).tableName());
+    return tables;
+  }
+
   @BeforeEach
   void setUp() {
     questionnaire = mock(QuestionnaireRepository.class);
@@ -53,7 +62,7 @@ class QuestionnaireServiceTest {
                 101L, List.of(new SectionHeader(HeaderKind.HEADING, "Ubicaci&oacute;n laboral"))));
     when(questionnaire.findOptions(anyCollection()))
         .thenReturn(Map.of(10, List.of(new AnswerOption("2", "T&eacute;cnico"))));
-    service = new QuestionnaireService(questionnaire, answerColumns);
+    service = new QuestionnaireService(questionnaire, answerColumns, defaultTables());
   }
 
   @Test

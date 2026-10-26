@@ -1,5 +1,6 @@
 package co.gov.dane.edi.repository;
 
+import co.gov.dane.edi.admin.AnswerTableResolver;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.Chapter;
 import java.util.ArrayList;
@@ -32,14 +33,17 @@ public class AnswerRepository {
   private final NamedParameterJdbcTemplate jdbc;
   private final AnswerColumnRepository answerColumns;
   private final SurveyProperties survey;
+  private final AnswerTableResolver tables;
 
   public AnswerRepository(
       NamedParameterJdbcTemplate jdbc,
       AnswerColumnRepository answerColumns,
-      SurveyProperties survey) {
+      SurveyProperties survey,
+      AnswerTableResolver tables) {
     this.jdbc = jdbc;
     this.answerColumns = answerColumns;
     this.survey = survey;
+    this.tables = tables;
   }
 
   public Map<String, String> findAnswers(
@@ -49,7 +53,11 @@ public class AnswerRepository {
       return Map.of();
     }
     String sql =
-        "SELECT " + String.join(", ", safe) + " FROM " + chapter.tableName() + " WHERE C_C = :cc";
+        "SELECT "
+            + String.join(", ", safe)
+            + " FROM "
+            + tables.activeTableFor(chapter)
+            + " WHERE C_C = :cc";
     List<Map<String, String>> rows =
         jdbc.query(
             sql,
@@ -70,7 +78,7 @@ public class AnswerRepository {
   public boolean rowExists(Chapter chapter, String respondentCode) {
     Integer rows =
         jdbc.queryForObject(
-            "SELECT COUNT(*) FROM " + chapter.tableName() + " WHERE C_C = :cc",
+            "SELECT COUNT(*) FROM " + tables.activeTableFor(chapter) + " WHERE C_C = :cc",
             Map.of("cc", respondentCode),
             Integer.class);
     return rows != null && rows > 0;
@@ -81,7 +89,7 @@ public class AnswerRepository {
     List<String> names = new ArrayList<>(List.of("C_C", "ESTADO", "TC"));
     List<String> params = new ArrayList<>(List.of(":cc", "1", "1"));
     MapSqlParameterSource parameters = new MapSqlParameterSource("cc", respondentCode);
-    if (answerColumns.findColumns(chapter.tableName()).contains(YEAR_COLUMN)) {
+    if (answerColumns.findColumns(tables.activeTableFor(chapter)).contains(YEAR_COLUMN)) {
       names.add(YEAR_COLUMN);
       params.add(":year");
       parameters.addValue("year", survey.yearText());
@@ -93,7 +101,7 @@ public class AnswerRepository {
     }
     jdbc.update(
         "INSERT INTO "
-            + chapter.tableName()
+            + tables.activeTableFor(chapter)
             + " ("
             + String.join(", ", names)
             + ") VALUES ("
@@ -120,7 +128,7 @@ public class AnswerRepository {
     }
     return jdbc.update(
         "UPDATE "
-            + chapter.tableName()
+            + tables.activeTableFor(chapter)
             + " SET "
             + String.join(", ", assignments)
             + " WHERE C_C = :cc AND "
@@ -137,7 +145,7 @@ public class AnswerRepository {
   public int saveObservations(String respondentCode, String text) {
     return jdbc.update(
         "UPDATE "
-            + Chapter.H.tableName()
+            + tables.activeTableFor(Chapter.H)
             + " SET "
             + OBSERVATIONS_COLUMN
             + " = :obs WHERE C_C = :cc AND "
@@ -157,11 +165,12 @@ public class AnswerRepository {
   }
 
   private List<String> requireColumns(Chapter chapter, Collection<String> columns) {
-    Set<String> known = answerColumns.findColumns(chapter.tableName());
+    Set<String> known = answerColumns.findColumns(tables.activeTableFor(chapter));
     List<String> safe = new ArrayList<>();
     for (String column : columns) {
       if (column == null || !COLUMN.matcher(column).matches() || !known.contains(column)) {
-        throw new IllegalArgumentException("Columna no permitida en " + chapter.tableName());
+        throw new IllegalArgumentException(
+            "Columna no permitida en " + tables.activeTableFor(chapter));
       }
       safe.add(column);
     }

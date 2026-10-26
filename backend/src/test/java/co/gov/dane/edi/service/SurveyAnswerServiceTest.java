@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import co.gov.dane.edi.admin.AnswerTableResolver;
 import co.gov.dane.edi.model.AnswerColumn;
+import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.PageState;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
@@ -87,6 +89,8 @@ class SurveyAnswerServiceTest {
     AnswerColumnRepository columns = mock(AnswerColumnRepository.class);
     when(columns.findColumnDetails(anyString())).thenReturn(Map.of());
     ReceiptService receipts = mock(ReceiptService.class);
+    AnswerTableResolver tables = mock(AnswerTableResolver.class);
+    when(tables.activeTableFor(Chapter.H)).thenReturn(Chapter.H.tableName());
     when(receipts.receiptFor("9000000998")).thenReturn("ABCDE-23456");
     SurveyAnswerService service =
         new SurveyAnswerService(
@@ -96,7 +100,8 @@ class SurveyAnswerServiceTest {
             answers,
             columns,
             new SaveLocks(),
-            receipts);
+            receipts,
+            tables);
 
     assertThat(service.finish("9000000998", "Texto ficticio").receipt()).isEqualTo("ABCDE-23456");
     assertThat(output)

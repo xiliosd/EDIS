@@ -1,5 +1,6 @@
 package co.gov.dane.edi.service;
 
+import co.gov.dane.edi.admin.AnswerTableResolver;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.AnswerSpec;
 import co.gov.dane.edi.model.Chapter;
@@ -35,6 +36,7 @@ public class QuestionnaireService {
 
   private final QuestionnaireRepository questionnaire;
   private final AnswerColumnRepository answerColumns;
+  private final AnswerTableResolver tables;
 
   /**
    * Preguntas por página en memoria: cada consulta del encuestado las necesita varias veces. Los
@@ -45,9 +47,12 @@ public class QuestionnaireService {
   private final AtomicLong cacheGeneration = new AtomicLong();
 
   public QuestionnaireService(
-      QuestionnaireRepository questionnaire, AnswerColumnRepository answerColumns) {
+      QuestionnaireRepository questionnaire,
+      AnswerColumnRepository answerColumns,
+      AnswerTableResolver tables) {
     this.questionnaire = questionnaire;
     this.answerColumns = answerColumns;
+    this.tables = tables;
   }
 
   public List<ChapterSummary> listChapters() {
@@ -58,7 +63,7 @@ public class QuestionnaireService {
     Chapter chapter =
         Chapter.fromCode(chapterCode)
             .orElseThrow(() -> new ResourceNotFoundException("El capítulo solicitado no existe."));
-    Set<String> columns = answerColumns.findColumns(chapter.tableName());
+    Set<String> columns = answerColumns.findColumns(tables.activeTableFor(chapter));
     List<QuestionnaireEntry> entries =
         chapter.pageCodes().stream()
             .flatMap(page -> buildEntries(page, columns, includePendingColumns).stream())
@@ -71,7 +76,10 @@ public class QuestionnaireService {
     return entriesByPage.computeIfAbsent(
         page,
         key ->
-            buildEntries(key.code(), answerColumns.findColumns(key.chapter().tableName()), false));
+            buildEntries(
+                key.code(),
+                answerColumns.findColumns(tables.activeTableFor(key.chapter())),
+                false));
   }
 
   /** Descarta las preguntas en memoria; las cachés derivadas comparan la generación. */
