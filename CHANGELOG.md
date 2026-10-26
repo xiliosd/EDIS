@@ -23,6 +23,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 - Aviso de sesión vencida (401) al guardar una página o enviar las observaciones, con enlace para
   ingresar de nuevo y borrador local de la página; aviso de recarga ante un 403 de CSRF.
 - "Cerrar sesión" pide confirmación si la página tiene respuestas sin guardar.
+- Salir de una página con respuestas sin guardar (botón Atrás del navegador o navegación interna)
+  pide confirmar en un diálogo accesible ("¿Salir sin guardar?"); el frontend usa un enrutador de
+  datos (`createBrowserRouter`) para poder bloquear la navegación.
 
 ### Cambiado
 - El inicio del encuestado muestra el avance por página.
@@ -46,6 +49,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 - Terminar registra un WARN (sin texto ni `C_C`) si las observaciones no actualizaron ninguna fila.
 
 ### Seguridad
+- Los borradores de página ya no pasan de un usuario a otro entre pestañas: cada ingreso y cada
+  cierre de sesión cambian una generación aleatoria en `localStorage` y las demás pestañas
+  descartan sus borradores (Ley 1581 de 2012).
 - El radicado no revela el `C_C`.
 - Las reglas ficticias de desarrollo no viajan en la imagen.
 - Fuera de los perfiles `dev` y `test`, el backend no arranca con los valores de ejemplo de

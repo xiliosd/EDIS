@@ -14,6 +14,22 @@ export function hasUnsavedChanges(): boolean {
   return dirtyFormCount > 0;
 }
 
+// Estado de navegación que marca una salida ya confirmada (p. ej. al cerrar sesión), para que la
+// página no vuelva a preguntar.
+const LEAVE_CONFIRMED_STATE_KEY = 'salidaConfirmada';
+
+export function withLeaveConfirmed(state: object): Record<string, unknown> {
+  return { ...state, [LEAVE_CONFIRMED_STATE_KEY]: true };
+}
+
+export function isLeaveConfirmed(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as Record<string, unknown>)[LEAVE_CONFIRMED_STATE_KEY] === true
+  );
+}
+
 /** Evita perder respuestas sin guardar: aviso al cerrar la pestaña y sesión viva. */
 export function useUnsavedChanges(dirty: boolean): void {
   useEffect(() => {

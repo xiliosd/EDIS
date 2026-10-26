@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router';
+import { useBlocker, useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ErrorState } from '../../components/ErrorState';
@@ -29,7 +29,7 @@ import {
   type PageDetail,
   type QuestionnaireEntry,
 } from './survey-api';
-import { UNSAVED_CHANGES_MESSAGE, useUnsavedChanges } from './use-unsaved-changes';
+import { isLeaveConfirmed, useUnsavedChanges } from './use-unsaved-changes';
 
 function isActiveItem(entry: QuestionnaireEntry): boolean {
   return entry.kind === 'ITEM' && entry.answer?.columnStatus === 'ACTIVE';
@@ -155,6 +155,17 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
   const summaryRef = useRef<HTMLDivElement>(null);
   const { isDirty } = form.formState;
   useUnsavedChanges(isDirty);
+  // Desde que se confirma el guardado no se bloquea: el paso a la página siguiente ocurre antes de
+  // que el formulario limpio vuelva a pintarse. Se reactiva si el guardado falla.
+  const savingRef = useRef(false);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty &&
+      !savingRef.current &&
+      !isLeaveConfirmed(nextLocation.state) &&
+      // Los enlaces del resumen de errores (#campo-…) no salen de la página.
+      currentLocation.pathname !== nextLocation.pathname,
+  );
 
   // Una pregunta que deja de aplicar pierde su valor, como en el formulario heredado. La casilla
   // vuelve a "0" (no marcada) para que, si vuelve a aplicar, no quede vacía y sin responder.
@@ -198,6 +209,9 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
 
   const save = useMutation({
     mutationFn: (answers: PageValues) => savePageAnswers(page.pageCode ?? '', answers),
+    onMutate: () => {
+      savingRef.current = true;
+    },
     onSuccess: async (result) => {
       clearDraft(page.pageCode ?? '');
       form.reset(form.getValues());
@@ -209,6 +223,7 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
       );
     },
     onError: (error) => {
+      savingRef.current = false;
       setPending(null);
       const sessionStatus = sessionErrorStatus(error);
       if (sessionStatus === 401) {
@@ -311,9 +326,7 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
         <Button
           variant="secondary"
           onClick={() => {
-            if (!isDirty || window.confirm(UNSAVED_CHANGES_MESSAGE)) {
-              void navigate('/encuesta');
-            }
+            void navigate('/encuesta');
           }}
         >
           Volver al inicio
@@ -333,6 +346,16 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
         onCancel={() => setPending(null)}
       >
         Después de guardar no podrá cambiar las respuestas de esta página.
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        title="¿Salir sin guardar?"
+        confirmLabel="Salir sin guardar"
+        cancelLabel="Seguir en la página"
+        onConfirm={() => blocker.proceed?.()}
+        onCancel={() => blocker.reset?.()}
+      >
+        Tiene respuestas sin guardar en esta página. Si sale, se perderán.
       </ConfirmDialog>
     </form>
   );

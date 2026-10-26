@@ -293,7 +293,12 @@ guardadas.
 
 Si la sesión vence al guardar una página, la aplicación lo avisa con un enlace para ingresar de
 nuevo y conserva las respuestas de esa página en `sessionStorage` (solo los valores, nunca el
-`C_C`) hasta volver a abrirla en la misma pestaña.
+`C_C`) hasta volver a abrirla en la misma pestaña. Si entretanto otra pestaña ingresa o cierra
+sesión, el borrador se descarta (una "generación" aleatoria en `localStorage`, sin datos
+personales, marca cada ingreso y cada cierre).
+
+Con respuestas sin guardar, salir de la página (botón Atrás, "Volver al inicio" u otro enlace)
+pide confirmar en un diálogo; cerrar o recargar la pestaña usa el aviso del navegador.
 
 Consultar el progreso con `curl` (cookie de la sesión iniciada arriba, sin escribir su valor):
 
@@ -361,9 +366,6 @@ Un test de respuesta conocida (KAT) fija el algoritmo del radicado; no contiene 
 - **ESLint 9.39.5** (marcado sin soporte por npm) porque `eslint-plugin-jsx-a11y` 6.10.2 no soporta
   ESLint 10.
 - **La EDID no tiene cuestionario 2026 en la base:** la semilla de reglas de la EDID está vacía.
-- **Sin navegación interna bloqueada** (`BrowserRouter` declarativo, sin `useBlocker`): con
-  respuestas sin guardar solo se confirma al cerrar la pestaña (`beforeunload`), al volver al inicio
-  y al cerrar sesión. El botón Atrás del navegador no pide confirmación.
 - **Cuestionario en memoria:** un cambio en las tablas `FRM_*` exige reiniciar el backend hasta que
   el editor de la Fase 3 invalide la caché (`QuestionnaireService.evict()`).
 - **El radicado depende de `RECEIPT_KEY`:** si se rota, cambian los radicados de quienes ya

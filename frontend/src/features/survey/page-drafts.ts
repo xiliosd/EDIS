@@ -5,6 +5,13 @@
 const DRAFT_KEY_PREFIX = 'edi-borrador-';
 // Huella SHA-256 (hex) del usuario que ingresó en esta pestaña; nunca el usuario en claro.
 export const DRAFT_OWNER_KEY = 'edi-propietario-borradores';
+// sessionStorage es de cada pestaña: si otra pestaña ingresa con otro usuario o cierra sesión,
+// esta no se entera por la huella. Cada ingreso y cada cierre escriben en localStorage (común a
+// todas las pestañas) una "generación" aleatoria sin datos personales; un borrador solo se
+// recupera si la pestaña lo guardó en la generación vigente.
+export const SESSION_GENERATION_KEY = 'edi-generacion-sesion';
+// Generación vigente cuando esta pestaña ingresó; vive junto a la huella del dueño.
+const TAB_GENERATION_KEY = 'edi-generacion-borradores';
 
 interface StoredDraft {
   owner: string;
@@ -30,13 +37,58 @@ export async function draftOwnerFor(accountType: string, username: string): Prom
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function sharedGeneration(): string | null {
+  try {
+    return window.localStorage.getItem(SESSION_GENERATION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function tabGeneration(): string | null {
+  try {
+    return window.sessionStorage.getItem(TAB_GENERATION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Escribe una generación nueva para que las demás pestañas descarten sus borradores. Devuelve la
+ * generación escrita, o null si no se pudo (sin almacenamiento o sin generador aleatorio).
+ */
+export function rotateSessionGeneration(): string | null {
+  try {
+    const generation = globalThis.crypto.randomUUID();
+    window.localStorage.setItem(SESSION_GENERATION_KEY, generation);
+    return generation;
+  } catch {
+    return null;
+  }
+}
+
+/** Escucha los cambios de generación de otras pestañas y descarta los borradores de esta. */
+export function watchSessionGeneration(): () => void {
+  const onStorage = (event: StorageEvent) => {
+    // key null: otra pestaña vació el almacenamiento; también se descartan por seguridad.
+    if (event.key === SESSION_GENERATION_KEY || event.key === null) {
+      clearAllDrafts();
+    }
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
+
 /** Borra todos los borradores y la huella del dueño (cierre de sesión o cambio de usuario). */
 export function clearAllDrafts(): void {
   try {
     const keys: string[] = [];
     for (let index = 0; index < window.sessionStorage.length; index += 1) {
       const key = window.sessionStorage.key(index);
-      if (key && (key.startsWith(DRAFT_KEY_PREFIX) || key === DRAFT_OWNER_KEY)) {
+      if (
+        key &&
+        (key.startsWith(DRAFT_KEY_PREFIX) || key === DRAFT_OWNER_KEY || key === TAB_GENERATION_KEY)
+      ) {
         keys.push(key);
       }
     }
@@ -61,8 +113,17 @@ export async function bindDraftsToUser(accountType: string, username: string): P
   if (currentOwner() !== owner) {
     clearAllDrafts();
   }
+  // Cada ingreso estrena generación: las demás pestañas descartan sus borradores. Esta pestaña
+  // la adopta, así el mismo usuario que vuelve a ingresar aquí conserva los suyos (los de otro
+  // usuario ya se borraron arriba).
+  const generation = rotateSessionGeneration();
   try {
     window.sessionStorage.setItem(DRAFT_OWNER_KEY, owner);
+    if (generation) {
+      window.sessionStorage.setItem(TAB_GENERATION_KEY, generation);
+    } else {
+      window.sessionStorage.removeItem(TAB_GENERATION_KEY);
+    }
   } catch {
     // Sin almacenamiento disponible: no habrá borradores.
   }
@@ -82,8 +143,17 @@ export function saveDraft(pageCode: string, values: Record<string, string>): voi
   }
 }
 
-/** Devuelve el borrador de la página si es del usuario actual (solo textos) y lo elimina. */
+/**
+ * Devuelve el borrador de la página si es del usuario actual y de la generación vigente (solo
+ * textos) y lo elimina.
+ */
 export function takeDraft(pageCode: string): Record<string, string> | null {
+  const generation = tabGeneration();
+  if (!generation || generation !== sharedGeneration()) {
+    // Otra pestaña ingresó o cerró sesión después: nada de esta pestaña se recupera.
+    clearAllDrafts();
+    return null;
+  }
   try {
     const raw = window.sessionStorage.getItem(draftKey(pageCode));
     window.sessionStorage.removeItem(draftKey(pageCode));

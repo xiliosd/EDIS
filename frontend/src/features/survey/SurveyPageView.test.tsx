@@ -1,10 +1,15 @@
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../../test/msw-server';
 import { renderApp } from '../../test/render-app';
-import { bindDraftsToUser, DRAFT_OWNER_KEY, draftOwnerFor } from './page-drafts';
+import {
+  bindDraftsToUser,
+  DRAFT_OWNER_KEY,
+  draftOwnerFor,
+  SESSION_GENERATION_KEY,
+} from './page-drafts';
 
 const YES_NO = [
   { value: '1', label: 'Sí' },
@@ -391,8 +396,11 @@ describe('SurveyPageView', () => {
   it('el mismo usuario recupera su borrador después de ingresar de nuevo', async () => {
     await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
     (await stashDraftAfterExpiredSession()).unmount();
+    const generationBefore = window.localStorage.getItem(SESSION_GENERATION_KEY);
 
     await loginAs(' prueba05 ');
+    // El ingreso estrena generación (las demás pestañas descartan), pero esta pestaña la adopta.
+    expect(window.localStorage.getItem(SESSION_GENERATION_KEY)).not.toBe(generationBefore);
     await expectDraftRestored();
   });
 
@@ -427,6 +435,7 @@ describe('SurveyPageView', () => {
     await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
     await stashDraftAfterExpiredSession();
     expect(window.sessionStorage.getItem('edi-borrador-C1')).not.toBeNull();
+    const generationBefore = window.localStorage.getItem(SESSION_GENERATION_KEY);
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     // El servidor falla al cerrar: aun así no queda nada para el siguiente usuario.
@@ -437,7 +446,31 @@ describe('SurveyPageView', () => {
     ).toBeInTheDocument();
     expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
     expect(window.sessionStorage.getItem(DRAFT_OWNER_KEY)).toBeNull();
+    // Las demás pestañas también descartan sus borradores.
+    expect(window.localStorage.getItem(SESSION_GENERATION_KEY)).not.toBeNull();
+    expect(window.localStorage.getItem(SESSION_GENERATION_KEY)).not.toBe(generationBefore);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: '¿Salir sin guardar?' })).not.toBeInTheDocument();
     confirm.mockRestore();
+  });
+
+  it('descarta los borradores de la pestaña si otra pestaña cambia la generación', async () => {
+    await bindDraftsToUser('RESPONDENT', 'PRUEBA05');
+    await stashDraftAfterExpiredSession();
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).not.toBeNull();
+
+    act(() => {
+      window.localStorage.setItem(SESSION_GENERATION_KEY, 'generacion-ficticia-2');
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: SESSION_GENERATION_KEY,
+          newValue: 'generacion-ficticia-2',
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+
+    expect(window.sessionStorage.getItem('edi-borrador-C1')).toBeNull();
   });
 
   it('la huella del usuario es un SHA-256 en hex sin el usuario en claro', async () => {
@@ -557,5 +590,71 @@ describe('SurveyPageView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Guardar página' }));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar y continuar' }));
     await vi.waitFor(() => expect(savedBody).toEqual({ answers: { C01A: '1', C02X: '0' } }));
+  });
+
+  describe('al salir de la página con respuestas sin guardar', () => {
+    const LEAVE_DIALOG = '¿Salir sin guardar?';
+
+    it('"Volver al inicio" pide confirmar y "Seguir en la página" conserva las respuestas', async () => {
+      renderApp('/encuesta/pagina/C1');
+      await userEvent.type(await screen.findByLabelText(/Años en la entidad/), '12');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Volver al inicio' }));
+
+      const dialog = screen.getByRole('dialog', { name: LEAVE_DIALOG });
+      expect(dialog).toHaveTextContent(
+        'Tiene respuestas sin guardar en esta página. Si sale, se perderán.',
+      );
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Seguir en la página' }));
+      expect(screen.queryByRole('dialog', { name: LEAVE_DIALOG })).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/Años en la entidad/)).toHaveValue('12');
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'C. Experiencia personal de trabajo' }),
+      ).toBeInTheDocument();
+    });
+
+    it('con el botón Atrás pide confirmar y "Salir sin guardar" navega', async () => {
+      const { router } = renderApp(['/encuesta', '/encuesta/pagina/C1']);
+      await userEvent.type(await screen.findByLabelText(/Años en la entidad/), '12');
+
+      await act(() => router.navigate(-1));
+
+      const dialog = await screen.findByRole('dialog', { name: LEAVE_DIALOG });
+      expect(router.state.location.pathname).toBe('/encuesta/pagina/C1');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Salir sin guardar' }));
+      expect(
+        await screen.findByRole('heading', { name: 'Encuesta EDIN 2026' }),
+      ).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe('/encuesta');
+    });
+
+    it('sin cambios navega sin preguntar', async () => {
+      const { router } = renderApp(['/encuesta', '/encuesta/pagina/C1']);
+      await screen.findByLabelText(/Años en la entidad/);
+
+      await act(() => router.navigate(-1));
+
+      expect(
+        await screen.findByRole('heading', { name: 'Encuesta EDIN 2026' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: LEAVE_DIALOG })).not.toBeInTheDocument();
+    });
+
+    it('no bloquea el paso a la página siguiente después de guardar', async () => {
+      server.use(
+        http.put('*/api/v1/survey/pages/C1/answers', () =>
+          HttpResponse.json({ pageCode: 'C1', nextPageCode: 'C2' }),
+        ),
+        nextPageHandler(),
+      );
+      const { router } = renderApp('/encuesta/pagina/C1');
+      await answerAndConfirm();
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: NEXT_PAGE_HEADING }),
+      ).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe('/encuesta/pagina/C2');
+      expect(screen.queryByRole('dialog', { name: LEAVE_DIALOG })).not.toBeInTheDocument();
+    });
   });
 });
