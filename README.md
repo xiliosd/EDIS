@@ -364,6 +364,9 @@ Un test de respuesta conocida (KAT) fija el algoritmo del radicado; no contiene 
   ampliar `PSW` a `VARCHAR2(60)` y migrar a BCrypt.
 - **Esquema `FRM_*` deducido del PHP** hasta recibir el DDL real de `DANE_DIRPEN` (ver el
   [MER](docs/diagramas/mer-tablas-usadas.md)).
+- **Confirmar con el DDL real de QA cómo se generan los ids de FRM_* (secuencia/disparador) antes de
+  usar la administración en QA.** Mientras tanto los ids se calculan con `MAX+1` (decisión de la
+  Fase 3a, registrada al inicio de `db/dev/schema.sql`).
 - **Credenciales del PHP heredado:** se recomienda rotar las que aparecen en ese sistema. Este
   repositorio no incluye nada de su carpeta `Conexion/`.
 - **Etapas de despliegue pendientes:** *staging* y producción del pipeline.
