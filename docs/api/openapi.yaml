@@ -13,7 +13,7 @@ tags:
   name: Autenticación
 - description: Lectura y diligenciamiento del cuestionario
   name: Encuesta
-- description: Consulta de años y árbol del cuestionario (rol ADMIN_CUESTIONARIO)
+- description: Consulta y edición de años y árbol del cuestionario (rol ADMIN_CUESTIONARIO)
   name: Administración del cuestionario
 paths:
   /api/v1/admin/questionnaire/{encuesta}/{anio}:
@@ -45,6 +45,181 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: La encuesta o el año no existen
       summary: Consultar el árbol del cuestionario de una encuesta y año
+      tags:
+      - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text:
+    put:
+      operationId: editQuestionText
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: capProyId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditTextRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEditResult"
+          description: Página actualizada y nueva versión del año
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El año está publicado, la versión cambió o la fila la usa\
+            \ otro año"
+      summary: Editar el texto de una pregunta de un año en borrador
+      tags:
+      - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/headers/{codEnc}:
+    put:
+      operationId: editHeader
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: codEnc
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditTextRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEditResult"
+          description: Página actualizada y nueva versión del año
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El año está publicado, la versión cambió o la fila la usa\
+            \ otro año"
+      summary: Editar un encabezado de un año en borrador
+      tags:
+      - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codAyu}:
+    put:
+      operationId: editHelp
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: codAyu
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditTextRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEditResult"
+          description: Página actualizada y nueva versión del año
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El año está publicado, la versión cambió o la fila la usa\
+            \ otro año"
+      summary: Editar la ayuda de una pregunta de un año en borrador
+      tags:
+      - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/order:
+    patch:
+      operationId: reorderPage
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: pageCode
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEditResult"
+          description: "Página actualizada, nueva versión y saltos cuyo destino queda\
+            \ antes"
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La lista no coincide con las preguntas de la página
+      summary: Reordenar las preguntas de una página de un año en borrador
       tags:
       - Administración del cuestionario
   /api/v1/admin/years/{encuesta}:
@@ -355,6 +530,18 @@ paths:
       - Encuesta
 components:
   schemas:
+    AdminEditResult:
+      type: object
+      properties:
+        page:
+          $ref: "#/components/schemas/AdminPage"
+        skipsTargetingEarlierQuestions:
+          type: array
+          items:
+            type: string
+        version:
+          type: integer
+          format: int32
     AdminEntry:
       type: object
       properties:
@@ -531,6 +718,19 @@ components:
       properties:
         token:
           type: string
+    EditTextRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 4000
+          minLength: 0
+        version:
+          type: integer
+          format: int32
+      required:
+      - text
+      - version
     FieldValidation:
       type: object
       properties:
@@ -689,6 +889,21 @@ components:
           type: string
         text:
           type: string
+    ReorderRequest:
+      type: object
+      properties:
+        capProyIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          minItems: 1
+        version:
+          type: integer
+          format: int32
+      required:
+      - capProyIds
+      - version
     RuleSet:
       type: object
       properties:

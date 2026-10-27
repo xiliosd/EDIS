@@ -57,16 +57,23 @@ public class QuestionnaireAdminService {
     }
     List<AdminPage> pages = new ArrayList<>();
     for (SurveyPage page : SurveyPage.ordered()) {
-      List<AdminEntry> entries = entriesOf(page, survey, year, rules);
-      pages.add(
-          new AdminPage(
-              page.code(),
-              page.chapter().code(),
-              chapterTables.get(page.chapter().code()),
-              entries));
+      pages.add(toAdminPage(page, survey, year, rules, chapterTables.get(page.chapter().code())));
     }
     return new AdminQuestionnaireView(
         survey, year, file.effectiveState(), file.version(), chapterTables, pages);
+  }
+
+  /** Una sola página, con los datos de la base y las reglas vigentes (tras una edición). */
+  public AdminPage page(String survey, int year, SurveyPage page) {
+    years.requireYear(survey, year);
+    RuleSet rules = effectiveRules.effectiveRules(survey, year);
+    return toAdminPage(page, survey, year, rules, tables.tableFor(page.chapter(), survey, year));
+  }
+
+  private AdminPage toAdminPage(
+      SurveyPage page, String survey, int year, RuleSet rules, String tableName) {
+    return new AdminPage(
+        page.code(), page.chapter().code(), tableName, entriesOf(page, survey, year, rules));
   }
 
   private List<AdminEntry> entriesOf(SurveyPage page, String survey, int year, RuleSet rules) {
@@ -131,7 +138,7 @@ public class QuestionnaireAdminService {
     return columns.contains(column);
   }
 
-  private static void collect(Condition condition, Set<String> columns) {
+  static void collect(Condition condition, Set<String> columns) {
     if (condition == null) {
       return;
     }

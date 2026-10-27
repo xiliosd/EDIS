@@ -21,6 +21,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Editar el texto de una pregunta de un año en borrador */
+        put: operations["editQuestionText"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/headers/{codEnc}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Editar un encabezado de un año en borrador */
+        put: operations["editHeader"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codAyu}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Editar la ayuda de una pregunta de un año en borrador */
+        put: operations["editHelp"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Reordenar las preguntas de una página de un año en borrador */
+        patch: operations["reorderPage"];
+        trace?: never;
+    };
     "/api/v1/admin/years/{encuesta}": {
         parameters: {
             query?: never;
@@ -238,6 +306,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminEditResult: {
+            page?: components["schemas"]["AdminPage"];
+            skipsTargetingEarlierQuestions?: string[];
+            /** Format: int32 */
+            version?: number;
+        };
         AdminEntry: {
             /** Format: int64 */
             capProyId?: number;
@@ -321,6 +395,11 @@ export interface components {
         CsrfTokenResponse: {
             token?: string;
         };
+        EditTextRequest: {
+            text: string;
+            /** Format: int32 */
+            version: number;
+        };
         FieldValidation: {
             /** Format: int32 */
             longitudMax?: number;
@@ -400,6 +479,11 @@ export interface components {
             numeral?: string;
             pageCode?: string;
             text?: string;
+        };
+        ReorderRequest: {
+            capProyIds: number[];
+            /** Format: int32 */
+            version: number;
         };
         RuleSet: {
             /** Format: int32 */
@@ -488,6 +572,154 @@ export interface operations {
             };
             /** @description La encuesta o el año no existen */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    editQuestionText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                capProyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditTextRequest"];
+            };
+        };
+        responses: {
+            /** @description Página actualizada y nueva versión del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEditResult"];
+                };
+            };
+            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    editHeader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                codEnc: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditTextRequest"];
+            };
+        };
+        responses: {
+            /** @description Página actualizada y nueva versión del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEditResult"];
+                };
+            };
+            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    editHelp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                codAyu: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditTextRequest"];
+            };
+        };
+        responses: {
+            /** @description Página actualizada y nueva versión del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEditResult"];
+                };
+            };
+            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reorderPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                pageCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Página actualizada, nueva versión y saltos cuyo destino queda antes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEditResult"];
+                };
+            };
+            /** @description La lista no coincide con las preguntas de la página */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

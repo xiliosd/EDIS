@@ -4,6 +4,7 @@ import co.gov.dane.edi.admin.SharedRowException;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidCredentialsException;
+import co.gov.dane.edi.service.error.InvalidEditException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.SurveyNotAvailableException;
 import co.gov.dane.edi.service.error.TooManyLoginAttemptsException;
@@ -48,6 +49,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         HttpStatus.CONFLICT,
         "Conflicto",
         "Esta fila la usa otro año o encuesta. Cree primero el año a partir del anterior.");
+  }
+
+  @ExceptionHandler(InvalidEditException.class)
+  ProblemDetail handleInvalidEdit(InvalidEditException exception) {
+    return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Edición inválida", exception.getMessage());
   }
 
   @ExceptionHandler(SurveyNotAvailableException.class)
