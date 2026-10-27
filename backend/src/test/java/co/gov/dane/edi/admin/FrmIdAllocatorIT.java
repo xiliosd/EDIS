@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +54,8 @@ class FrmIdAllocatorIT extends OracleIntegrationTest {
     jdbc.update("INSERT INTO FRM_PREGUNTA (COD_PRE, PREGUNTA, TIPO) VALUES (?, 'x', 'L')", BASE);
     long expectedFirst = currentMaximum() + 1;
     CountDownLatch firstHoldsLock = new CountDownLatch(1);
+    AtomicLong firstReleasing = new AtomicLong(Long.MAX_VALUE);
+    AtomicLong secondDone = new AtomicLong();
     ExecutorService pool = Executors.newFixedThreadPool(2);
     try {
       Future<Long> first =
@@ -63,16 +66,21 @@ class FrmIdAllocatorIT extends OracleIntegrationTest {
                       () -> {
                         firstHoldsLock.countDown();
                         pause(HOLD_MILLIS);
+                        firstReleasing.set(System.nanoTime());
                       }));
       assertThat(firstHoldsLock.await(30, TimeUnit.SECONDS)).isTrue();
-      long secondStarted = System.nanoTime();
-      Future<Long> second = pool.submit(() -> allocateAndInsert("b", () -> {}));
+      Future<Long> second =
+          pool.submit(
+              () -> {
+                long id = allocateAndInsert("b", () -> {});
+                secondDone.set(System.nanoTime());
+                return id;
+              });
 
       assertThat(first.get(60, TimeUnit.SECONDS)).isEqualTo(expectedFirst);
       assertThat(second.get(60, TimeUnit.SECONDS)).isEqualTo(expectedFirst + 1);
-      // La segunda transacción esperó el bloqueo mientras la primera seguía abierta.
-      long waitedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - secondStarted);
-      assertThat(waitedMillis).isGreaterThanOrEqualTo(HOLD_MILLIS - 500);
+      // La segunda solo terminó después de que la primera soltó el bloqueo (fin de su pausa).
+      assertThat(secondDone.get()).isGreaterThanOrEqualTo(firstReleasing.get());
     } finally {
       pool.shutdownNow();
     }

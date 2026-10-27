@@ -291,4 +291,26 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
     assertThat(copied).isNotEqualTo(900011);
     assertThat(groupOf(900041)).isEqualTo(900011);
   }
+
+  @Test
+  void headerAndHelpWithoutCapProyAreRefused() {
+    jdbc.update(
+        "INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO, ANIO)"
+            + " VALUES (900051, NULL, 'E', 'Huérfano', '2027')");
+    jdbc.update(
+        "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO)"
+            + " VALUES (900051, NULL, 'Huérfana')");
+    jdbc.update(
+        "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO) VALUES (900052, 999998, 'Rota')");
+
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHeader(900051, "EDIN", "2027", "x")))
+        .isInstanceOf(SharedRowException.class);
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHelp(900051, "EDIN", "2027", "x")))
+        .isInstanceOf(SharedRowException.class);
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHelp(900052, "EDIN", "2027", "x")))
+        .isInstanceOf(SharedRowException.class);
+  }
 }

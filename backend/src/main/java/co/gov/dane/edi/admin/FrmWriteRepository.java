@@ -1,8 +1,11 @@
 package co.gov.dane.edi.admin;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -109,12 +112,13 @@ public class FrmWriteRepository {
     List<Object[]> rows =
         jdbc.query(
             "SELECT COD_CAP_PROY, ANIO FROM FRM_ENCABEZADO WHERE COD_ENC = ?",
-            (set, rowNumber) -> new Object[] {set.getLong(1), set.getString(2)},
+            (set, rowNumber) -> new Object[] {nullableLong(set, 1), set.getString(2)},
             codEnc);
     if (rows.isEmpty()) {
       throw new NoSuchElementException("No existe el registro de encabezado " + codEnc);
     }
-    if (!yearText.equals(rows.get(0)[1])) {
+    String storedYear = rows.get(0)[1] == null ? null : ((String) rows.get(0)[1]).trim();
+    if (!yearText.equals(storedYear)) {
       throw new SharedRowException("El encabezado " + codEnc + " pertenece a otro año");
     }
     requireCapProyOnlyForPair((Long) rows.get(0)[0], project, year);
@@ -132,15 +136,15 @@ public class FrmWriteRepository {
   public void updateHelp(long codAyu, String project, String yearText, String text) {
     Objects.requireNonNull(text);
     int year = Integer.parseInt(yearText);
-    List<Long> caps =
+    List<Optional<Long>> caps =
         jdbc.query(
             "SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_AYU = ?",
-            (set, rowNumber) -> set.getLong(1),
+            (set, rowNumber) -> Optional.ofNullable(nullableLong(set, 1)),
             codAyu);
     if (caps.isEmpty()) {
       throw new NoSuchElementException("No existe el registro de ayuda " + codAyu);
     }
-    requireCapProyOnlyForPair(caps.get(0), project, year);
+    requireCapProyOnlyForPair(caps.get(0).orElse(null), project, year);
     requireOne(
         jdbc.update("UPDATE FRM_PRE_AYUDA SET TEXTO = ? WHERE COD_AYU = ?", text, codAyu),
         "ayuda " + codAyu);
@@ -225,7 +229,11 @@ public class FrmWriteRepository {
   }
 
   /** Falla con {@link SharedRowException} si el cap_proy lo usa otra pareja. */
-  private void requireCapProyOnlyForPair(long capProyId, String project, int year) {
+  private void requireCapProyOnlyForPair(Long capProyId, String project, int year) {
+    if (capProyId == null
+        || count("SELECT COUNT(*) FROM FRM_CAP_PROY WHERE COD_CAP_PROY = ?", capProyId) == 0) {
+      throw new SharedRowException("La fila no tiene un FRM_CAP_PROY verificable");
+    }
     long byPeriods =
         count(
             "SELECT COUNT(*) FROM FRM_CAP_PERIODO P WHERE P.COD_CAP_PROY = ?" + OTHER_PAIR_PERIOD,
@@ -241,6 +249,11 @@ public class FrmWriteRepository {
     if (byPeriods > 0 || byOwnColumns > 0) {
       throw new SharedRowException("La fila " + capProyId + " de FRM_CAP_PROY la usa otro año");
     }
+  }
+
+  private static Long nullableLong(ResultSet set, int column) throws SQLException {
+    long value = set.getLong(column);
+    return set.wasNull() ? null : value;
   }
 
   private long count(String sql, Object... arguments) {
