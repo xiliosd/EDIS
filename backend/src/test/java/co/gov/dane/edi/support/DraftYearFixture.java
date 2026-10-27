@@ -45,8 +45,18 @@ public final class DraftYearFixture {
     return OFFSET + capProy2026;
   }
 
+  /** Preguntas propias de 2027 en la página H1: dos bloques de GRUPO (1 y 2) de dos cada uno. */
+  public static final long H1_GROUP_1_SECOND = OFFSET + 10001;
+
+  public static final long H1_GROUP_2_FIRST = OFFSET + 10002;
+  public static final long H1_GROUP_2_SECOND = OFFSET + 10003;
+
   public void install() {
     remove();
+    for (FrmTable table : FrmTable.values()) {
+      jdbc.update(
+          "DELETE FROM " + table.tableName() + " WHERE " + table.idColumn() + " >= ?", OFFSET);
+    }
     for (FrmTable table : FrmTable.values()) {
       Long maximum =
           jdbc.queryForObject(
@@ -92,12 +102,41 @@ public final class DraftYearFixture {
             + " (SELECT COD_CAP_PROY FROM FRM_CAP_PROY WHERE PROY = 'EDIN' AND ANIO = '2026')",
         OFFSET,
         OFFSET);
+    insertH1Block(H1_GROUP_1_SECOND, 1, 2, "H02A.");
+    insertH1Block(H1_GROUP_2_FIRST, 2, 1, "H02B.");
+    insertH1Block(H1_GROUP_2_SECOND, 2, 2, "H02C.");
     rulesFiles.save(
         new RuleSet("EDIN", 2027, 0, List.of(), Map.of(), YearState.BORRADOR, Map.of()),
         0,
         "fixture",
         "crear-borrador-prueba",
         List.of());
+  }
+
+  /** Pregunta propia (pregunta, grupo, cap_proy y periodo con el mismo id) de H1 en 2027. */
+  private void insertH1Block(long id, int group, int order, String numeral) {
+    jdbc.update(
+        "INSERT INTO FRM_PREGUNTA (COD_PRE, PREGUNTA, TIPO) VALUES (?, ?, 'L')",
+        id,
+        "Pregunta ficticia " + numeral);
+    jdbc.update(
+        "INSERT INTO FRM_PRE_GRUPO (COD_PRE_GRUPO, GRUPO, ORDEN, COD_PRE) VALUES (?, ?, ?, ?)",
+        id,
+        group,
+        order,
+        id);
+    jdbc.update(
+        "INSERT INTO FRM_CAP_PROY (COD_CAP_PROY, CAPITULO, NUMERAL, COD_PRE_GRUPO, PROY, ANIO)"
+            + " VALUES (?, 'H1', ?, ?, 'EDIN', '2027')",
+        id,
+        numeral,
+        id);
+    jdbc.update(
+        "INSERT INTO FRM_CAP_PERIODO (ID_PERIODO, ANIO, PROY, COD_CAP_PROY, NUMERAL)"
+            + " VALUES (?, 2027, 'EDIN', ?, ?)",
+        id,
+        id,
+        numeral);
   }
 
   /** Borra lo que creó {@link #install()} y las copias que haya hecho el editor. */

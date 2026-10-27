@@ -325,6 +325,7 @@ export interface components {
             numeral?: string;
             /** Format: int32 */
             optionGroup?: number;
+            rawText?: string;
             referencedByRules?: string[];
             text?: string;
         };
@@ -607,8 +608,35 @@ export interface operations {
                     "application/json": components["schemas"]["AdminEditResult"];
                 };
             };
+            /** @description Cuerpo inválido: falta el texto o la versión, o el texto excede el límite */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta, el año, la página o el registro no existen en ese año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description El año está publicado, la versión cambió o la fila la usa otro año */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El texto queda vacío o es demasiado largo */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -644,8 +672,35 @@ export interface operations {
                     "application/json": components["schemas"]["AdminEditResult"];
                 };
             };
+            /** @description Cuerpo inválido: falta el texto o la versión, o el texto excede el límite */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta, el año, la página o el registro no existen en ese año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description El año está publicado, la versión cambió o la fila la usa otro año */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El texto queda vacío o es demasiado largo */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -681,8 +736,35 @@ export interface operations {
                     "application/json": components["schemas"]["AdminEditResult"];
                 };
             };
+            /** @description Cuerpo inválido: falta el texto o la versión, o el texto excede el límite */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta, el año, la página o el registro no existen en ese año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description El año está publicado, la versión cambió o la fila la usa otro año */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El texto queda vacío o es demasiado largo */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -718,7 +800,34 @@ export interface operations {
                     "application/json": components["schemas"]["AdminEditResult"];
                 };
             };
-            /** @description La lista no coincide con las preguntas de la página */
+            /** @description Cuerpo inválido: falta el texto o la versión, o el texto excede el límite */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta, el año, la página o el registro no existen en ese año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La lista no coincide con las preguntas de la página o mueve una pregunta de grupo */
             422: {
                 headers: {
                     [name: string]: unknown;

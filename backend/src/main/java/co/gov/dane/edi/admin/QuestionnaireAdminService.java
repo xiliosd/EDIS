@@ -81,13 +81,15 @@ public class QuestionnaireAdminService {
     List<Long> ids = rows.stream().map(built -> built.row().entryId()).toList();
     Map<Long, List<AdminHeader>> headers = repository.findAdminHeaders(ids, String.valueOf(year));
     Map<Long, AdminHelp> help = repository.findHelp(ids);
-    return rows.stream().map(built -> toAdminEntry(built, headers, help, rules)).toList();
+    Map<Long, String> rawTexts = repository.findRawQuestionTexts(ids);
+    return rows.stream().map(built -> toAdminEntry(built, headers, help, rawTexts, rules)).toList();
   }
 
   private static AdminEntry toAdminEntry(
       PageRow built,
       Map<Long, List<AdminHeader>> headers,
       Map<Long, AdminHelp> help,
+      Map<Long, String> rawTexts,
       RuleSet rules) {
     QuestionnaireEntry entry = built.entry();
     AnswerSpec answer = entry.answer();
@@ -108,6 +110,7 @@ public class QuestionnaireAdminService {
             entry.kind().name(),
             answer == null ? null : answer.inputType().name(),
             entry.text(),
+            QuestionTextSanitizer.toPlainText(rawTexts.get(id)),
             answer == null ? null : answer.columnStatus(),
             built.row().optionGroup(),
             entryHeaders,

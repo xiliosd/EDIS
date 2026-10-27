@@ -58,6 +58,15 @@ public class QuestionnaireRepository {
        ORDER BY COD_CAP_PROY, COD_AYU
       """;
 
+  private static final String RAW_TEXTS =
+      """
+      SELECT PP.COD_CAP_PROY, P.PREGUNTA
+        FROM FRM_CAP_PROY PP
+        JOIN FRM_PRE_GRUPO G ON G.COD_PRE_GRUPO = PP.COD_PRE_GRUPO
+        JOIN FRM_PREGUNTA P ON P.COD_PRE = G.COD_PRE
+       WHERE PP.COD_CAP_PROY IN (:entryIds)
+      """;
+
   private static final String OPTIONS =
       """
       SELECT G.GRUPO, R.VALOR, R.RESPUESTA
@@ -167,6 +176,21 @@ public class QuestionnaireRepository {
               new AdminHelp(row.getLong("COD_AYU"), row.getString("TEXTO")));
         });
     return help;
+  }
+
+  /** Texto guardado de cada pregunta (sin sustituir el comodín 200X), por FRM_CAP_PROY. */
+  public Map<Long, String> findRawQuestionTexts(Collection<Long> entryIds) {
+    Map<Long, String> texts = new LinkedHashMap<>();
+    if (entryIds.isEmpty()) {
+      return texts;
+    }
+    jdbc.query(
+        RAW_TEXTS,
+        new MapSqlParameterSource("entryIds", entryIds),
+        row -> {
+          texts.put(row.getLong("COD_CAP_PROY"), row.getString("PREGUNTA"));
+        });
+    return texts;
   }
 
   public Map<Integer, List<AnswerOption>> findOptions(Collection<Integer> optionGroups) {

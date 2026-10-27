@@ -22,6 +22,8 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -127,8 +129,26 @@ public class RulesFileRepository {
       deleteQuietly(temporary);
     }
     cache.put(name, toSave);
-    audit.record(user, toSave.survey(), toSave.year(), operation, codes);
+    recordAudit(toSave, user, operation, codes);
     return toSave;
+  }
+
+  /**
+   * Dentro de una transacción la auditoría espera al COMMIT: un cambio revertido no se registra.
+   */
+  private void recordAudit(RuleSet saved, String user, String operation, List<String> codes) {
+    List<String> auditedCodes = List.copyOf(codes);
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      audit.record(user, saved.survey(), saved.year(), operation, auditedCodes);
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            audit.record(user, saved.survey(), saved.year(), operation, auditedCodes);
+          }
+        });
   }
 
   /** Nunca reemplaza una copia previa: dos guardados en el mismo milisegundo no se pisan. */

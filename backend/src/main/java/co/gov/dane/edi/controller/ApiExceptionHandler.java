@@ -53,7 +53,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler(InvalidEditException.class)
   ProblemDetail handleInvalidEdit(InvalidEditException exception) {
-    return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Edición inválida", exception.getMessage());
+    ProblemDetail body =
+        problem(HttpStatus.UNPROCESSABLE_CONTENT, "Edición inválida", exception.getMessage());
+    if (exception.field() != null) {
+      body.setProperty("errors", Map.of(exception.field(), exception.getMessage()));
+    }
+    return body;
   }
 
   @ExceptionHandler(SurveyNotAvailableException.class)

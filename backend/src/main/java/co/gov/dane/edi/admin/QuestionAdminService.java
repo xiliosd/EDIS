@@ -16,11 +16,13 @@ import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidEditException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.util.ColumnCodeResolver;
-import co.gov.dane.edi.util.QuestionTextSanitizer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -43,7 +45,7 @@ public class QuestionAdminService {
 
   private static final String LOCK_KEY = "admin:frm";
   private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cc}&&[^\\n\\t]]");
-  private static final int MAX_NORMALIZATION_PASSES = 5;
+  private static final int MAX_STORED_BYTES = 4000;
 
   private final YearCatalogService years;
   private final RulesFileRepository rulesFiles;
@@ -161,13 +163,31 @@ public class QuestionAdminService {
         page,
         () -> {
           List<PageRow> rows = questionnaire.pageRows(page, survey, year);
-          Set<Long> current = new LinkedHashSet<>();
-          rows.forEach(row -> current.add(row.row().entryId()));
-          if (capProyIds.size() != current.size() || !current.equals(new HashSet<>(capProyIds))) {
+          List<Long> current = rows.stream().map(row -> row.row().entryId()).distinct().toList();
+          if (capProyIds.size() != current.size()
+              || !new HashSet<>(current).equals(new HashSet<>(capProyIds))) {
             throw new InvalidEditException("La lista no coincide con las preguntas de la página.");
           }
-          for (int position = 0; position < capProyIds.size(); position++) {
-            writes.updateOrder(capProyIds.get(position), survey, yearText, position + 1);
+          Map<Long, Integer> groups = lookup.groupNumbers(current);
+          // La lectura ordena por GRUPO y luego ORDEN: solo se puede permutar dentro de cada
+          // bloque.
+          for (int position = 0; position < current.size(); position++) {
+            if (!groups.get(current.get(position)).equals(groups.get(capProyIds.get(position)))) {
+              throw new InvalidEditException("No se puede mover una pregunta a otro grupo.");
+            }
+          }
+          Map<Integer, Integer> nextOrder = new HashMap<>();
+          for (Long capProyId : capProyIds) {
+            int order = nextOrder.merge(groups.get(capProyId), 1, Integer::sum);
+            writes.updateOrder(capProyId, survey, yearText, order);
+          }
+          List<Long> reread =
+              questionnaire.pageRows(page, survey, year).stream()
+                  .map(row -> row.row().entryId())
+                  .distinct()
+                  .toList();
+          if (!reread.equals(capProyIds)) {
+            throw new IllegalStateException("El orden guardado no coincide con el solicitado.");
           }
           Set<String> codes = new LinkedHashSet<>();
           rows.forEach(row -> codes.add(codeOf(row.row().entryId(), row.row().numeral())));
@@ -240,24 +260,20 @@ public class QuestionAdminService {
   }
 
   /**
-   * Texto plano estable: lo que se guarda es exactamente lo que luego se lee y se muestra. Se
-   * repite la limpieza de {@link QuestionTextSanitizer} hasta que no cambie, para que una entidad
-   * (por ejemplo la que decodifica a una etiqueta) no reaparezca como marcado al leerse de nuevo.
+   * Texto plano a su forma guardada: sin caracteres de control, recortado y con solo {@code &},
+   * {@code <} y {@code >} escapados. La lectura (quitar etiquetas y luego decodificar entidades) lo
+   * devuelve tal cual lo escribió la persona.
    */
   static String normalize(String text) {
-    String current = text == null ? "" : text;
-    for (int pass = 0; pass < MAX_NORMALIZATION_PASSES; pass++) {
-      String cleaned =
-          QuestionTextSanitizer.toPlainText(CONTROL_CHARACTERS.matcher(current).replaceAll(""));
-      if (cleaned.equals(current)) {
-        break;
-      }
-      current = cleaned;
+    String stripped = CONTROL_CHARACTERS.matcher(text == null ? "" : text).replaceAll("").strip();
+    if (stripped.isEmpty()) {
+      throw new InvalidEditException("text", "El texto no puede quedar vacío.");
     }
-    if (current.isBlank()) {
-      throw new InvalidEditException("El texto no puede quedar vacío.");
+    String escaped = stripped.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    if (escaped.getBytes(StandardCharsets.UTF_8).length > MAX_STORED_BYTES) {
+      throw new InvalidEditException("text", "El texto es demasiado largo.");
     }
-    return current;
+    return escaped;
   }
 
   /** Reglas cuyo destino queda ahora antes de la pregunta que las dispara, dentro de la página. */

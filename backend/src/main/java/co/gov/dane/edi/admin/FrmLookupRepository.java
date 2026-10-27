@@ -1,6 +1,10 @@
 package co.gov.dane.edi.admin;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -41,6 +45,26 @@ public class FrmLookupRepository {
 
   public Optional<Long> capProyOfHelp(long codAyu) {
     return first("SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_AYU = ?", codAyu);
+  }
+
+  /** Número de GRUPO (bloque de orden) de cada FRM_CAP_PROY indicado. */
+  public Map<Long, Integer> groupNumbers(Collection<Long> capProyIds) {
+    Map<Long, Integer> groups = new HashMap<>();
+    if (capProyIds.isEmpty()) {
+      return groups;
+    }
+    String placeholders = String.join(",", Collections.nCopies(capProyIds.size(), "?"));
+    jdbc.query(
+        "SELECT C.COD_CAP_PROY, G.GRUPO FROM FRM_CAP_PROY C"
+            + " JOIN FRM_PRE_GRUPO G ON G.COD_PRE_GRUPO = C.COD_PRE_GRUPO"
+            + " WHERE C.COD_CAP_PROY IN ("
+            + placeholders
+            + ")",
+        rows -> {
+          groups.put(rows.getLong(1), rows.getInt(2));
+        },
+        capProyIds.toArray());
+    return groups;
   }
 
   private Optional<Long> first(String sql, Object... arguments) {

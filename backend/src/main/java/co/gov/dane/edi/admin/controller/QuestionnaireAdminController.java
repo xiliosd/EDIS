@@ -88,8 +88,29 @@ public class QuestionnaireAdminController {
   @Operation(summary = "Editar el texto de una pregunta de un año en borrador")
   @ApiResponse(responseCode = "200", description = "Página actualizada y nueva versión del año")
   @ApiResponse(
+      responseCode = "400",
+      description = "Cuerpo inválido: falta el texto o la versión, o el texto excede el límite",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "404",
+      description = "La encuesta, el año, la página o el registro no existen en ese año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
       responseCode = "409",
       description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description = "El texto queda vacío o es demasiado largo",
       content =
           @Content(
               mediaType = "application/problem+json",
@@ -110,8 +131,29 @@ public class QuestionnaireAdminController {
   @Operation(summary = "Editar un encabezado de un año en borrador")
   @ApiResponse(responseCode = "200", description = "Página actualizada y nueva versión del año")
   @ApiResponse(
+      responseCode = "400",
+      description = "Cuerpo inválido: falta el texto o la versión, o el texto excede el límite",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "404",
+      description = "La encuesta, el año, la página o el registro no existen en ese año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
       responseCode = "409",
       description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description = "El texto queda vacío o es demasiado largo",
       content =
           @Content(
               mediaType = "application/problem+json",
@@ -129,8 +171,29 @@ public class QuestionnaireAdminController {
   @Operation(summary = "Editar la ayuda de una pregunta de un año en borrador")
   @ApiResponse(responseCode = "200", description = "Página actualizada y nueva versión del año")
   @ApiResponse(
+      responseCode = "400",
+      description = "Cuerpo inválido: falta el texto o la versión, o el texto excede el límite",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "404",
+      description = "La encuesta, el año, la página o el registro no existen en ese año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
       responseCode = "409",
       description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description = "El texto queda vacío o es demasiado largo",
       content =
           @Content(
               mediaType = "application/problem+json",
@@ -150,8 +213,30 @@ public class QuestionnaireAdminController {
       responseCode = "200",
       description = "Página actualizada, nueva versión y saltos cuyo destino queda antes")
   @ApiResponse(
+      responseCode = "400",
+      description = "Cuerpo inválido: falta el texto o la versión, o el texto excede el límite",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "404",
+      description = "La encuesta, el año, la página o el registro no existen en ese año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "409",
+      description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
       responseCode = "422",
-      description = "La lista no coincide con las preguntas de la página",
+      description =
+          "La lista no coincide con las preguntas de la página o mueve una pregunta de grupo",
       content =
           @Content(
               mediaType = "application/problem+json",

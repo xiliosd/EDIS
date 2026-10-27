@@ -3,6 +3,7 @@ package co.gov.dane.edi.admin;
 import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
 import static co.gov.dane.edi.support.DraftYearFixture.draftCapProy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -233,30 +234,109 @@ class QuestionEditIT extends OracleIntegrationTest {
 
   @Test
   void textIsStoredPlainAndRenderedEscaped() throws Exception {
-    edit(
-            DRAFT + "/entries/" + draftCapProy(C01A) + "/text",
-            "{\"text\":\"<script>x</script>&amp;\\u0007 &lt;b&gt;\",\"version\":1}")
+    String path = DRAFT + "/entries/" + draftCapProy(C01A) + "/text";
+    edit(path, "{\"text\":\"<script>x</script>&amp;\\u0007\",\"version\":1}")
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.page.entries[?(@.columnCode == 'C01A')].text").value("x&"));
+        .andExpect(
+            jsonPath("$.page.entries[?(@.columnCode == 'C01A')].text")
+                .value("<script>x</script>&amp;"))
+        .andExpect(
+            jsonPath("$.page.entries[?(@.columnCode == 'C01A')].rawText")
+                .value("<script>x</script>&amp;"));
+    assertThat(storedTextOf(draftCapProy(C01A)))
+        .isEqualTo("&lt;script&gt;x&lt;/script&gt;&amp;amp;");
+    SurveyPage c1 = SurveyPage.find("C1").orElseThrow();
+    assertThat(questionnaire.pageEntries(c1, "EDIN", 2027).get(0).text())
+        .isEqualTo("<script>x</script>&amp;");
 
-    String stored =
-        jdbc.queryForObject(
-            "SELECT P.PREGUNTA FROM FRM_PREGUNTA P JOIN FRM_PRE_GRUPO G ON G.COD_PRE = P.COD_PRE"
-                + " JOIN FRM_CAP_PROY C ON C.COD_PRE_GRUPO = G.COD_PRE_GRUPO"
-                + " WHERE C.COD_CAP_PROY = ?",
-            String.class,
-            draftCapProy(C01A));
-    assertThat(stored).isEqualTo("x&").doesNotContain("<", "\u0007");
+    edit(path, "{\"text\":\"Ingreso <entre 1 y 2> SMMLV\",\"version\":2}")
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.page.entries[?(@.columnCode == 'C01A')].text")
+                .value("Ingreso <entre 1 y 2> SMMLV"));
+    assertThat(questionnaire.pageEntries(c1, "EDIN", 2027).get(0).text())
+        .isEqualTo("Ingreso <entre 1 y 2> SMMLV");
   }
 
   @Test
-  void blankTextAfterCleaningIsRejected() throws Exception {
-    edit(DRAFT + "/entries/" + draftCapProy(C01A) + "/text", "{\"text\":\"<b></b>\",\"version\":1}")
-        .andExpect(status().isUnprocessableContent());
-    edit(DRAFT + "/entries/" + draftCapProy(C01A) + "/text", "{\"text\":\"  \",\"version\":1}")
-        .andExpect(status().isBadRequest());
-    edit(DRAFT + "/entries/" + draftCapProy(C01A) + "/text", "{\"text\":\"Hola\"}")
-        .andExpect(status().isBadRequest());
+  void blankOrOversizedTextIsRejected() throws Exception {
+    String path = DRAFT + "/entries/" + draftCapProy(C01A) + "/text";
+    edit(path, "{\"text\":\"\\u0007\\u0008\",\"version\":1}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors.text").value("El texto no puede quedar vacío."));
+    edit(path, "{\"text\":\"" + "&".repeat(1000) + "\",\"version\":1}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors.text").value("El texto es demasiado largo."));
+    edit(path, "{\"text\":\"  \",\"version\":1}").andExpect(status().isBadRequest());
+    edit(path, "{\"text\":\"Hola\"}").andExpect(status().isBadRequest());
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void yearWildcardSurvivesAnEdit() throws Exception {
+    jdbc.update("UPDATE FRM_PREGUNTA SET PREGUNTA = 'Ingreso del 200X' WHERE COD_PRE = 201");
+    try {
+      questionnaire.evict();
+      mockMvc
+          .perform(get(DRAFT).cookie(admin()))
+          .andExpect(status().isOk())
+          .andExpect(
+              jsonPath("$.pages[?(@.pageCode == 'C1')].entries[?(@.columnCode == 'C01A')].text")
+                  .value("Ingreso del 2027"))
+          .andExpect(
+              jsonPath("$.pages[?(@.pageCode == 'C1')].entries[?(@.columnCode == 'C01A')].rawText")
+                  .value("Ingreso del 200X"));
+
+      edit(
+              DRAFT + "/entries/" + draftCapProy(C01A) + "/text",
+              "{\"text\":\"Gasto del 200X\",\"version\":1}")
+          .andExpect(status().isOk())
+          .andExpect(
+              jsonPath("$.page.entries[?(@.columnCode == 'C01A')].text").value("Gasto del 2027"))
+          .andExpect(
+              jsonPath("$.page.entries[?(@.columnCode == 'C01A')].rawText")
+                  .value("Gasto del 200X"));
+      assertThat(storedTextOf(draftCapProy(C01A))).isEqualTo("Gasto del 200X");
+    } finally {
+      jdbc.update(
+          "UPDATE FRM_PREGUNTA SET PREGUNTA = '&iquest;Pregunta ficticia C01A?'"
+              + " WHERE COD_PRE = 201");
+    }
+  }
+
+  @Test
+  void reordersWithinAGroupBlock() throws Exception {
+    long first = draftCapProy(309);
+    long second = DraftYearFixture.H1_GROUP_1_SECOND;
+    long third = DraftYearFixture.H1_GROUP_2_FIRST;
+    long fourth = DraftYearFixture.H1_GROUP_2_SECOND;
+    reorder(
+            DRAFT + "/pages/H1/order",
+            "[" + second + "," + first + "," + fourth + "," + third + "]",
+            1)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version").value(2))
+        .andExpect(jsonPath("$.page.entries[0].capProyId").value(second))
+        .andExpect(jsonPath("$.page.entries[1].capProyId").value(first))
+        .andExpect(jsonPath("$.page.entries[2].capProyId").value(fourth))
+        .andExpect(jsonPath("$.page.entries[3].capProyId").value(third));
+  }
+
+  @Test
+  void reorderAcrossGroupsIsRejected() throws Exception {
+    long first = draftCapProy(309);
+    long second = DraftYearFixture.H1_GROUP_1_SECOND;
+    long third = DraftYearFixture.H1_GROUP_2_FIRST;
+    long fourth = DraftYearFixture.H1_GROUP_2_SECOND;
+    reorder(
+            DRAFT + "/pages/H1/order",
+            "[" + third + "," + first + "," + second + "," + fourth + "]",
+            1)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.detail").value("No se puede mover una pregunta a otro grupo."));
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+    SurveyPage h1 = SurveyPage.find("H1").orElseThrow();
+    assertThat(questionnaire.pageRows(h1, "EDIN", 2027).get(0).row().entryId()).isEqualTo(first);
   }
 
   @Test
@@ -311,6 +391,15 @@ class QuestionEditIT extends OracleIntegrationTest {
         .cookie(admin())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body);
+  }
+
+  private String storedTextOf(long capProyId) {
+    return jdbc.queryForObject(
+        "SELECT P.PREGUNTA FROM FRM_PREGUNTA P JOIN FRM_PRE_GRUPO G ON G.COD_PRE = P.COD_PRE"
+            + " JOIN FRM_CAP_PROY C ON C.COD_PRE_GRUPO = G.COD_PRE_GRUPO"
+            + " WHERE C.COD_CAP_PROY = ?",
+        String.class,
+        capProyId);
   }
 
   private String textOfQuestion(long codPre) {
