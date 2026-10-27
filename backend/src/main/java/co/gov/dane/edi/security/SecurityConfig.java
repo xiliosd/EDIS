@@ -78,6 +78,9 @@ public class SecurityConfig {
                   .requestMatchers(HttpMethod.GET, "/api/v1/survey/**")
                   .hasAnyRole(Role.ENCUESTADO.name(), Role.ADMIN_CUESTIONARIO.name());
               authorize.requestMatchers("/api/v1/survey/**").hasRole(Role.ENCUESTADO.name());
+              authorize
+                  .requestMatchers("/api/v1/admin/questionnaire/**", "/api/v1/admin/years/**")
+                  .hasRole(Role.ADMIN_CUESTIONARIO.name());
               authorize.requestMatchers("/api/v1/admin/**").hasAnyRole(administratorRoles);
               authorize.anyRequest().authenticated();
             })

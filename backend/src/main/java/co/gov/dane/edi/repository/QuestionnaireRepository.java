@@ -60,10 +60,15 @@ public class QuestionnaireRepository {
   }
 
   public List<QuestionnaireRow> findRowsByPage(String pageCode) {
+    return findRowsByPage(pageCode, survey.code(), survey.yearText());
+  }
+
+  /** Preguntas de una página para cualquier encuesta y año (lo usa el administrador). */
+  public List<QuestionnaireRow> findRowsByPage(String pageCode, String project, String yearText) {
     MapSqlParameterSource parameters =
         new MapSqlParameterSource()
-            .addValue("yearText", survey.yearText())
-            .addValue("projectPattern", "%" + survey.code() + "%")
+            .addValue("yearText", yearText)
+            .addValue("projectPattern", "%" + project + "%")
             .addValue("pageCode", pageCode);
     return jdbc.query(
         ROWS_BY_PAGE,
@@ -83,14 +88,16 @@ public class QuestionnaireRepository {
 
   /** Oracle admite hasta 1000 valores en IN; una página del cuestionario tiene muchos menos. */
   public Map<Long, List<SectionHeader>> findHeaders(Collection<Long> entryIds) {
+    return findHeaders(entryIds, survey.yearText());
+  }
+
+  public Map<Long, List<SectionHeader>> findHeaders(Collection<Long> entryIds, String yearText) {
     Map<Long, List<SectionHeader>> headers = new LinkedHashMap<>();
     if (entryIds.isEmpty()) {
       return headers;
     }
     MapSqlParameterSource parameters =
-        new MapSqlParameterSource()
-            .addValue("entryIds", entryIds)
-            .addValue("yearText", survey.yearText());
+        new MapSqlParameterSource().addValue("entryIds", entryIds).addValue("yearText", yearText);
     jdbc.query(
         HEADERS,
         parameters,

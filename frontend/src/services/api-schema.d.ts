@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consultar el árbol del cuestionario de una encuesta y año */
+        get: operations["questionnaire"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/years/{encuesta}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar los años del cuestionario de una encuesta */
+        get: operations["years"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -204,6 +238,41 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminEntry: {
+            /** Format: int64 */
+            capProyId?: number;
+            columnCode?: string;
+            /** @enum {string} */
+            columnStatus?: "ACTIVE" | "PENDING_COLUMN";
+            headers?: components["schemas"]["SectionHeader"][];
+            help?: string;
+            inputType?: string;
+            kind?: string;
+            numeral?: string;
+            /** Format: int32 */
+            optionGroup?: number;
+            referencedByRules?: string[];
+            text?: string;
+        };
+        AdminPage: {
+            chapterCode?: string;
+            entries?: components["schemas"]["AdminEntry"][];
+            pageCode?: string;
+            tableName?: string;
+        };
+        AdminQuestionnaireView: {
+            pages?: components["schemas"]["AdminPage"][];
+            /** @enum {string} */
+            state?: "borrador" | "publicado";
+            survey?: string;
+            tables?: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            version?: number;
+            /** Format: int32 */
+            year?: number;
+        };
         AnswerOption: {
             label?: string;
             value?: string;
@@ -366,6 +435,15 @@ export interface components {
             pages?: components["schemas"]["PageStatus"][];
             receipt?: string;
         };
+        YearSummary: {
+            active?: boolean;
+            /** @enum {string} */
+            state?: "borrador" | "publicado";
+            /** Format: int32 */
+            version?: number;
+            /** Format: int32 */
+            year?: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -375,6 +453,69 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    questionnaire: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Páginas, preguntas y estado de sus columnas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminQuestionnaireView"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    years: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Años con estado, versión y año activo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearSummary"][];
+                };
+            };
+            /** @description La encuesta no existe */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     csrf: {
         parameters: {
             query?: never;

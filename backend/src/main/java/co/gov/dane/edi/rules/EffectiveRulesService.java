@@ -5,8 +5,9 @@ import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.service.QuestionnaireService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -18,8 +19,8 @@ public class EffectiveRulesService {
   private final QuestionnaireService questionnaire;
   private final SurveyProperties survey;
 
-  /** Una sola instancia (D6): las reglas efectivas se calculan una vez por generación. */
-  private final AtomicReference<CachedRules> cached = new AtomicReference<>();
+  /** Una sola instancia (D6): las reglas efectivas se calculan una vez por año y generación. */
+  private final Map<String, CachedRules> cached = new ConcurrentHashMap<>();
 
   public EffectiveRulesService(
       RulesFileRepository rulesFile, QuestionnaireService questionnaire, SurveyProperties survey) {
@@ -29,28 +30,35 @@ public class EffectiveRulesService {
   }
 
   public RuleSet effectiveRules() {
+    return effectiveRules(survey.code(), survey.year());
+  }
+
+  /** Reglas del archivo del año más los saltos heredados traducidos de las preguntas de ese año. */
+  public RuleSet effectiveRules(String surveyCode, int year) {
     long generation = questionnaire.cacheGeneration();
-    CachedRules current = cached.get();
+    String key = surveyCode + "-" + year;
+    CachedRules current = cached.get(key);
     if (current != null && current.generation() == generation) {
       return current.rules();
     }
-    RuleSet computed = compute();
-    cached.set(new CachedRules(generation, computed));
+    RuleSet computed = compute(surveyCode, year);
+    cached.put(key, new CachedRules(generation, computed));
     return computed;
   }
 
-  private RuleSet compute() {
+  private RuleSet compute(String surveyCode, int year) {
     List<SkipRule> legacy = new ArrayList<>();
     for (SurveyPage page : SurveyPage.ordered()) {
-      legacy.addAll(LegacySkipTranslator.translate(questionnaire.pageEntries(page)));
+      legacy.addAll(
+          LegacySkipTranslator.translate(questionnaire.pageEntries(page, surveyCode, year)));
     }
-    return merge(rulesFile.load(survey.code(), survey.year()), legacy);
+    return merge(rulesFile.load(surveyCode, year), legacy);
   }
 
   private record CachedRules(long generation, RuleSet rules) {}
 
   /** Una regla del archivo con el id de una heredada la reemplaza (así se corrige FRM_SALTO). */
-  static RuleSet merge(RuleSet fromFile, List<SkipRule> legacy) {
+  public static RuleSet merge(RuleSet fromFile, List<SkipRule> legacy) {
     Set<String> fileIds = fromFile.skips().stream().map(SkipRule::id).collect(Collectors.toSet());
     List<SkipRule> skips = new ArrayList<>(fromFile.skips());
     legacy.stream().filter(rule -> !fileIds.contains(rule.id())).forEach(skips::add);

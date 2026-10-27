@@ -39,6 +39,11 @@ class QuestionnaireServiceTest {
     AnswerTableResolver tables = mock(AnswerTableResolver.class);
     when(tables.activeTableFor(org.mockito.ArgumentMatchers.any(Chapter.class)))
         .thenAnswer(call -> call.<Chapter>getArgument(0).tableName());
+    when(tables.tableFor(
+            org.mockito.ArgumentMatchers.any(Chapter.class),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.anyInt()))
+        .thenAnswer(call -> call.<Chapter>getArgument(0).tableName());
     return tables;
   }
 
@@ -62,7 +67,12 @@ class QuestionnaireServiceTest {
                 101L, List.of(new SectionHeader(HeaderKind.HEADING, "Ubicaci&oacute;n laboral"))));
     when(questionnaire.findOptions(anyCollection()))
         .thenReturn(Map.of(10, List.of(new AnswerOption("2", "T&eacute;cnico"))));
-    service = new QuestionnaireService(questionnaire, answerColumns, defaultTables());
+    service =
+        new QuestionnaireService(
+            questionnaire,
+            answerColumns,
+            defaultTables(),
+            new co.gov.dane.edi.config.SurveyProperties("EDIN", 2026, "S", "d"));
   }
 
   @Test

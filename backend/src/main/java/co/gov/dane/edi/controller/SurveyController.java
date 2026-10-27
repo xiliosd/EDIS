@@ -1,5 +1,6 @@
 package co.gov.dane.edi.controller;
 
+import co.gov.dane.edi.admin.YearCatalogService;
 import co.gov.dane.edi.model.ChapterDetail;
 import co.gov.dane.edi.model.ChapterSummary;
 import co.gov.dane.edi.security.Role;
@@ -26,8 +27,11 @@ public class SurveyController {
 
   private final QuestionnaireService questionnaireService;
 
-  public SurveyController(QuestionnaireService questionnaireService) {
+  private final YearCatalogService years;
+
+  public SurveyController(QuestionnaireService questionnaireService, YearCatalogService years) {
     this.questionnaireService = questionnaireService;
+    this.years = years;
   }
 
   @Operation(summary = "Listar los capítulos del cuestionario")
@@ -54,6 +58,9 @@ public class SurveyController {
     boolean includePending =
         authentication.getAuthorities().stream()
             .anyMatch(a -> Role.ADMIN_CUESTIONARIO.authority().equals(a.getAuthority()));
+    if (!includePending) {
+      years.requireActiveYearAvailable();
+    }
     return questionnaireService.getChapter(chapterCode, includePending);
   }
 }

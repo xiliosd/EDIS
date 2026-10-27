@@ -1,6 +1,8 @@
 package co.gov.dane.edi.service;
 
 import co.gov.dane.edi.admin.AnswerTableResolver;
+import co.gov.dane.edi.admin.dto.AdminEntry;
+import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.AnswerSpec;
 import co.gov.dane.edi.model.Chapter;
@@ -37,22 +39,30 @@ public class QuestionnaireService {
   private final QuestionnaireRepository questionnaire;
   private final AnswerColumnRepository answerColumns;
   private final AnswerTableResolver tables;
+  private final SurveyProperties survey;
 
   /**
    * Preguntas por página en memoria: cada consulta del encuestado las necesita varias veces. Los
    * cambios en las tablas FRM exigen reiniciar hasta que el editor de la Fase 3 llame a evict().
    */
-  private final Map<SurveyPage, List<QuestionnaireEntry>> entriesByPage = new ConcurrentHashMap<>();
+  private final Map<PageKey, List<QuestionnaireEntry>> entriesByPage = new ConcurrentHashMap<>();
 
   private final AtomicLong cacheGeneration = new AtomicLong();
+
+  private record PageKey(SurveyPage page, String survey, int year) {}
+
+  /** Fila de FRM_* junto con la pregunta ya armada: el editor necesita ambas. */
+  private record Built(QuestionnaireRow row, QuestionnaireEntry entry) {}
 
   public QuestionnaireService(
       QuestionnaireRepository questionnaire,
       AnswerColumnRepository answerColumns,
-      AnswerTableResolver tables) {
+      AnswerTableResolver tables,
+      SurveyProperties survey) {
     this.questionnaire = questionnaire;
     this.answerColumns = answerColumns;
     this.tables = tables;
+    this.survey = survey;
   }
 
   public List<ChapterSummary> listChapters() {
@@ -66,20 +76,46 @@ public class QuestionnaireService {
     Set<String> columns = answerColumns.findColumns(tables.activeTableFor(chapter));
     List<QuestionnaireEntry> entries =
         chapter.pageCodes().stream()
-            .flatMap(page -> buildEntries(page, columns, includePendingColumns).stream())
+            .flatMap(
+                page ->
+                    buildEntries(page, columns, includePendingColumns, survey.code(), survey.year())
+                        .stream()
+                        .map(Built::entry))
             .toList();
     return new ChapterDetail(chapter.code(), chapter.title(), chapter.module(), entries);
   }
 
   /** Preguntas que ve el encuestado en una página, sin columnas pendientes de crear. */
   public List<QuestionnaireEntry> pageEntries(SurveyPage page) {
+    return pageEntries(page, survey.code(), survey.year());
+  }
+
+  /** Lo mismo para cualquier encuesta y año, en memoria por (página, encuesta, año). */
+  public List<QuestionnaireEntry> pageEntries(SurveyPage page, String surveyCode, int year) {
     return entriesByPage.computeIfAbsent(
-        page,
+        new PageKey(page, surveyCode, year),
         key ->
             buildEntries(
-                key.code(),
-                answerColumns.findColumns(tables.activeTableFor(key.chapter())),
-                false));
+                    page.code(),
+                    answerColumns.findColumns(tables.tableFor(page.chapter(), surveyCode, year)),
+                    false,
+                    surveyCode,
+                    year)
+                .stream()
+                .map(Built::entry)
+                .toList());
+  }
+
+  /**
+   * Página para el administrador: incluye las preguntas sin columna y el grupo de opciones. No se
+   * guarda en memoria porque el editor debe ver siempre lo último.
+   */
+  public List<AdminEntry> adminEntries(SurveyPage page, String surveyCode, int year) {
+    Set<String> columns =
+        answerColumns.findColumns(tables.tableFor(page.chapter(), surveyCode, year));
+    return buildEntries(page.code(), columns, true, surveyCode, year).stream()
+        .map(built -> toAdminEntry(built.row(), built.entry()))
+        .toList();
   }
 
   /** Descarta las preguntas en memoria; las cachés derivadas comparan la generación. */
@@ -105,11 +141,39 @@ public class QuestionnaireService {
         .toList();
   }
 
-  private List<QuestionnaireEntry> buildEntries(
-      String pageCode, Set<String> columns, boolean includePendingColumns) {
-    List<QuestionnaireRow> rows = questionnaire.findRowsByPage(pageCode);
+  private static AdminEntry toAdminEntry(QuestionnaireRow row, QuestionnaireEntry entry) {
+    AnswerSpec answer = entry.answer();
+    return new AdminEntry(
+        entry.id(),
+        entry.numeral(),
+        answer == null ? null : answer.columnCode(),
+        entry.kind().name(),
+        answer == null ? null : answer.inputType().name(),
+        entry.text(),
+        answer == null ? null : answer.columnStatus(),
+        row.optionGroup(),
+        entry.headers(),
+        null,
+        List.of());
+  }
+
+  /** El año activo conserva las consultas de siempre; otro año usa las que reciben parámetros. */
+  private List<Built> buildEntries(
+      String pageCode,
+      Set<String> columns,
+      boolean includePendingColumns,
+      String surveyCode,
+      int year) {
+    boolean active = surveyCode.equals(survey.code()) && year == survey.year();
+    List<QuestionnaireRow> rows =
+        active
+            ? questionnaire.findRowsByPage(pageCode)
+            : questionnaire.findRowsByPage(pageCode, surveyCode, String.valueOf(year));
+    List<Long> entryIds = rows.stream().map(QuestionnaireRow::entryId).toList();
     Map<Long, List<SectionHeader>> headers =
-        questionnaire.findHeaders(rows.stream().map(QuestionnaireRow::entryId).toList());
+        active
+            ? questionnaire.findHeaders(entryIds)
+            : questionnaire.findHeaders(entryIds, String.valueOf(year));
     Map<Integer, List<AnswerOption>> options =
         questionnaire.findOptions(
             rows.stream()
@@ -118,8 +182,8 @@ public class QuestionnaireService {
                 .distinct()
                 .toList());
     return rows.stream()
-        .map(row -> toEntry(pageCode, row, headers, options, columns))
-        .filter(entry -> includePendingColumns || !isPending(entry))
+        .map(row -> new Built(row, toEntry(pageCode, row, headers, options, columns)))
+        .filter(built -> includePendingColumns || !isPending(built.entry()))
         .toList();
   }
 
