@@ -800,7 +800,7 @@ export interface operations {
                     "application/json": components["schemas"]["AdminEditResult"];
                 };
             };
-            /** @description Cuerpo inválido: falta el texto o la versión, o el texto excede el límite */
+            /** @description Cuerpo inválido: faltan los capProyIds (o la lista está vacía) o la versión */
             400: {
                 headers: {
                     [name: string]: unknown;

@@ -18,10 +18,12 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class QuestionnaireRepository {
 
-  // Igual que Capitulos_Body.php; REGEXP_REPLACE cambia el comodín "200X" por el año.
+  // Igual que Capitulos_Body.php; REGEXP_REPLACE cambia el comodín "200X" por el año ('&' se
+  // excluye: el texto guardado va escapado).
   private static final String ROWS_BY_PAGE =
       """
-      SELECT P.COD_PRE, PP.COD_CAP_PROY, REGEXP_REPLACE(P.PREGUNTA, '200.', :yearText) AS PREGUNTA,
+      SELECT P.COD_PRE, PP.COD_CAP_PROY,
+             REGEXP_REPLACE(P.PREGUNTA, '200[^&]', :yearText) AS PREGUNTA,
              P.TIPO, PER.NUMERAL, O.GRUPO AS GRUPO_RESPUESTA, S.SALTO, S.VALOR_SALTO, O.COD_OBJ
         FROM FRM_CAP_PROY PP
         JOIN FRM_PRE_GRUPO G ON G.COD_PRE_GRUPO = PP.COD_PRE_GRUPO

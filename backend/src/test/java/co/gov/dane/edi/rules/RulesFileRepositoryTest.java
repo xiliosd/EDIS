@@ -21,6 +21,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(OutputCaptureExtension.class)
@@ -304,6 +308,55 @@ class RulesFileRepositoryTest {
     RulesFileRepository repository = repository(tempDir, "EDIN");
     repository.save(repository.load("EDIN", 2027), 1, "admin1", "reordenar", List.of("B06"));
     assertThat(output).contains("operacion=reordenar codigos=[B06]");
+  }
+
+  @Test
+  void auditWaitsForCommitAndSkipsRolledBackSaves(CapturedOutput output) throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    TransactionTemplate transaction = new TransactionTemplate(new NoopTransactionManager());
+
+    transaction.executeWithoutResult(
+        status -> {
+          repository.save(repository.load("EDIN", 2027), 1, "admin1", "confirmado", List.of("B06"));
+          assertThat(output).doesNotContain("operacion=confirmado");
+        });
+    assertThat(countOf(output, "operacion=confirmado")).isEqualTo(1);
+
+    transaction.executeWithoutResult(
+        status -> {
+          repository.save(repository.load("EDIN", 2027), 2, "admin1", "revertido", List.of("B06"));
+          status.setRollbackOnly();
+        });
+    assertThat(output).doesNotContain("operacion=revertido");
+  }
+
+  private static int countOf(CapturedOutput output, String text) {
+    return output.getAll().split(java.util.regex.Pattern.quote(text), -1).length - 1;
+  }
+
+  /** Transacción sin recurso: basta para ejercitar las sincronizaciones de commit y rollback. */
+  private static final class NoopTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(Object transaction, TransactionDefinition definition) {
+      // Sin recurso que abrir.
+    }
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {
+      // Sin recurso que confirmar.
+    }
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {
+      // Sin recurso que revertir.
+    }
   }
 
   @Test

@@ -305,6 +305,29 @@ class QuestionEditIT extends OracleIntegrationTest {
   }
 
   @Test
+  void ampersandAfterTheYearStemIsNotTreatedAsTheWildcard() throws Exception {
+    mockMvc
+        .perform(
+            put(DRAFT + "/entries/" + draftCapProy(C01A) + "/text")
+                .with(realCsrf(mockMvc))
+                .cookie(admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\":\"Meta 200& más\",\"version\":1}"))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.page.entries[?(@.columnCode == 'C01A')].text").value("Meta 200& más"))
+        .andExpect(
+            jsonPath("$.page.entries[?(@.columnCode == 'C01A')].rawText").value("Meta 200& más"));
+    assertThat(storedTextOf(draftCapProy(C01A))).isEqualTo("Meta 200&amp; más");
+    assertThat(
+            questionnaire
+                .pageEntries(SurveyPage.find("C1").orElseThrow(), "EDIN", 2027)
+                .get(0)
+                .text())
+        .isEqualTo("Meta 200& más");
+  }
+
+  @Test
   void reordersWithinAGroupBlock() throws Exception {
     long first = draftCapProy(309);
     long second = DraftYearFixture.H1_GROUP_1_SECOND;
