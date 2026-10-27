@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class FrmIdAllocatorIT extends OracleIntegrationTest {
 
   private static final long BASE = 910000;
+  private static final long HOLD_MILLIS = 1500;
 
   @Autowired private FrmIdAllocator allocator;
   @Autowired private JdbcTemplate jdbc;
@@ -61,13 +62,17 @@ class FrmIdAllocatorIT extends OracleIntegrationTest {
                       "a",
                       () -> {
                         firstHoldsLock.countDown();
-                        pause(500);
+                        pause(HOLD_MILLIS);
                       }));
       assertThat(firstHoldsLock.await(30, TimeUnit.SECONDS)).isTrue();
+      long secondStarted = System.nanoTime();
       Future<Long> second = pool.submit(() -> allocateAndInsert("b", () -> {}));
 
       assertThat(first.get(60, TimeUnit.SECONDS)).isEqualTo(expectedFirst);
       assertThat(second.get(60, TimeUnit.SECONDS)).isEqualTo(expectedFirst + 1);
+      // La segunda transacción esperó el bloqueo mientras la primera seguía abierta.
+      long waitedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - secondStarted);
+      assertThat(waitedMillis).isGreaterThanOrEqualTo(HOLD_MILLIS - 500);
     } finally {
       pool.shutdownNow();
     }

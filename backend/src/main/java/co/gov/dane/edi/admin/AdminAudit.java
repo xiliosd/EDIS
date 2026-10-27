@@ -26,6 +26,9 @@ public class AdminAudit {
     if (operation == null || !OPERATION.matcher(operation).matches()) {
       throw new IllegalArgumentException("Operación de auditoría inválida");
     }
+    if (codes == null) {
+      throw new IllegalArgumentException("Códigos de auditoría inválidos");
+    }
     for (String code : codes) {
       if (code == null || !CODE.matcher(code).matches()) {
         throw new IllegalArgumentException("Código de auditoría inválido");

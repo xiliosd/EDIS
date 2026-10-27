@@ -42,6 +42,8 @@ class AdminAuditTest {
     assertThatThrownBy(
             () -> audit.record("u", "EDIN", 2027, "ok", java.util.Arrays.asList("B1", null)))
         .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> audit.record("u", "EDIN", 2027, "ok", null))
+        .isInstanceOf(IllegalArgumentException.class);
     assertThat(output.getAll()).doesNotContain("edi.admin.audit");
   }
 }

@@ -1,5 +1,6 @@
 package co.gov.dane.edi.controller;
 
+import co.gov.dane.edi.admin.SharedRowException;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidCredentialsException;
@@ -39,6 +40,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(ConflictException.class)
   ProblemDetail handleConflict(ConflictException exception) {
     return problem(HttpStatus.CONFLICT, "Conflicto", exception.getMessage());
+  }
+
+  @ExceptionHandler(SharedRowException.class)
+  ProblemDetail handleSharedRow(SharedRowException exception) {
+    return problem(
+        HttpStatus.CONFLICT,
+        "Conflicto",
+        "Esta fila la usa otro año o encuesta. Cree primero el año a partir del anterior.");
   }
 
   @ExceptionHandler(SurveyNotAvailableException.class)

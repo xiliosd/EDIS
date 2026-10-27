@@ -59,6 +59,12 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
         "INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO, ANIO)"
             + " VALUES (900001, 900001, 'E', 'Encabezado', '2027')");
     jdbc.update(
+        "INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO, ANIO)"
+            + " VALUES (900031, 900031, 'E', 'Encabezado compartido', '2027')");
+    jdbc.update(
+        "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO)"
+            + " VALUES (900031, 900031, 'Ayuda compartida')");
+    jdbc.update(
         "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO)"
             + " VALUES (900001, 900001, 'Ayuda')");
   }
@@ -160,7 +166,7 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
   void refusesToRepointACapProyRowUsedByAnotherYear() {
     assertThatThrownBy(
             () -> inTransaction(() -> repository.copyQuestionForYear(900031, "EDIN", "2027")))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(SharedRowException.class);
     assertThat(groupOf(900031)).isEqualTo(900031);
   }
 
@@ -193,9 +199,9 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
   void updatesHeaderHelpAndOrder() {
     inTransaction(
         () -> {
-          repository.updateHeader(900001, "Nuevo encabezado");
-          repository.updateHelp(900001, "Nueva ayuda");
-          repository.updateOrder(900011, 5);
+          repository.updateHeader(900001, "EDIN", "2027", "Nuevo encabezado");
+          repository.updateHelp(900001, "EDIN", "2027", "Nueva ayuda");
+          repository.updateOrder(900011, "EDIN", "2027", 5);
         });
 
     assertThat(
@@ -216,11 +222,13 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
   void updatingAMissingRowFails() {
     assertThatThrownBy(() -> inTransaction(() -> repository.updateQuestionText(999999, "x")))
         .isInstanceOf(NoSuchElementException.class);
-    assertThatThrownBy(() -> inTransaction(() -> repository.updateHeader(999999, "x")))
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHeader(999999, "EDIN", "2027", "x")))
         .isInstanceOf(NoSuchElementException.class);
-    assertThatThrownBy(() -> inTransaction(() -> repository.updateHelp(999999, "x")))
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHelp(999999, "EDIN", "2027", "x")))
         .isInstanceOf(NoSuchElementException.class);
-    assertThatThrownBy(() -> inTransaction(() -> repository.updateOrder(999999, 1)))
+    assertThatThrownBy(() -> inTransaction(() -> repository.updateOrder(999999, "EDIN", "2027", 1)))
         .isInstanceOf(NoSuchElementException.class);
   }
 
@@ -234,5 +242,53 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
         .contains("edi.admin.audit")
         .contains("operacion=editar-texto codigos=[900011]")
         .doesNotContain(secret);
+  }
+
+  private int orderOf(long group) {
+    return jdbc.queryForObject(
+        "SELECT ORDEN FROM FRM_PRE_GRUPO WHERE COD_PRE_GRUPO = ?", Integer.class, group);
+  }
+
+  @Test
+  void reorderOnSharedGroupLeavesOtherYearUntouched() {
+    inTransaction(() -> repository.updateOrder(900001, "EDIN", "2027", 2));
+
+    assertThat(orderOf(900001)).isEqualTo(7);
+    assertThat(groupOf(900002)).isEqualTo(900001);
+    assertThat(groupOf(900001)).isNotEqualTo(900001);
+    assertThat(orderOf(groupOf(900001))).isEqualTo(2);
+  }
+
+  @Test
+  void reorderRefusesACapProyUsedByAnotherYear() {
+    assertThatThrownBy(() -> inTransaction(() -> repository.updateOrder(900031, "EDIN", "2027", 9)))
+        .isInstanceOf(SharedRowException.class);
+    assertThat(orderOf(900031)).isEqualTo(3);
+  }
+
+  @Test
+  void headerAndHelpOfASharedCapProyAreRefused() {
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHeader(900031, "EDIN", "2027", "x")))
+        .isInstanceOf(SharedRowException.class);
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHelp(900031, "EDIN", "2027", "x")))
+        .isInstanceOf(SharedRowException.class);
+    assertThatThrownBy(
+            () -> inTransaction(() -> repository.updateHeader(900001, "EDIN", "2026", "x")))
+        .isInstanceOf(SharedRowException.class);
+  }
+
+  @Test
+  void aPeriodWithNullYearCountsAsAnotherPair() {
+    insertCap(900041, 900011, "EDIN", "2027");
+    jdbc.update(
+        "INSERT INTO FRM_CAP_PERIODO (ID_PERIODO, ANIO, PROY, COD_CAP_PROY, NUMERAL)"
+            + " VALUES (900041, NULL, 'EDIN', 900041, 'Z.')");
+
+    long copied = inTransaction(() -> repository.copyQuestionForYear(900011, "EDIN", "2027"));
+
+    assertThat(copied).isNotEqualTo(900011);
+    assertThat(groupOf(900041)).isEqualTo(900011);
   }
 }
