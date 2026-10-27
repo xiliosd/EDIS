@@ -1,7 +1,6 @@
 package co.gov.dane.edi.admin.dto;
 
 import co.gov.dane.edi.model.ColumnStatus;
-import co.gov.dane.edi.model.SectionHeader;
 import java.util.List;
 
 /**
@@ -17,8 +16,8 @@ public record AdminEntry(
     String text,
     ColumnStatus columnStatus,
     Integer optionGroup,
-    List<SectionHeader> headers,
-    String help,
+    List<AdminHeader> headers,
+    AdminHelp help,
     List<String> referencedByRules) {
 
   public AdminEntry withReferencedByRules(List<String> ruleIds) {

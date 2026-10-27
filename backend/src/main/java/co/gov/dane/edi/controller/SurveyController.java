@@ -1,6 +1,5 @@
 package co.gov.dane.edi.controller;
 
-import co.gov.dane.edi.admin.YearCatalogService;
 import co.gov.dane.edi.model.ChapterDetail;
 import co.gov.dane.edi.model.ChapterSummary;
 import co.gov.dane.edi.security.Role;
@@ -27,15 +26,19 @@ public class SurveyController {
 
   private final QuestionnaireService questionnaireService;
 
-  private final YearCatalogService years;
-
-  public SurveyController(QuestionnaireService questionnaireService, YearCatalogService years) {
+  public SurveyController(QuestionnaireService questionnaireService) {
     this.questionnaireService = questionnaireService;
-    this.years = years;
   }
 
   @Operation(summary = "Listar los capítulos del cuestionario")
   @ApiResponse(responseCode = "200", description = "Capítulos B a H")
+  @ApiResponse(
+      responseCode = "503",
+      description = "La encuesta aún no está disponible (el año activo es un borrador)",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(value = "/chapters", produces = MediaType.APPLICATION_JSON_VALUE)
   public List<ChapterSummary> listChapters() {
     return questionnaireService.listChapters();
@@ -52,15 +55,19 @@ public class SurveyController {
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "503",
+      description = "La encuesta aún no está disponible (el año activo es un borrador)",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(value = "/chapters/{chapterCode}", produces = MediaType.APPLICATION_JSON_VALUE)
   public ChapterDetail getChapter(
       @PathVariable String chapterCode, @Parameter(hidden = true) Authentication authentication) {
     boolean includePending =
         authentication.getAuthorities().stream()
             .anyMatch(a -> Role.ADMIN_CUESTIONARIO.authority().equals(a.getAuthority()));
-    if (!includePending) {
-      years.requireActiveYearAvailable();
-    }
     return questionnaireService.getChapter(chapterCode, includePending);
   }
 }

@@ -29,6 +29,11 @@ public class EffectiveRulesService {
     this.survey = survey;
   }
 
+  /** Descarta las reglas calculadas: tras guardar un archivo de reglas. */
+  public void evict() {
+    cached.clear();
+  }
+
   public RuleSet effectiveRules() {
     return effectiveRules(survey.code(), survey.year());
   }

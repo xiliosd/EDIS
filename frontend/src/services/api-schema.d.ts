@@ -244,14 +244,26 @@ export interface components {
             columnCode?: string;
             /** @enum {string} */
             columnStatus?: "ACTIVE" | "PENDING_COLUMN";
-            headers?: components["schemas"]["SectionHeader"][];
-            help?: string;
+            headers?: components["schemas"]["AdminHeader"][];
+            help?: components["schemas"]["AdminHelp"];
             inputType?: string;
             kind?: string;
             numeral?: string;
             /** Format: int32 */
             optionGroup?: number;
             referencedByRules?: string[];
+            text?: string;
+        };
+        AdminHeader: {
+            /** Format: int64 */
+            codEnc?: number;
+            /** @enum {string} */
+            kind?: "HEADING" | "SUBTITLE";
+            text?: string;
+        };
+        AdminHelp: {
+            /** Format: int64 */
+            codAyu?: number;
             text?: string;
         };
         AdminPage: {
@@ -643,6 +655,15 @@ export interface operations {
                     "application/json": components["schemas"]["ChapterSummary"][];
                 };
             };
+            /** @description La encuesta aún no está disponible (el año activo es un borrador) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     getChapter: {
@@ -667,6 +688,15 @@ export interface operations {
             };
             /** @description El capítulo no existe */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta aún no está disponible (el año activo es un borrador) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -707,6 +737,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description La encuesta aún no está disponible (el año activo es un borrador) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     page: {
@@ -731,6 +770,15 @@ export interface operations {
             };
             /** @description La página no existe */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta aún no está disponible (el año activo es un borrador) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -791,6 +839,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description La encuesta aún no está disponible (el año activo es un borrador) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     progress: {
@@ -811,6 +868,15 @@ export interface operations {
                     "application/json": components["schemas"]["SurveyProgress"];
                 };
             };
+            /** @description La encuesta aún no está disponible (el año activo es un borrador) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     rules: {
@@ -829,6 +895,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleSet"];
+                };
+            };
+            /** @description La encuesta aún no está disponible (el año activo es un borrador) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };

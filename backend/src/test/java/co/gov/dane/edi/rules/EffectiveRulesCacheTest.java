@@ -33,4 +33,20 @@ class EffectiveRulesCacheTest {
     assertThat(service.effectiveRules()).isNotSameAs(first);
     verify(rulesFile, times(2)).load("EDIN", 2026);
   }
+
+  @Test
+  void evictDiscardsTheCachedRules() {
+    RulesFileRepository rulesFile = mock(RulesFileRepository.class);
+    QuestionnaireService questionnaire = mock(QuestionnaireService.class);
+    when(rulesFile.load("EDIN", 2026)).thenReturn(RuleSet.empty("EDIN", 2026));
+    when(questionnaire.cacheGeneration()).thenReturn(0L);
+    EffectiveRulesService service =
+        new EffectiveRulesService(
+            rulesFile, questionnaire, new SurveyProperties("EDIN", 2026, "S", "d"));
+
+    RuleSet first = service.effectiveRules();
+    service.evict();
+
+    assertThat(service.effectiveRules()).isNotSameAs(first);
+  }
 }

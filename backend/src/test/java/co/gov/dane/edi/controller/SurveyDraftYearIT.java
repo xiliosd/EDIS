@@ -57,6 +57,7 @@ class SurveyDraftYearIT extends OracleIntegrationTest {
           "/api/v1/survey/rules",
           "/api/v1/survey/progress",
           "/api/v1/survey/pages/B1",
+          "/api/v1/survey/chapters",
           "/api/v1/survey/chapters/B"
         }) {
       mockMvc

@@ -1,6 +1,5 @@
 package co.gov.dane.edi.controller;
 
-import co.gov.dane.edi.admin.YearCatalogService;
 import co.gov.dane.edi.model.FinishRequest;
 import co.gov.dane.edi.model.FinishResult;
 import co.gov.dane.edi.model.PageAnswersRequest;
@@ -40,34 +39,43 @@ public class RespondentSurveyController {
   private final SurveyProgressService progress;
   private final SessionTokenService tokens;
   private final SurveyAnswerService answersService;
-  private final YearCatalogService years;
 
   public RespondentSurveyController(
       EffectiveRulesService rules,
       SurveyProgressService progress,
       SessionTokenService tokens,
-      SurveyAnswerService answersService,
-      YearCatalogService years) {
+      SurveyAnswerService answersService) {
     this.rules = rules;
     this.progress = progress;
     this.tokens = tokens;
     this.answersService = answersService;
-    this.years = years;
   }
 
   @Operation(summary = "Consultar las reglas de saltos y validaciones vigentes")
   @ApiResponse(responseCode = "200", description = "Reglas del archivo más saltos heredados")
+  @ApiResponse(
+      responseCode = "503",
+      description = "La encuesta aún no está disponible (el año activo es un borrador)",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(value = "/rules", produces = MediaType.APPLICATION_JSON_VALUE)
   public RuleSet rules() {
-    years.requireActiveYearAvailable();
     return rules.effectiveRules();
   }
 
   @Operation(summary = "Consultar el avance del encuestado")
   @ApiResponse(responseCode = "200", description = "Estado de las 9 páginas y radicado si terminó")
+  @ApiResponse(
+      responseCode = "503",
+      description = "La encuesta aún no está disponible (el año activo es un borrador)",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(value = "/progress", produces = MediaType.APPLICATION_JSON_VALUE)
   public SurveyProgress progress(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    years.requireActiveYearAvailable();
     return progress.progress(respondentCode(jwt));
   }
 
@@ -80,10 +88,16 @@ public class RespondentSurveyController {
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "503",
+      description = "La encuesta aún no está disponible (el año activo es un borrador)",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(value = "/pages/{pageCode}", produces = MediaType.APPLICATION_JSON_VALUE)
   public PageDetail page(
       @PathVariable String pageCode, @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    years.requireActiveYearAvailable();
     return progress.pageDetail(respondentCode(jwt), pageCode);
   }
 
@@ -110,12 +124,18 @@ public class RespondentSurveyController {
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "503",
+      description = "La encuesta aún no está disponible (el año activo es un borrador)",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
   @PutMapping(value = "/pages/{pageCode}/answers", produces = MediaType.APPLICATION_JSON_VALUE)
   public PageSaveResult saveAnswers(
       @PathVariable String pageCode,
       @Valid @RequestBody PageAnswersRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    years.requireActiveYearAvailable();
     return answersService.savePage(respondentCode(jwt), pageCode, request.answers());
   }
 
@@ -128,11 +148,17 @@ public class RespondentSurveyController {
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "503",
+      description = "La encuesta aún no está disponible (el año activo es un borrador)",
+      content =
+          @Content(
+              mediaType = "application/problem+json",
+              schema = @Schema(implementation = ProblemDetail.class)))
   @PostMapping(value = "/finish", produces = MediaType.APPLICATION_JSON_VALUE)
   public FinishResult finish(
       @Valid @RequestBody FinishRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    years.requireActiveYearAvailable();
     return answersService.finish(respondentCode(jwt), request.observations());
   }
 

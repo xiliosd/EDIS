@@ -1,5 +1,7 @@
 package co.gov.dane.edi.repository;
 
+import co.gov.dane.edi.admin.dto.AdminHeader;
+import co.gov.dane.edi.admin.dto.AdminHelp;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.HeaderKind;
@@ -38,6 +40,22 @@ public class QuestionnaireRepository {
         FROM FRM_ENCABEZADO
        WHERE COD_CAP_PROY IN (:entryIds) AND ANIO = :yearText
        ORDER BY COD_CAP_PROY, TIPO DESC, COD_ENC
+      """;
+
+  private static final String ADMIN_HEADERS =
+      """
+      SELECT COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO
+        FROM FRM_ENCABEZADO
+       WHERE COD_CAP_PROY IN (:entryIds) AND ANIO = :yearText
+       ORDER BY COD_CAP_PROY, TIPO DESC, COD_ENC
+      """;
+
+  private static final String HELP =
+      """
+      SELECT COD_AYU, COD_CAP_PROY, TEXTO
+        FROM FRM_PRE_AYUDA
+       WHERE COD_CAP_PROY IN (:entryIds)
+       ORDER BY COD_CAP_PROY, COD_AYU
       """;
 
   private static final String OPTIONS =
@@ -109,6 +127,46 @@ public class QuestionnaireRepository {
               .add(new SectionHeader(kind, row.getString("ENCABEZADO")));
         });
     return headers;
+  }
+
+  /**
+   * Encabezados con su clave COD_ENC (el editor los direcciona); texto tal como está en la base.
+   */
+  public Map<Long, List<AdminHeader>> findAdminHeaders(Collection<Long> entryIds, String yearText) {
+    Map<Long, List<AdminHeader>> headers = new LinkedHashMap<>();
+    if (entryIds.isEmpty()) {
+      return headers;
+    }
+    MapSqlParameterSource parameters =
+        new MapSqlParameterSource().addValue("entryIds", entryIds).addValue("yearText", yearText);
+    jdbc.query(
+        ADMIN_HEADERS,
+        parameters,
+        row -> {
+          HeaderKind kind =
+              HEADING_TYPE.equals(row.getString("TIPO")) ? HeaderKind.HEADING : HeaderKind.SUBTITLE;
+          headers
+              .computeIfAbsent(row.getLong("COD_CAP_PROY"), ignored -> new ArrayList<>())
+              .add(new AdminHeader(row.getLong("COD_ENC"), kind, row.getString("ENCABEZADO")));
+        });
+    return headers;
+  }
+
+  /** Primera ayuda de cada pregunta (FRM_PRE_AYUDA); texto tal como está en la base. */
+  public Map<Long, AdminHelp> findHelp(Collection<Long> entryIds) {
+    Map<Long, AdminHelp> help = new LinkedHashMap<>();
+    if (entryIds.isEmpty()) {
+      return help;
+    }
+    jdbc.query(
+        HELP,
+        new MapSqlParameterSource("entryIds", entryIds),
+        row -> {
+          help.putIfAbsent(
+              row.getLong("COD_CAP_PROY"),
+              new AdminHelp(row.getLong("COD_AYU"), row.getString("TEXTO")));
+        });
+    return help;
   }
 
   public Map<Integer, List<AnswerOption>> findOptions(Collection<Integer> optionGroups) {

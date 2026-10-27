@@ -33,6 +33,16 @@ class QuestionnaireAdminIT extends OracleIntegrationTest {
         .andExpect(jsonPath("$.pages.length()").value(9))
         .andExpect(jsonPath("$.pages[0].pageCode").value("B1"))
         .andExpect(jsonPath("$.pages[0].tableName").value("EDIN_20_CAP_B_UBICA"))
+        .andExpect(jsonPath("$.pages[0].entries[0].help.codAyu").value(1))
+        .andExpect(
+            jsonPath("$.pages[0].entries[0].help.text").value("Ayuda ficticia de la página B1"))
+        .andExpect(jsonPath("$.pages[0].entries[0].headers.length()").value(2))
+        .andExpect(
+            jsonPath("$.pages[0].entries[0].headers[?(@.codEnc == 1)].kind").value("HEADING"))
+        .andExpect(
+            jsonPath("$.pages[0].entries[0].headers[?(@.codEnc == 1)].text")
+                .value("Ubicación laboral"))
+        .andExpect(jsonPath("$.pages[0].entries[1].help").doesNotExist())
         .andExpect(
             jsonPath("$.pages[0].entries[?(@.columnCode == 'B99')].columnStatus")
                 .value("PENDING_COLUMN"))

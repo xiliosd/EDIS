@@ -1,7 +1,6 @@
 package co.gov.dane.edi.service;
 
 import co.gov.dane.edi.admin.AnswerTableResolver;
-import co.gov.dane.edi.admin.dto.AdminEntry;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.AnswerSpec;
@@ -52,7 +51,7 @@ public class QuestionnaireService {
   private record PageKey(SurveyPage page, String survey, int year) {}
 
   /** Fila de FRM_* junto con la pregunta ya armada: el editor necesita ambas. */
-  private record Built(QuestionnaireRow row, QuestionnaireEntry entry) {}
+  public record PageRow(QuestionnaireRow row, QuestionnaireEntry entry) {}
 
   public QuestionnaireService(
       QuestionnaireRepository questionnaire,
@@ -80,7 +79,7 @@ public class QuestionnaireService {
                 page ->
                     buildEntries(page, columns, includePendingColumns, survey.code(), survey.year())
                         .stream()
-                        .map(Built::entry))
+                        .map(PageRow::entry))
             .toList();
     return new ChapterDetail(chapter.code(), chapter.title(), chapter.module(), entries);
   }
@@ -102,20 +101,18 @@ public class QuestionnaireService {
                     surveyCode,
                     year)
                 .stream()
-                .map(Built::entry)
+                .map(PageRow::entry)
                 .toList());
   }
 
   /**
-   * Página para el administrador: incluye las preguntas sin columna y el grupo de opciones. No se
-   * guarda en memoria porque el editor debe ver siempre lo último.
+   * Filas de la página para el administrador: incluye las preguntas sin columna y el grupo de
+   * opciones. No se guarda en memoria porque el editor debe ver siempre lo último.
    */
-  public List<AdminEntry> adminEntries(SurveyPage page, String surveyCode, int year) {
+  public List<PageRow> pageRows(SurveyPage page, String surveyCode, int year) {
     Set<String> columns =
         answerColumns.findColumns(tables.tableFor(page.chapter(), surveyCode, year));
-    return buildEntries(page.code(), columns, true, surveyCode, year).stream()
-        .map(built -> toAdminEntry(built.row(), built.entry()))
-        .toList();
+    return buildEntries(page.code(), columns, true, surveyCode, year);
   }
 
   /** Descarta las preguntas en memoria; las cachés derivadas comparan la generación. */
@@ -141,24 +138,8 @@ public class QuestionnaireService {
         .toList();
   }
 
-  private static AdminEntry toAdminEntry(QuestionnaireRow row, QuestionnaireEntry entry) {
-    AnswerSpec answer = entry.answer();
-    return new AdminEntry(
-        entry.id(),
-        entry.numeral(),
-        answer == null ? null : answer.columnCode(),
-        entry.kind().name(),
-        answer == null ? null : answer.inputType().name(),
-        entry.text(),
-        answer == null ? null : answer.columnStatus(),
-        row.optionGroup(),
-        entry.headers(),
-        null,
-        List.of());
-  }
-
   /** El año activo conserva las consultas de siempre; otro año usa las que reciben parámetros. */
-  private List<Built> buildEntries(
+  private List<PageRow> buildEntries(
       String pageCode,
       Set<String> columns,
       boolean includePendingColumns,
@@ -182,7 +163,7 @@ public class QuestionnaireService {
                 .distinct()
                 .toList());
     return rows.stream()
-        .map(row -> new Built(row, toEntry(pageCode, row, headers, options, columns)))
+        .map(row -> new PageRow(row, toEntry(pageCode, row, headers, options, columns)))
         .filter(built -> includePendingColumns || !isPending(built.entry()))
         .toList();
   }

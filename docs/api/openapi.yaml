@@ -163,6 +163,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ChapterSummary"
           description: Capítulos B a H
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta aún no está disponible (el año activo es un borrador)
       summary: Listar los capítulos del cuestionario
       tags:
       - Encuesta
@@ -189,6 +195,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: El capítulo no existe
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta aún no está disponible (el año activo es un borrador)
       summary: Consultar un capítulo
       tags:
       - Encuesta
@@ -214,6 +226,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Faltan páginas por guardar
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta aún no está disponible (el año activo es un borrador)
       summary: Terminar la encuesta y obtener el radicado
       tags:
       - Encuesta
@@ -239,6 +257,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: La página no existe
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta aún no está disponible (el año activo es un borrador)
       summary: "Consultar una página con sus preguntas y, si ya se guardó, sus respuestas"
       tags:
       - Encuesta
@@ -282,6 +306,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Respuestas inválidas (errors: columna → mensaje)"
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta aún no está disponible (el año activo es un borrador)
       summary: Guardar las respuestas de una página (una sola vez)
       tags:
       - Encuesta
@@ -295,6 +325,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/SurveyProgress"
           description: Estado de las 9 páginas y radicado si terminó
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta aún no está disponible (el año activo es un borrador)
       summary: Consultar el avance del encuestado
       tags:
       - Encuesta
@@ -308,6 +344,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/RuleSet"
           description: Reglas del archivo más saltos heredados
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta aún no está disponible (el año activo es un borrador)
       summary: Consultar las reglas de saltos y validaciones vigentes
       tags:
       - Encuesta
@@ -329,9 +371,9 @@ components:
         headers:
           type: array
           items:
-            $ref: "#/components/schemas/SectionHeader"
+            $ref: "#/components/schemas/AdminHeader"
         help:
-          type: string
+          $ref: "#/components/schemas/AdminHelp"
         inputType:
           type: string
         kind:
@@ -345,6 +387,27 @@ components:
           type: array
           items:
             type: string
+        text:
+          type: string
+    AdminHeader:
+      type: object
+      properties:
+        codEnc:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum:
+          - HEADING
+          - SUBTITLE
+        text:
+          type: string
+    AdminHelp:
+      type: object
+      properties:
+        codAyu:
+          type: integer
+          format: int64
         text:
           type: string
     AdminPage:

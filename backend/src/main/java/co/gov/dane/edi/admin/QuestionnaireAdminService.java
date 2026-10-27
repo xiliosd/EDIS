@@ -1,15 +1,22 @@
 package co.gov.dane.edi.admin;
 
 import co.gov.dane.edi.admin.dto.AdminEntry;
+import co.gov.dane.edi.admin.dto.AdminHeader;
+import co.gov.dane.edi.admin.dto.AdminHelp;
 import co.gov.dane.edi.admin.dto.AdminPage;
 import co.gov.dane.edi.admin.dto.AdminQuestionnaireView;
+import co.gov.dane.edi.model.AnswerSpec;
 import co.gov.dane.edi.model.Chapter;
+import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
+import co.gov.dane.edi.repository.QuestionnaireRepository;
 import co.gov.dane.edi.rules.Condition;
 import co.gov.dane.edi.rules.EffectiveRulesService;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.SkipRule;
 import co.gov.dane.edi.service.QuestionnaireService;
+import co.gov.dane.edi.service.QuestionnaireService.PageRow;
+import co.gov.dane.edi.util.QuestionTextSanitizer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -26,16 +33,19 @@ public class QuestionnaireAdminService {
   private final QuestionnaireService questionnaire;
   private final EffectiveRulesService effectiveRules;
   private final AnswerTableResolver tables;
+  private final QuestionnaireRepository repository;
 
   public QuestionnaireAdminService(
       YearCatalogService years,
       QuestionnaireService questionnaire,
       EffectiveRulesService effectiveRules,
-      AnswerTableResolver tables) {
+      AnswerTableResolver tables,
+      QuestionnaireRepository repository) {
     this.years = years;
     this.questionnaire = questionnaire;
     this.effectiveRules = effectiveRules;
     this.tables = tables;
+    this.repository = repository;
   }
 
   public AdminQuestionnaireView view(String survey, int year) {
@@ -47,10 +57,7 @@ public class QuestionnaireAdminService {
     }
     List<AdminPage> pages = new ArrayList<>();
     for (SurveyPage page : SurveyPage.ordered()) {
-      List<AdminEntry> entries =
-          questionnaire.adminEntries(page, survey, year).stream()
-              .map(entry -> entry.withReferencedByRules(referencingRules(entry, rules)))
-              .toList();
+      List<AdminEntry> entries = entriesOf(page, survey, year, rules);
       pages.add(
           new AdminPage(
               page.code(),
@@ -60,6 +67,49 @@ public class QuestionnaireAdminService {
     }
     return new AdminQuestionnaireView(
         survey, year, file.effectiveState(), file.version(), chapterTables, pages);
+  }
+
+  private List<AdminEntry> entriesOf(SurveyPage page, String survey, int year, RuleSet rules) {
+    List<PageRow> rows = questionnaire.pageRows(page, survey, year);
+    List<Long> ids = rows.stream().map(built -> built.row().entryId()).toList();
+    Map<Long, List<AdminHeader>> headers = repository.findAdminHeaders(ids, String.valueOf(year));
+    Map<Long, AdminHelp> help = repository.findHelp(ids);
+    return rows.stream().map(built -> toAdminEntry(built, headers, help, rules)).toList();
+  }
+
+  private static AdminEntry toAdminEntry(
+      PageRow built,
+      Map<Long, List<AdminHeader>> headers,
+      Map<Long, AdminHelp> help,
+      RuleSet rules) {
+    QuestionnaireEntry entry = built.entry();
+    AnswerSpec answer = entry.answer();
+    long id = entry.id();
+    List<AdminHeader> entryHeaders =
+        headers.getOrDefault(id, List.of()).stream()
+            .map(
+                h ->
+                    new AdminHeader(
+                        h.codEnc(), h.kind(), QuestionTextSanitizer.toPlainText(h.text())))
+            .toList();
+    AdminHelp entryHelp = help.get(id);
+    AdminEntry admin =
+        new AdminEntry(
+            id,
+            entry.numeral(),
+            answer == null ? null : answer.columnCode(),
+            entry.kind().name(),
+            answer == null ? null : answer.inputType().name(),
+            entry.text(),
+            answer == null ? null : answer.columnStatus(),
+            built.row().optionGroup(),
+            entryHeaders,
+            entryHelp == null
+                ? null
+                : new AdminHelp(
+                    entryHelp.codAyu(), QuestionTextSanitizer.toPlainText(entryHelp.text())),
+            List.of());
+    return admin.withReferencedByRules(referencingRules(admin, rules));
   }
 
   private static List<String> referencingRules(AdminEntry entry, RuleSet rules) {
