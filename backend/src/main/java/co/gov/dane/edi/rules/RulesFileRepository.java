@@ -36,8 +36,6 @@ public class RulesFileRepository {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RulesFileRepository.class);
   private static final Pattern SURVEY_CODE = Pattern.compile("[A-Z]{4}");
-  private static final Pattern OPERATION = Pattern.compile("[a-z][a-z0-9-]{0,40}");
-  private static final Pattern AUDIT_CODE = Pattern.compile("[A-Za-z0-9_-]{1,40}");
   private static final String HISTORY_DIR = "historial";
 
   private final JsonMapper jsonMapper;
@@ -104,14 +102,7 @@ public class RulesFileRepository {
    */
   public synchronized RuleSet save(
       RuleSet rules, int expectedVersion, String user, String operation, List<String> codes) {
-    if (operation == null || !OPERATION.matcher(operation).matches()) {
-      throw new IllegalArgumentException("Operación de auditoría inválida");
-    }
-    for (String code : codes) {
-      if (code == null || !AUDIT_CODE.matcher(code).matches()) {
-        throw new IllegalArgumentException("Código de auditoría inválido");
-      }
-    }
+    AdminAudit.validate(operation, codes);
     RuleSetValidator.validate(rules);
     String name = fileName(rules.survey(), rules.year());
     Path file = rulesDir().resolve(name);
