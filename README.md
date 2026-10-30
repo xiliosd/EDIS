@@ -15,6 +15,9 @@ dos aplicaciones independientes: `backend/` (Spring Boot) y `frontend/` (React).
  - [Diagrama de arquitectura](docs/diagramas/arquitectura.md)
  - [Diagrama de secuencia del inicio de sesión](docs/diagramas/secuencia-inicio-sesion.md)
  - [Diagrama de secuencia de guardar una página](docs/diagramas/secuencia-guardar-pagina.md)
+ - [Diseño de la Fase 3 (administración del cuestionario)](docs/superpowers/specs/2026-10-26-fase-3-administracion-design.md)
+ - [Diagrama de secuencia de crear un año](docs/diagramas/secuencia-crear-anio.md)
+ - [Diagrama de secuencia de editar con copia al escribir](docs/diagramas/secuencia-editar-copia-al-escribir.md)
  - [Reglas de EDIN 2026](docs/reglas/edin-2026.md)
  - [MER de las tablas usadas](docs/diagramas/mer-tablas-usadas.md)
  - [Contrato OpenAPI](docs/api/openapi.yaml)
@@ -40,6 +43,25 @@ Prefijo `/api/v1`; errores en RFC 7807 (`application/problem+json`). Swagger UI 
 | `POST` | `/api/v1/survey/finish` | Registra las observaciones opcionales; entrega el radicado |
 
 Todo método distinto de `GET`/`HEAD` exige la cabecera `X-XSRF-TOKEN`.
+
+**Administración del cuestionario (Fase 3a).** Todas las rutas de `/api/v1/admin/**` exigen el rol
+`ADMIN_CUESTIONARIO` (ROL 1 del sistema heredado). Solo un año con `estado: "borrador"` acepta
+ediciones, y cada edición lleva la `version` que el cliente leyó (409 si cambió).
+
+| Verbo | Ruta | Descripción |
+| :-- | :-- | :-- |
+| `GET` | `/api/v1/admin/years/{encuesta}` | Años de la encuesta con estado, versión y año activo |
+| `POST` | `/api/v1/admin/years/{encuesta}` | Crea un año en borrador a partir de otro (`year`, `fromYear`) |
+| `PUT` | `/api/v1/admin/questionnaire/{encuesta}/{anio}/tables` | Elige la tabla de respuestas de cada capítulo |
+| `GET` | `.../tables/{capitulo}/create-script` | Script de creación de la tabla de un capítulo (texto; no se ejecuta) |
+| `GET` | `/api/v1/admin/questionnaire/{encuesta}/{anio}` | Árbol del año: páginas, preguntas, estado de columna |
+| `PUT` | `/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text` | Edita el texto de una pregunta |
+| `PUT` | `.../headers/{codEnc}` y `.../help/{codAyu}` | Edita un encabezado o una ayuda |
+| `PATCH` | `.../pages/{pagina}/order` | Reordena las preguntas de una página (dentro de su grupo) |
+| `POST` | `.../pages/{pagina}/entries` | Agrega una pregunta propia del año (columna pendiente si no existe) |
+| `GET` | `.../entries/{capProyId}/column-script` | Script `ALTER TABLE` de una columna pendiente (texto; no se ejecuta) |
+| `DELETE` | `.../entries/{capProyId}` | Desactiva la pregunta solo en ese año |
+
 
 Límites de `PUT .../answers`: como máximo 200 respuestas por página (400 «Envíe como máximo 200
 respuestas por página») y 4000 caracteres por valor (422 con «La respuesta es demasiado larga.» en
@@ -106,6 +128,23 @@ worker y sin reintentos, porque los datos son de escritura única y el inicio de
 tras 5 fallos. Cada proyecto de Playwright usa su propio usuario (`PRUEBA05` en Chromium,
 `PRUEBA06` en móvil); se cambian con `E2E_FLOW_USER_CHROMIUM` / `E2E_FLOW_PASSWORD_CHROMIUM` y
 `E2E_FLOW_USER_MOVIL` / `E2E_FLOW_PASSWORD_MOVIL`.
+
+**Reinicio local para la prueba del administrador.** La prueba E2E `admin-cuestionario` crea un año
+nuevo (2027 en Chromium, 2028 en móvil, siempre a partir de 2026). La encuesta admite **un solo
+borrador abierto**, así que cada arranque del backend admite una sola corrida de esa prueba. Para
+repetirla, o para correr el otro proyecto de Playwright:
+
+1. Detenga el backend.
+2. Borre la carpeta `RULES_DIR` (quita `EDIN-2027.json`, `EDIN-2028.json` y su historial). Con compose:
+   `docker compose down -v`.
+3. Inicie el backend: `db/dev/data.sql` borra y recarga los datos, incluidas las filas `FRM_*` del
+   año creado, y la semilla vuelve a copiar `EDIN-2026.json`.
+
+En una corrida completa (`npm run e2e`) el proyecto móvil omite esa prueba porque encuentra el
+borrador de Chromium; ejecútela sola con `npx playwright test admin-cuestionario --project=movil`
+tras el reinicio. Si cambió `db/dev/schema.sql` (la Fase 3a rehízo las tablas `FRM_*`), recree el
+contenedor de Oracle de desarrollo: `CREATE TABLE IF NOT EXISTS` no modifica las tablas viejas. El
+administrador ficticio es `adm.nacional` (variables `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD`).
 
 Pruebas automatizadas:
 
@@ -225,6 +264,8 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `E2E_FLOW_PASSWORD_CHROMIUM` | Clave de ese usuario | No | ver `db/dev/data.sql` |
 | `E2E_FLOW_USER_MOVIL` | Usuario del flujo completo en móvil | No | `PRUEBA06` |
 | `E2E_FLOW_PASSWORD_MOVIL` | Clave de ese usuario | No | ver `db/dev/data.sql` |
+| `E2E_ADMIN_USER` | Administrador ficticio de la prueba del cuestionario | No | `adm.nacional` |
+| `E2E_ADMIN_PASSWORD` | Clave de ese administrador | No | ver `db/dev/data.sql` |
 
 **`JWT_SECRET` y `RECEIPT_KEY`.** Genere cada una con `openssl rand -base64 48`. Fuera de los
 perfiles `dev` y `test`, el backend no arranca si alguna conserva el valor de ejemplo de
@@ -310,6 +351,29 @@ Consultar el progreso con `curl` (cookie de la sesión iniciada arriba, sin escr
 curl -s -b cookies.txt "$BASE/api/v1/survey/progress"
 ```
 
+**Administrar el cuestionario (Fase 3a).** Ingrese como administrador (`Administrador(a)` en el
+ingreso) con un usuario de rol `ADMIN_CUESTIONARIO` y abra **Cuestionario** en el menú.
+
+1. **Años.** La tabla muestra cada año con su estado (Publicado o Borrador). "Crear año" copia un
+   año publicado a un año nuevo en borrador; solo puede haber un borrador por encuesta. Publicar
+   un año llega en una fase posterior (3c).
+2. **Árbol.** Al abrir un año se ven sus páginas y preguntas. Un año publicado es de solo lectura.
+3. **Editar.** En un borrador, "Editar" cambia el texto, un encabezado o la ayuda y "Guardar" lo
+   envía; no hay autoguardado. Escriba `200X` donde debe ir el año. Si otra persona cambió el
+   cuestionario, aparece un aviso con "Recargar".
+4. **Ordenar.** Con el teclado, "Subir" y "Bajar" (también se puede arrastrar). Solo se mueve dentro
+   del mismo bloque de preguntas; el servidor rechaza cruzar bloques.
+5. **Agregar una pregunta.** "Agregar pregunta en {página}" pide numeral (que debe dar el código de
+   la columna, p. ej. `C30A`), texto, tipo de respuesta y ubicación. Si la columna no existe en la
+   tabla, la pregunta queda **Pendiente de columna**: descargue su script, entréguelo a la persona
+   técnica y, tras ejecutarlo, recargue el árbol para verla Activa. La aplicación nunca ejecuta DDL.
+6. **Desactivar** una pregunta la quita solo de ese año; los demás años no cambian.
+7. **Tablas por capítulo.** El panel de tablas elige la tabla de respuestas de cada capítulo del
+   año; una tabla inexistente se marca como faltante y sus preguntas quedan pendientes.
+
+Cada cambio escribe una línea de auditoría (usuario, encuesta, año, operación y códigos afectados;
+nunca el texto de las preguntas). Los textos se guardan como texto plano y se muestran escapados.
+
 **Regenerar el contrato y los tipos.** El contrato lo genera el backend durante `./mvnw verify`
 (CI falla si `docs/api/openapi.yaml` no coincide). Los tipos del frontend:
 
@@ -351,6 +415,18 @@ Detalle en la tabla de decisiones del
 
 Un test de respuesta conocida (KAT) fija el algoritmo del radicado; no contiene ninguna clave real.
 
+## Decisiones de la Fase 3a
+
+Detalle en la sección «Desviaciones de implementación (3a)» del
+[diseño de la Fase 3](docs/superpowers/specs/2026-10-26-fase-3-administracion-design.md).
+
+- **Sin tablas nuevas y sin DDL desde la aplicación.** Las columnas nuevas se entregan como script.
+- **Copia al escribir.** Editar un año nunca modifica una fila de `FRM_*` usada por otro año.
+- **Ids de `FRM_*` con `MAX+1`** bajo `LOCK TABLE`, mientras no se confirme cómo los genera QA.
+- **Un solo borrador por encuesta** y un candado global de administración para toda escritura
+  estructural.
+- **Reordenar solo dentro del mismo bloque (`GRUPO`)**; cruzar bloques responde 422.
+
 ## Excepciones a los lineamientos de nombres
 
 - Paquetes Java en minúscula (`co.gov.dane.edi...`) y clases en PascalCase, según la convención de Java.
@@ -367,6 +443,17 @@ Un test de respuesta conocida (KAT) fija el algoritmo del radicado; no contiene 
 - **Confirmar con el DDL real de QA cómo se generan los ids de FRM_* (secuencia/disparador) antes de
   usar la administración en QA.** Mientras tanto los ids se calculan con `MAX+1` (decisión de la
   Fase 3a, registrada al inicio de `db/dev/schema.sql`).
+- **DDL real de `FRM_*` por confirmar (Fase 3a).** Ids, nulabilidad, `COD_GRUPO` y las listas de
+  columnas de la copia de año salen del esquema deducido; confírmelos con el DDL de QA antes de
+  usar la administración allí.
+- **`orderGroup` en el árbol (seguimiento).** `AdminEntry` no expone el bloque de cada pregunta:
+  "Subir"/"Bajar" se habilitan en los bordes de bloque y el servidor responde 422 al cruzarlos.
+  Agregar `orderGroup` al contrato permitiría deshabilitarlos.
+- **Esquema en producción.** El SQL usa nombres de tabla sin calificar mientras la validación usa
+  `DB_SCHEMA`; si el usuario de la aplicación no es el dueño (`DANE_DIRPEN`), hay que calificar los
+  nombres o crear sinónimos antes de desplegar.
+- **Filas huérfanas.** Desactivar una pregunta creada en el borrador deja sus filas de `FRM_*`
+  (anotado para la Fase 3c).
 - **Credenciales del PHP heredado:** se recomienda rotar las que aparecen en ese sistema. Este
   repositorio no incluye nada de su carpeta `Conexion/`.
 - **Etapas de despliegue pendientes:** *staging* y producción del pipeline.

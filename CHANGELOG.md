@@ -28,6 +28,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 - Salir de una página con respuestas sin guardar (botón Atrás del navegador o navegación interna)
   pide confirmar en un diálogo accesible ("¿Salir sin guardar?"); el frontend usa un enrutador de
   datos (`createBrowserRouter`) para poder bloquear la navegación.
+- Administración del cuestionario (Fase 3a) para el rol `ADMIN_CUESTIONARIO`: años (crear un año en
+  borrador a partir de otro), árbol del año, edición de textos, encabezados y ayudas, orden con
+  teclado o arrastre, preguntas nuevas con columna pendiente (script descargable, sin DDL desde la
+  aplicación), desactivación por año y tablas de respuestas por capítulo. Las ediciones usan copia
+  al escribir, control de versión (409 ante edición simultánea) y una línea de auditoría por cambio.
+- Prueba E2E del administrador (`frontend/e2e/admin-cuestionario.spec.ts`) con verificación de
+  accesibilidad; el administrador se configura con `E2E_ADMIN_USER` y `E2E_ADMIN_PASSWORD`.
+- Diagramas de secuencia de crear un año y de editar con copia al escribir.
 
 ### Cambiado
 - El inicio del encuestado muestra el avance por página.
@@ -38,6 +46,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 - Las preguntas por página y las reglas efectivas se guardan en memoria y el avance se lee con una
   consulta por capítulo; un cambio en las tablas `FRM_*` exige reiniciar hasta la Fase 3.
 - El backend registra un WARN si la semilla de reglas trae una versión mayor que el archivo vigente.
+- El archivo de reglas de cada año guarda su `estado` (`borrador`; sin estado equivale a publicado) y
+  las tablas de respuestas por capítulo; la lectura del cuestionario y las respuestas usan las tablas
+  del año.
+- `db/dev/schema.sql` incorpora la estructura de `FRM_*` usada por la administración: recree el
+  contenedor de Oracle de desarrollo.
 
 ### Corregido
 - `ColumnCodeResolver` completa el cero de los numerales ("C7a." pasa a `C07A`).

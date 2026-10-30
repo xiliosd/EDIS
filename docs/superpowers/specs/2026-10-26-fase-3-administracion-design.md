@@ -235,3 +235,43 @@ Cada corrección:
 - El próximo cambio anual se hace completo con el editor, sin SQL a mano salvo los scripts generados, y sin tocar `FrmValida.js`.
 - Ningún error de los tipos de §1 llega a producción: o el editor lo bloquea, o un caso de prueba lo detecta.
 - El tiempo del cambio anual baja claramente desde los ~20 días actuales. **La meta concreta la fija el responsable** (pendiente).
+
+## Desviaciones de implementación (3a)
+
+Cambios respecto a lo escrito arriba, decididos durante la Fase 3a (plan
+`docs/superpowers/plans/2026-10-26-fase-3a-preguntas-y-anios.md`).
+
+1. **Texto escapado en la base (§4.1, «texto plano»).** El texto editado se guarda escapado
+   (`&amp;`, `&lt;`, `&gt;`) porque la lectura heredada quita etiquetas y decodifica entidades:
+   así `<script>x</script>&amp;` vuelve idéntico y el PHP también lo muestra como texto. Límite de
+   4000 bytes UTF-8 tras escapar (422). El comodín `200X` se conserva (`rawText` en el árbol) y
+   el reemplazo del año usa `200[^&]` para no corromper texto escapado.
+2. **Candado global de administración.** Toda escritura estructural en `FRM_*` usa un solo candado
+   (`admin:frm`, monitor propio, sin compartir franja con los guardados del encuestado), en vez de
+   uno por encuesta y año. Las ediciones de EDIN y EDID se serializan.
+3. **Ids con `MAX+1`.** Sin el DDL real de QA (`db/reference/frm-ddl-qa.sql` no entregado), los
+   ids de `FRM_*` se calculan con `MAX+1` bajo `LOCK TABLE`; confirmar antes de usar QA.
+4. **Reordenar solo dentro del mismo `GRUPO`.** Un orden que cruza bloques responde 422; el campo
+   `orderGroup` en el contrato queda como seguimiento.
+5. **Firma de guardado y auditoría.** `save(reglas, versiónEsperada, usuario, operación, códigos)`
+   con la operación como clave fija (`editar-texto`, etc.) y sin texto libre en el log; el motivo
+   libre de las correcciones irá al historial del archivo (3c). La auditoría se escribe después del
+   commit.
+6. **`columnasNuevas`.** El tipo y la longitud de una columna nueva se guardan en el archivo del año
+   (sección `columnasNuevas`) y alimentan el script; el año nuevo no las copia del origen. Las
+   preguntas de texto libre usan el `GRUPO` más frecuente entre las de texto del año.
+7. **Borrador con tabla faltante.** Se puede abrir un borrador cuya tabla de capítulo aún no existe:
+   la vista la marca como faltante y sus preguntas quedan pendientes de columna.
+8. **Guarda de `PROY`.** La copia de año se rechaza (422) si en el año de origen `PROY` no es exacto
+   (el recuento con `=` difiere del de `LIKE`).
+9. **Compuerta 503.** Mientras el año activo esté en borrador, `/api/v1/survey/**` responde 503,
+   salvo para `ADMIN_CUESTIONARIO`.
+10. **Un solo borrador y pruebas E2E.** Como solo hay un borrador por encuesta, la prueba E2E del
+    administrador no puede crear 2027 (Chromium) y 2028 (móvil) en el mismo arranque del backend: el
+    proyecto móvil la omite si encuentra un borrador abierto y se corre tras reiniciar el backend y
+    borrar `RULES_DIR` (ver README, «Ambiente de pruebas»).
+11. **Árbol de un borrador.** El estado de columna se recalcula leyendo `ALL_TAB_COLUMNS` sin caché,
+    para que la pregunta pase a Activa al recargar tras ejecutar el script.
+
+Pendiente de la 3a: DDL real de `FRM_*`, `orderGroup`, calificación del esquema o sinónimos de
+`DANE_DIRPEN` en producción y filas huérfanas al desactivar (ver README, «Deuda técnica y riesgos»).
