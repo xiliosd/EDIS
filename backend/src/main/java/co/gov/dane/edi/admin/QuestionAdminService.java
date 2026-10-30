@@ -52,7 +52,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * el guardado del archivo del año (que sube su versión). Si el archivo no se puede guardar la
  * transacción se revierte, así la base y la versión no divergen por una falla de disco; solo un
  * fallo del COMMIT, muy poco probable, dejaría la versión subida sin cambio de datos, algo inocuo.
- * Las cachés se descartan siempre.
+ * Las cachés se descartan siempre. La versión nueva solo se ve tras el COMMIT ({@link
+ * RulesFileRepository#save}) y la respuesta (versión y página releída) se arma sin soltar el
+ * candado, de modo que corresponde al estado que dejó este cambio y no a uno posterior.
  */
 @Service
 public class QuestionAdminService {
@@ -512,8 +514,11 @@ public class QuestionAdminService {
       Supplier<List<String>> frmWrites,
       boolean warnAboutSkips,
       UnaryOperator<RuleSet> fileChange) {
-    locks.withAdminLock(
+    // La página de la respuesta se arma dentro del candado: otra edición no puede colarse entre el
+    // COMMIT y la lectura, así la versión devuelta corresponde exactamente a la página devuelta.
+    return locks.withAdminLock(
         () -> {
+          RuleSet saved;
           try {
             years.requireDraft(survey, year);
             RuleSet rules = years.requireYear(survey, year);
@@ -521,11 +526,13 @@ public class QuestionAdminService {
               throw new ConflictException(
                   "Otro usuario modificó el cuestionario. Recargue la página.");
             }
-            transaction.executeWithoutResult(
-                status -> {
-                  List<String> codes = frmWrites.get();
-                  rulesFiles.save(fileChange.apply(rules), version, user, operation, codes);
-                });
+            saved =
+                transaction.execute(
+                    status -> {
+                      List<String> codes = frmWrites.get();
+                      return rulesFiles.save(
+                          fileChange.apply(rules), version, user, operation, codes);
+                    });
           } catch (NoSuchElementException exception) {
             throw new ResourceNotFoundException("El registro que intenta editar no existe.");
           } finally {
@@ -533,13 +540,11 @@ public class QuestionAdminService {
             effectiveRules.evict();
             tables.evict();
           }
-          return null;
+          AdminPage refreshed = view.page(survey, year, page);
+          List<String> warnings =
+              warnAboutSkips ? skipsTargetingEarlier(refreshed, survey, year) : List.of();
+          return new AdminEditResult(saved.version(), refreshed, warnings);
         });
-    int newVersion = years.requireYear(survey, year).version();
-    AdminPage refreshed = view.page(survey, year, page);
-    List<String> warnings =
-        warnAboutSkips ? skipsTargetingEarlier(refreshed, survey, year) : List.of();
-    return new AdminEditResult(newVersion, refreshed, warnings);
   }
 
   private CapProyRef requireCapProy(long capProyId, String survey, int year) {

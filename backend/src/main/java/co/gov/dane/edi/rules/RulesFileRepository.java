@@ -46,6 +46,15 @@ public class RulesFileRepository {
   private final AdminAudit audit;
   private final Map<String, RuleSet> cache = new ConcurrentHashMap<>();
 
+  /**
+   * Guardados escritos en disco cuya transacción aún no confirma: la caché sigue sirviendo la
+   * versión anterior hasta el COMMIT, así nadie lee una versión cuyas filas FRM_* no se ven.
+   */
+  private final Map<String, PendingSave> pendingSaves = new ConcurrentHashMap<>();
+
+  /** {@code previous} es la versión confirmada antes del guardado (nula si el año era nuevo). */
+  private record PendingSave(RuleSet previous, RuleSet saved) {}
+
   public RulesFileRepository(
       JsonMapper jsonMapper, SurveyProperties survey, RulesSeedProperties seed, AdminAudit audit) {
     this.jsonMapper = jsonMapper;
@@ -61,8 +70,16 @@ public class RulesFileRepository {
     if (current != null) {
       return current;
     }
+    PendingSave pending = pendingSaves.get(key);
+    if (pending != null && pending.previous() != null) {
+      return pending.previous();
+    }
     RuleSet loaded = readOrSeed(surveyCode, year);
     RuleSetValidator.validate(loaded);
+    if (pending != null) {
+      // El disco ya tiene la versión sin confirmar: se sirve sin publicarla en la caché.
+      return loaded;
+    }
     return cache.computeIfAbsent(key, ignored -> loaded);
   }
 
@@ -101,6 +118,12 @@ public class RulesFileRepository {
    * escribe un temporal con la versión + 1 y lo mueve de forma atómica. {@code operation} es una
    * clave fija y {@code codes} códigos de columna o ids de regla: ningún texto libre llega a la
    * auditoría. Si el año aún no tiene archivo, la versión esperada es 0 y no hay historial.
+   *
+   * <p>Dentro de una transacción la versión nueva se publica en la caché solo tras el COMMIT. Si la
+   * transacción se revierte, el archivo ya quedó escrito con la versión + 1 (la anterior queda en
+   * el historial): la caché descarta la entrada y la siguiente lectura viene del disco, de modo que
+   * quien conserve la versión anterior recibe 409 y recarga, y nunca se sirve una versión que ni el
+   * disco ni la base respaldan.
    */
   public synchronized RuleSet save(
       RuleSet rules, int expectedVersion, String user, String operation, List<String> codes) {
@@ -108,7 +131,11 @@ public class RulesFileRepository {
     RuleSetValidator.validate(rules);
     String name = fileName(rules.survey(), rules.year());
     Path file = rulesDir().resolve(name);
-    int currentVersion = find(rules.survey(), rules.year()).map(RuleSet::version).orElse(0);
+    PendingSave pending = pendingSaves.get(name);
+    RuleSet committed =
+        pending != null ? pending.previous() : find(rules.survey(), rules.year()).orElse(null);
+    RuleSet current = pending != null ? pending.saved() : committed;
+    int currentVersion = current == null ? 0 : current.version();
     if (currentVersion != expectedVersion) {
       throw new ConflictException("Otro usuario modificó el cuestionario. Recargue la página.");
     }
@@ -128,9 +155,31 @@ public class RulesFileRepository {
     } finally {
       deleteQuietly(temporary);
     }
-    cache.put(name, toSave);
+    publish(name, new PendingSave(committed, toSave));
     recordAudit(toSave, user, operation, codes);
     return toSave;
+  }
+
+  /** Sin transacción la caché se actualiza ya; con ella, al terminar según su resultado. */
+  private void publish(String name, PendingSave save) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      cache.put(name, save.saved());
+      return;
+    }
+    pendingSaves.put(name, save);
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCompletion(int status) {
+            if (status == STATUS_COMMITTED) {
+              cache.put(name, save.saved());
+            } else {
+              // Revertida o con resultado desconocido: se relee del disco en la próxima lectura.
+              cache.remove(name);
+            }
+            pendingSaves.remove(name, save);
+          }
+        });
   }
 
   /**

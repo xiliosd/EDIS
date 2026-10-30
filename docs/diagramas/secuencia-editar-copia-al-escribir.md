@@ -36,7 +36,8 @@ sequenceDiagram
             B-->>F: 5xx (si falla el archivo, la base y la versión no divergen)
         else Todo guardado
             B->>O: commit
-            B->>B: Descarta cachés y registra la auditoría (usuario, año, operación, códigos)
+            B->>B: Publica la versión nueva en la caché, descarta las demás cachés y registra la auditoría
+            B->>O: Relee la página sin soltar el candado
             B-->>F: 200 {versión, página releída}
             F->>A: Muestra el texto nuevo y devuelve el foco al botón Editar
         end
@@ -50,6 +51,12 @@ Notas:
   después de escribir el archivo, la base se revierte pero el archivo ya quedó con versión + 1 (la
   versión anterior queda en el historial). El administrador recibe un 5xx; con la versión que
   tenía, su siguiente intento responde 409 hasta que recargue, y la base conserva el estado anterior.
+  La caché de reglas nunca publica esa versión revertida: descarta la entrada del año y la
+  siguiente lectura viene del disco.
+- La versión nueva solo se ve (en el árbol o en otra edición) después del COMMIT: antes, cualquier
+  lectura obtiene la versión confirmada junto con las filas confirmadas. La respuesta 200 (versión
+  y página releída) se arma sin soltar el candado, así ninguna otra edición se cuela entre el
+  guardado y la respuesta.
 - La línea de auditoría lleva usuario, encuesta, año, operación y códigos afectados; nunca el
   texto de la pregunta.
 - Reordenar y desactivar siguen el mismo patrón (candado, versión, transacción y archivo); un

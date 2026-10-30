@@ -331,6 +331,80 @@ class RulesFileRepositoryTest {
     assertThat(output).doesNotContain("operacion=revertido");
   }
 
+  @Test
+  void cachePublishesTheSavedVersionOnlyAfterCommit() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet before = repository.load("EDIN", 2027);
+    TransactionTemplate transaction = new TransactionTemplate(new NoopTransactionManager());
+
+    RuleSet saved =
+        transaction.execute(
+            status -> {
+              RuleSet inside = repository.save(before, 1, "admin1", "confirmado", List.of());
+              // Otra lectura antes del COMMIT sigue viendo la versión confirmada.
+              assertThat(readFromAnotherThread(repository)).isSameAs(before);
+              return inside;
+            });
+
+    assertThat(saved.version()).isEqualTo(2);
+    assertThat(repository.load("EDIN", 2027)).isSameAs(saved);
+  }
+
+  @Test
+  void rolledBackSaveIsNeverPublishedAndTheNextReadComesFromDisk() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet before = repository.load("EDIN", 2027);
+    TransactionTemplate transaction = new TransactionTemplate(new NoopTransactionManager());
+    RuleSet[] saved = new RuleSet[1];
+
+    transaction.executeWithoutResult(
+        status -> {
+          saved[0] = repository.save(before, 1, "admin1", "revertido", List.of());
+          assertThat(readFromAnotherThread(repository)).isSameAs(before);
+          status.setRollbackOnly();
+        });
+
+    // El archivo ya quedó escrito (caso borde documentado): la caché no conserva ni la versión
+    // revertida ni la anterior, y la siguiente lectura viene del disco.
+    writeYear(tempDir, "EDIN", 2027, 7, "");
+    RuleSet reread = repository.load("EDIN", 2027);
+    assertThat(reread).isNotSameAs(saved[0]).isNotSameAs(before);
+    assertThat(reread.version()).isEqualTo(7);
+  }
+
+  @Test
+  void secondSaveInTheSameTransactionChecksAgainstThePendingVersion() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet before = repository.load("EDIN", 2027);
+    TransactionTemplate transaction = new TransactionTemplate(new NoopTransactionManager());
+
+    RuleSet last =
+        transaction.execute(
+            status -> {
+              RuleSet first = repository.save(before, 1, "admin1", "primero", List.of());
+              assertThatThrownBy(() -> repository.save(before, 1, "admin1", "viejo", List.of()))
+                  .isInstanceOf(ConflictException.class);
+              return repository.save(first, 2, "admin1", "segundo", List.of());
+            });
+
+    assertThat(last.version()).isEqualTo(3);
+    assertThat(repository.load("EDIN", 2027)).isSameAs(last);
+  }
+
+  private static RuleSet readFromAnotherThread(RulesFileRepository repository) {
+    try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+      return executor.submit(() -> repository.load("EDIN", 2027)).get();
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(exception);
+    } catch (java.util.concurrent.ExecutionException exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
   private static int countOf(CapturedOutput output, String text) {
     return output.getAll().split(java.util.regex.Pattern.quote(text), -1).length - 1;
   }
