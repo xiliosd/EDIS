@@ -74,9 +74,32 @@ public final class RuleSetValidator {
         problems.add("Tablas: nombre de tabla inválido para el capítulo " + entry.getKey());
       }
     }
+    for (Map.Entry<String, NewColumn> entry : rules.newColumns().entrySet()) {
+      NewColumn column = entry.getValue();
+      if (!COLUMN.matcher(entry.getKey()).matches()) {
+        problems.add("Columnas nuevas: nombre de columna inválido " + entry.getKey());
+      }
+      String problem = column == null ? "falta la definición" : definitionProblem(column);
+      if (problem != null) {
+        problems.add("Columnas nuevas: " + entry.getKey() + ": " + problem);
+      }
+    }
     if (!problems.isEmpty()) {
       throw new IllegalStateException("Reglas inválidas: " + String.join("; ", problems));
     }
+  }
+
+  private static String definitionProblem(NewColumn column) {
+    String type = column.type();
+    Integer length = column.length();
+    if (!"VARCHAR2".equals(type) && !"NUMBER".equals(type)) {
+      return "el tipo debe ser VARCHAR2 o NUMBER";
+    }
+    int maximum = "VARCHAR2".equals(type) ? 4000 : 38;
+    if (length == null || length < 1 || length > maximum) {
+      return "longitud fuera de rango (1 a " + maximum + ")";
+    }
+    return null;
   }
 
   private static void checkCondition(

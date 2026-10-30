@@ -13,6 +13,7 @@ import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.rules.EffectiveRulesService;
+import co.gov.dane.edi.rules.NewColumn;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipRule;
@@ -31,11 +32,13 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -223,6 +226,8 @@ public class QuestionAdminService {
     years.requireDraft(survey, year);
     String plain = normalize(request.text());
     String numeral = validateNewQuestion(request);
+    String code = request.columnCode().strip();
+    NewColumn definition = definitionOf(request);
     return apply(
         survey,
         year,
@@ -231,7 +236,12 @@ public class QuestionAdminService {
         "agregar-pregunta",
         page,
         () -> insertQuestion(survey, year, page, request, numeral, plain),
-        false);
+        false,
+        rules -> {
+          Map<String, NewColumn> columns = new LinkedHashMap<>(rules.newColumns());
+          columns.put(code, definition);
+          return rules.withNewColumns(columns);
+        });
   }
 
   /** Quita la pregunta del año (solo su periodo); rechaza si alguna regla vigente la usa. */
@@ -259,7 +269,12 @@ public class QuestionAdminService {
           writes.deletePeriod(capProyId, survey, year);
           return List.of(codeOf(ref));
         },
-        false);
+        false,
+        rules -> {
+          Map<String, NewColumn> columns = new LinkedHashMap<>(rules.newColumns());
+          ColumnCodeResolver.fromNumeral(ref.numeral()).ifPresent(columns::remove);
+          return rules.withNewColumns(columns);
+        });
   }
 
   /**
@@ -270,7 +285,7 @@ public class QuestionAdminService {
    */
   public String columnScript(
       String survey, int year, long capProyId, String columnType, Integer columnLength) {
-    years.requireYear(survey, year);
+    RuleSet file = years.requireYear(survey, year);
     CapProyRef ref = requireCapProy(capProyId, survey, year);
     SurveyPage page = requirePage(ref.pageCode());
     PageRow row =
@@ -280,8 +295,12 @@ public class QuestionAdminService {
             .orElseThrow(() -> new ResourceNotFoundException("La pregunta no existe en ese año."));
     QuestionnaireEntry entry = row.entry();
     String column = entry.answer() == null ? null : entry.answer().columnCode();
-    if (entry.kind() != EntryKind.ITEM || column == null) {
+    if (entry.kind() != EntryKind.ITEM) {
       throw new ResourceNotFoundException("La pregunta no tiene columna de respuesta.");
+    }
+    if (column == null) {
+      throw new InvalidEditException(
+          "columnCode", "El numeral de la pregunta no da un código de columna válido.");
     }
     String table = tables.tableFor(page.chapter(), survey, year);
     answerColumns.evict(table);
@@ -291,11 +310,31 @@ public class QuestionAdminService {
     String type = columnType;
     Integer length = columnLength;
     if (type == null && length == null) {
-      type = ColumnScriptService.VARCHAR2;
-      length = defaultLength(entry.answer().inputType(), row.row().optionGroup());
+      NewColumn stored = file.newColumns().get(column);
+      if (stored != null) {
+        type = stored.type();
+        length = stored.length();
+      } else {
+        type = ColumnScriptService.VARCHAR2;
+        length = defaultLength(entry.answer().inputType(), row.row().optionGroup());
+      }
     }
     requireColumnDefinition(type, length);
-    return scripts.alterTable(table, column, type, length);
+    try {
+      return scripts.alterTable(table, column, type, length);
+    } catch (IllegalArgumentException exception) {
+      throw new InvalidEditException(
+          "columnCode", "No se puede generar el script para esa tabla o columna.");
+    }
+  }
+
+  /** Lo elegido por la persona o, sin elección, el tipo deducido de la pregunta. */
+  private NewColumn definitionOf(NewQuestionRequest request) {
+    if (request.columnType() != null) {
+      return new NewColumn(request.columnType().toUpperCase(Locale.ROOT), request.columnLength());
+    }
+    return new NewColumn(
+        ColumnScriptService.VARCHAR2, defaultLength(request.inputType(), request.optionGroup()));
   }
 
   private int defaultLength(InputType inputType, Integer optionGroup) {
@@ -458,6 +497,21 @@ public class QuestionAdminService {
       SurveyPage page,
       Supplier<List<String>> frmWrites,
       boolean warnAboutSkips) {
+    return apply(
+        survey, year, version, user, operation, page, frmWrites, warnAboutSkips, rules -> rules);
+  }
+
+  /** {@code fileChange} ajusta las reglas del año que se guardan junto con las escrituras FRM_*. */
+  private AdminEditResult apply(
+      String survey,
+      int year,
+      int version,
+      String user,
+      String operation,
+      SurveyPage page,
+      Supplier<List<String>> frmWrites,
+      boolean warnAboutSkips,
+      UnaryOperator<RuleSet> fileChange) {
     locks.withLock(
         LOCK_KEY,
         () -> {
@@ -471,7 +525,7 @@ public class QuestionAdminService {
             transaction.executeWithoutResult(
                 status -> {
                   List<String> codes = frmWrites.get();
-                  rulesFiles.save(rules, version, user, operation, codes);
+                  rulesFiles.save(fileChange.apply(rules), version, user, operation, codes);
                 });
           } catch (NoSuchElementException exception) {
             throw new ResourceNotFoundException("El registro que intenta editar no existe.");

@@ -74,6 +74,7 @@ public class EffectiveRulesService {
         skips,
         fromFile.validations(),
         fromFile.state(),
-        fromFile.tables());
+        fromFile.tables(),
+        fromFile.newColumns());
   }
 }

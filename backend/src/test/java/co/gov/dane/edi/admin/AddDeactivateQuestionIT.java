@@ -12,10 +12,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.gov.dane.edi.config.SurveyProperties;
+import co.gov.dane.edi.model.InputType;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.rules.Condition;
+import co.gov.dane.edi.rules.NewColumn;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipAction;
@@ -27,6 +29,8 @@ import co.gov.dane.edi.service.QuestionnaireService;
 import co.gov.dane.edi.support.DraftYearFixture;
 import co.gov.dane.edi.support.OracleIntegrationTest;
 import jakarta.servlet.http.Cookie;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +63,7 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
   @Autowired private SurveyProperties survey;
   @Autowired private QuestionnaireService questionnaire;
   @Autowired private AnswerColumnRepository answerColumns;
+  @Autowired private tools.jackson.databind.json.JsonMapper jsonMapper;
 
   private DraftYearFixture fixture;
 
@@ -124,7 +129,7 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
     script(added, "?columnType=VARCHAR2&columnLength=2")
         .andExpect(status().isOk())
         .andExpect(content().string("ALTER TABLE " + CHAPTER_C_TABLE + " ADD (C30A VARCHAR2(2));"));
-    // Sin tipo explícito se deduce del valor más largo de las opciones (1 y 2: un carácter).
+    // Sin parámetros usa la definición guardada al agregar la pregunta.
     script(added, "")
         .andExpect(status().isOk())
         .andExpect(content().string("ALTER TABLE " + CHAPTER_C_TABLE + " ADD (C30A VARCHAR2(1));"));
@@ -329,6 +334,93 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
     assertThat(periodRows(C13, 2026)).isEqualTo(1);
     assertThat(periodRows(draftCapProy(C13), 2027)).isEqualTo(1);
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void storedColumnDefinitionDrivesTheScriptAndDeactivateRemovesIt() throws Exception {
+    String body =
+        newQuestion("C30A", "C30A.", "Cantidad", "TEXT", null, null)
+            .replace(
+                ",\"version\":1", ",\"columnType\":\"NUMBER\",\"columnLength\":5,\"version\":1");
+    add("C1", body).andExpect(status().isCreated());
+    assertThat(rulesFiles.load("EDIN", 2027).newColumns().get("C30A"))
+        .isEqualTo(new NewColumn("NUMBER", 5));
+    long added = capProyOf("C30A.");
+    script(added, "")
+        .andExpect(content().string("ALTER TABLE " + CHAPTER_C_TABLE + " ADD (C30A NUMBER(5));"));
+    script(added, "?columnType=VARCHAR2&columnLength=9")
+        .andExpect(content().string("ALTER TABLE " + CHAPTER_C_TABLE + " ADD (C30A VARCHAR2(9));"));
+
+    mockMvc.perform(deactivate(added, 2)).andExpect(status().isOk());
+
+    assertThat(rulesFiles.load("EDIN", 2027).newColumns()).isEmpty();
+    assertThat(jsonMapper.writeValueAsString(rulesFiles.load("EDIN", 2026)))
+        .doesNotContain("columnasNuevas");
+    assertThat(Files.readString(Path.of(survey.rulesDir()).resolve("EDIN-2027.json")))
+        .doesNotContain("columnasNuevas");
+  }
+
+  @Test
+  void derivedDefinitionIsStoredAndKeptAfterTheColumnExists() throws Exception {
+    add("C1", newQuestion("C14", "C14.", "Texto libre", "TEXT", null, null))
+        .andExpect(status().isCreated());
+    assertThat(rulesFiles.load("EDIN", 2027).newColumns().get("C14"))
+        .isEqualTo(new NewColumn("VARCHAR2", 4000));
+    jdbc.execute("ALTER TABLE " + CHAPTER_C_TABLE + " ADD (C14 VARCHAR2(4000))");
+    answerColumns.evict(CHAPTER_C_TABLE);
+    assertThat(treeStatusOf("C14")).isEqualTo("ACTIVE");
+    assertThat(rulesFiles.load("EDIN", 2027).newColumns()).containsKey("C14");
+  }
+
+  @Test
+  void activeTextQuestionRendersForTheRespondentOfThatYear() throws Exception {
+    jdbc.execute("ALTER TABLE " + CHAPTER_C_TABLE + " ADD (C15 VARCHAR2(50))");
+    answerColumns.evict(CHAPTER_C_TABLE);
+    add("C1", newQuestion("C15", "C15.", "Texto activo", "TEXT", null, null))
+        .andExpect(status().isCreated());
+    // Convención heredada: el GRUPO más usado por las preguntas de texto del año (11).
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT GRUPO FROM FRM_OBJ_PRE WHERE COD_CAP_PROY = ?",
+                Integer.class,
+                capProyOf("C15.")))
+        .isEqualTo(11);
+    List<QuestionnaireEntry> entries =
+        questionnaire.pageEntries(SurveyPage.find("C1").orElseThrow(), "EDIN", 2027);
+    assertThat(entries)
+        .anySatisfy(
+            entry -> {
+              assertThat(entry.answer().columnCode()).isEqualTo("C15");
+              assertThat(entry.answer().inputType()).isEqualTo(InputType.TEXT);
+              assertThat(entry.text()).isEqualTo("Texto activo");
+            });
+  }
+
+  @Test
+  void textQuestionWithoutAnyTextPeerGetsNullGroup() throws Exception {
+    jdbc.update(
+        "DELETE FROM FRM_OBJ_PRE WHERE COD_OBJ = 5 AND COD_CAP_PROY >= ?", DraftYearFixture.OFFSET);
+    add("C1", newQuestion("C14", "C14.", "Sin pares", "TEXT", null, null))
+        .andExpect(status().isCreated());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM FRM_OBJ_PRE WHERE COD_CAP_PROY = ? AND GRUPO IS NULL",
+                Long.class,
+                capProyOf("C14.")))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void columnScriptWithUnusableNumeralIsUnprocessableNotServerError() throws Exception {
+    jdbc.update(
+        "UPDATE FRM_CAP_PERIODO SET NUMERAL = 'x-1' WHERE COD_CAP_PROY = ? AND ANIO = 2027",
+        draftCapProy(C01A));
+    jdbc.update(
+        "UPDATE FRM_CAP_PROY SET NUMERAL = 'x-1' WHERE COD_CAP_PROY = ?", draftCapProy(C01A));
+    questionnaire.evict();
+    script(draftCapProy(C01A), "")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors.columnCode").exists());
   }
 
   @Test

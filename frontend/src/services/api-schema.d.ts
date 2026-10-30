@@ -480,6 +480,11 @@ export interface components {
             password: string;
             username: string;
         };
+        NewColumn: {
+            /** Format: int32 */
+            longitud?: number;
+            tipo?: string;
+        };
         NewQuestionRequest: {
             /** Format: int64 */
             afterCapProyId?: number;
@@ -559,6 +564,9 @@ export interface components {
         RuleSet: {
             /** Format: int32 */
             anio?: number;
+            columnasNuevas?: {
+                [key: string]: components["schemas"]["NewColumn"];
+            };
             encuesta?: string;
             /** @enum {string} */
             estado?: "borrador" | "publicado";

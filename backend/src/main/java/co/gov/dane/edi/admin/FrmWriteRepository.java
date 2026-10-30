@@ -28,6 +28,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class FrmWriteRepository {
 
+  private static final int TEXT_OBJECT_CODE = 5;
   private static final String OTHER_PAIR_PERIOD =
       " AND (P.PROY IS NULL OR P.ANIO IS NULL OR P.PROY <> ? OR P.ANIO <> ?)";
   private static final String OTHER_PAIR_CAP =
@@ -144,15 +145,35 @@ public class FrmWriteRepository {
         question.project(),
         capProyId,
         question.numeral());
+    // Convención heredada: las preguntas de texto comparten el GRUPO más usado por las de su año.
+    Integer objectGroup =
+        question.optionGroup() != null || question.objectCode() != TEXT_OBJECT_CODE
+            ? question.optionGroup()
+            : mostUsedTextGroup(question.project(), question.year());
     jdbc.update(
         "INSERT INTO FRM_OBJ_PRE (COD_OBJ_PRE, COD_GRUPO, GRUPO, COD_OBJ, COD_CAP_PROY)"
             + " VALUES (?, ?, ?, ?, ?)",
         ids.next(FrmTable.OBJ_PRE),
-        question.optionGroup(),
-        question.optionGroup(),
+        objectGroup,
+        objectGroup,
         question.objectCode(),
         capProyId);
     return capProyId;
+  }
+
+  private Integer mostUsedTextGroup(String project, int year) {
+    return jdbc
+        .query(
+            "SELECT GRUPO FROM (SELECT O.GRUPO, COUNT(*) AS TOTAL FROM FRM_OBJ_PRE O"
+                + " JOIN FRM_CAP_PROY C ON C.COD_CAP_PROY = O.COD_CAP_PROY"
+                + " WHERE O.COD_OBJ = 5 AND O.GRUPO IS NOT NULL AND C.PROY = ? AND C.ANIO = ?"
+                + " GROUP BY O.GRUPO ORDER BY TOTAL DESC, O.GRUPO) FETCH FIRST 1 ROWS ONLY",
+            (rows, rowNumber) -> rows.getInt(1),
+            project,
+            String.valueOf(year))
+        .stream()
+        .findFirst()
+        .orElse(null);
   }
 
   /**

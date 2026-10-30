@@ -1037,6 +1037,14 @@ components:
       - accountType
       - password
       - username
+    NewColumn:
+      type: object
+      properties:
+        longitud:
+          type: integer
+          format: int32
+        tipo:
+          type: string
     NewQuestionRequest:
       type: object
       properties:
@@ -1202,6 +1210,10 @@ components:
         anio:
           type: integer
           format: int32
+        columnasNuevas:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/NewColumn"
         encuesta:
           type: string
         estado:
