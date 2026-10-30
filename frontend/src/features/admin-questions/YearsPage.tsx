@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
@@ -41,6 +41,10 @@ export function YearsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newYear, setNewYear] = useState('');
   const [fromYear, setFromYear] = useState('');
+  // Tras pulsar "Crear" se muestran también los errores de los campos vacíos (WCAG 3.3.1).
+  const [submitted, setSubmitted] = useState(false);
+  const newYearRef = useRef<HTMLInputElement>(null);
+  const fromYearRef = useRef<HTMLInputElement>(null);
 
   const yearsQuery = useQuery({
     queryKey: yearsQueryKey(survey),
@@ -61,12 +65,27 @@ export function YearsPage() {
 
   function openDialog() {
     createMutation.reset();
+    setSubmitted(false);
     setNewYear(years.length > 0 ? String(latestYear(years) + 1) : '');
     setFromYear(years.length > 0 ? suggestSourceYear(years) : '');
     setDialogOpen(true);
   }
 
-  const inputsValid = YEAR_PATTERN.test(newYear) && YEAR_PATTERN.test(fromYear);
+  const newYearValid = YEAR_PATTERN.test(newYear);
+  const fromYearValid = YEAR_PATTERN.test(fromYear);
+
+  function yearError(value: string, valid: boolean): string | undefined {
+    return (submitted || value) && !valid ? YEAR_ERROR : undefined;
+  }
+
+  function confirmCreate() {
+    if (newYearValid && fromYearValid) {
+      createMutation.mutate();
+      return;
+    }
+    setSubmitted(true);
+    (newYearValid ? fromYearRef : newYearRef).current?.focus();
+  }
 
   return (
     <section aria-labelledby="titulo-anios">
@@ -162,11 +181,7 @@ export function YearsPage() {
         cancelLabel="Cancelar"
         busy={createMutation.isPending}
         onCancel={() => setDialogOpen(false)}
-        onConfirm={() => {
-          if (inputsValid) {
-            createMutation.mutate();
-          }
-        }}
+        onConfirm={confirmCreate}
       >
         <p>
           Se copia el cuestionario del año de origen de {survey} y el año nuevo queda en borrador.
@@ -174,19 +189,21 @@ export function YearsPage() {
         <div className="mt-4 grid gap-4">
           <TextField
             id="anio-nuevo"
+            ref={newYearRef}
             label="Año nuevo"
             inputMode="numeric"
             value={newYear}
             onChange={(event) => setNewYear(event.target.value)}
-            error={newYear && !YEAR_PATTERN.test(newYear) ? YEAR_ERROR : undefined}
+            error={yearError(newYear, newYearValid)}
           />
           <TextField
             id="anio-origen"
+            ref={fromYearRef}
             label="Año de origen"
             inputMode="numeric"
             value={fromYear}
             onChange={(event) => setFromYear(event.target.value)}
-            error={fromYear && !YEAR_PATTERN.test(fromYear) ? YEAR_ERROR : undefined}
+            error={yearError(fromYear, fromYearValid)}
           />
         </div>
       </ConfirmDialog>

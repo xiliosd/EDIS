@@ -1,9 +1,10 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, Ref } from 'react';
 
 type ButtonVariant = 'primary' | 'secondary';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {

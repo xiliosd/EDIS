@@ -88,6 +88,28 @@ describe('YearsPage', () => {
     );
   });
 
+  it('createWithInvalidInputsShowsErrors', async () => {
+    let posted = false;
+    server.use(
+      http.get('*/api/v1/admin/years/EDIN', () => HttpResponse.json([])),
+      http.post('*/api/v1/admin/years/EDIN', () => {
+        posted = true;
+        return HttpResponse.json({}, { status: 201 });
+      }),
+    );
+    renderApp('/admin/cuestionario');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Crear año' }));
+    expect(screen.getByLabelText('Año nuevo')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+
+    expect(screen.getAllByText('Escriba un año de cuatro cifras.')).toHaveLength(2);
+    expect(screen.getByLabelText('Año nuevo')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Año nuevo')).toHaveFocus();
+    expect(posted).toBe(false);
+  });
+
   it('reloadsYearsWhenSurveyChanges', async () => {
     server.use(
       http.get('*/api/v1/admin/years/EDIN', () => HttpResponse.json(YEARS)),
