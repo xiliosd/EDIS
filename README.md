@@ -53,15 +53,14 @@ ediciones, y cada edición lleva la `version` que el cliente leyó (409 si cambi
 | `GET` | `/api/v1/admin/years/{encuesta}` | Años de la encuesta con estado, versión y año activo |
 | `POST` | `/api/v1/admin/years/{encuesta}` | Crea un año en borrador a partir de otro (`year`, `fromYear`) |
 | `PUT` | `/api/v1/admin/questionnaire/{encuesta}/{anio}/tables` | Elige la tabla de respuestas de cada capítulo |
-| `GET` | `.../tables/{capitulo}/create-script` | Script de creación de la tabla de un capítulo (texto; no se ejecuta) |
+| `GET` | `.../tables/{capitulo}/create-script` | Script de creación de la tabla del capítulo (solo texto) |
 | `GET` | `/api/v1/admin/questionnaire/{encuesta}/{anio}` | Árbol del año: páginas, preguntas, estado de columna |
 | `PUT` | `/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text` | Edita el texto de una pregunta |
 | `PUT` | `.../headers/{codEnc}` y `.../help/{codAyu}` | Edita un encabezado o una ayuda |
 | `PATCH` | `.../pages/{pagina}/order` | Reordena las preguntas de una página (dentro de su grupo) |
 | `POST` | `.../pages/{pagina}/entries` | Agrega una pregunta propia del año (columna pendiente si no existe) |
-| `GET` | `.../entries/{capProyId}/column-script` | Script `ALTER TABLE` de una columna pendiente (texto; no se ejecuta) |
+| `GET` | `.../entries/{capProyId}/column-script` | Script `ALTER TABLE` de la columna pendiente (solo texto) |
 | `DELETE` | `.../entries/{capProyId}` | Desactiva la pregunta solo en ese año |
-
 
 Límites de `PUT .../answers`: como máximo 200 respuestas por página (400 «Envíe como máximo 200
 respuestas por página») y 4000 caracteres por valor (422 con «La respuesta es demasiado larga.» en
@@ -140,11 +139,12 @@ repetirla, o para correr el otro proyecto de Playwright:
 3. Inicie el backend: `db/dev/data.sql` borra y recarga los datos, incluidas las filas `FRM_*` del
    año creado, y la semilla vuelve a copiar `EDIN-2026.json`.
 
-En una corrida completa (`npm run e2e`) el proyecto móvil omite esa prueba porque encuentra el
-borrador de Chromium; ejecútela sola con `npx playwright test admin-cuestionario --project=movil`
-tras el reinicio. Si cambió `db/dev/schema.sql` (la Fase 3a rehízo las tablas `FRM_*`), recree el
-contenedor de Oracle de desarrollo: `CREATE TABLE IF NOT EXISTS` no modifica las tablas viejas. El
-administrador ficticio es `adm.nacional` (variables `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD`).
+En una corrida completa (`npm run e2e`) el proyecto móvil omite esa prueba, con la anotación
+«omitida» en el reporte, porque encuentra el borrador de Chromium: cada proyecto (chromium y movil)
+necesita un backend recién arrancado con un `RULES_DIR` limpio; tras el reinicio, ejecute solo el
+móvil con `npm run e2e:admin-movil`. Si cambió `db/dev/schema.sql` (la Fase 3a rehízo las tablas
+`FRM_*`), recree el contenedor de Oracle de desarrollo: `CREATE TABLE IF NOT EXISTS` no modifica las
+tablas viejas. El administrador ficticio es `adm.nacional` (variables `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD`).
 
 Pruebas automatizadas:
 
@@ -372,7 +372,8 @@ ingreso) con un usuario de rol `ADMIN_CUESTIONARIO` y abra **Cuestionario** en e
    año; una tabla inexistente se marca como faltante y sus preguntas quedan pendientes.
 
 Cada cambio escribe una línea de auditoría (usuario, encuesta, año, operación y códigos afectados;
-nunca el texto de las preguntas). Los textos se guardan como texto plano y se muestran escapados.
+nunca el texto de las preguntas). Los textos se guardan como texto plano, con `&`, `<` y `>`
+escapados en la base, y se muestran escapados.
 
 **Regenerar el contrato y los tipos.** El contrato lo genera el backend durante `./mvnw verify`
 (CI falla si `docs/api/openapi.yaml` no coincide). Los tipos del frontend:

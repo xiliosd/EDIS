@@ -19,6 +19,9 @@ sequenceDiagram
         F->>A: Aviso con botón Recargar
     else Texto inválido
         B-->>F: 422 con el campo y el motivo
+    else Otro año o encuesta usa la fila (SharedRowException)
+        B->>O: rollback
+        B-->>F: 409 "Esta fila la usa otro año o encuesta. Cree primero el año a partir del anterior."
     else Versión vigente
         B->>O: Inicia la transacción
         B->>O: ¿Otra pareja (encuesta, año) usa esta pregunta?
@@ -30,7 +33,7 @@ sequenceDiagram
         B->>R: Guarda el archivo del año (versión + 1, historial)
         alt Falla el guardado del archivo
             B->>O: rollback
-            B-->>F: 5xx (base y versión no divergen)
+            B-->>F: 5xx (si falla el archivo, la base y la versión no divergen)
         else Todo guardado
             B->>O: commit
             B->>B: Descarta cachés y registra la auditoría (usuario, año, operación, códigos)
@@ -43,6 +46,10 @@ sequenceDiagram
 Notas:
 - El texto se guarda como texto plano (sin etiquetas) con las entidades que lee el PHP heredado y
   siempre se muestra escapado; el comodín `200X` se conserva al editar.
+- Caso borde: el archivo se guarda dentro de la transacción y antes del commit. Si el commit falla
+  después de escribir el archivo, la base se revierte pero el archivo ya quedó con versión + 1 (la
+  versión anterior queda en el historial). El administrador recibe un 5xx; con la versión que
+  tenía, su siguiente intento responde 409 hasta que recargue, y la base conserva el estado anterior.
 - La línea de auditoría lleva usuario, encuesta, año, operación y códigos afectados; nunca el
   texto de la pregunta.
 - Reordenar y desactivar siguen el mismo patrón (candado, versión, transacción y archivo); un

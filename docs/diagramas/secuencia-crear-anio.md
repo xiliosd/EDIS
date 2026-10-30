@@ -14,8 +14,12 @@ sequenceDiagram
     F->>B: POST /api/v1/admin/years/{encuesta}
     B->>B: Rol ADMIN_CUESTIONARIO y candado de administración
     B->>B: Año nuevo no existe y no hay otro borrador abierto
-    alt El año existe o hay un borrador abierto
+    alt Año nuevo fuera de 2020 a 2100
+        B-->>F: 422 "El año debe estar entre 2020 y 2100."
+    else El año existe o hay un borrador abierto
         B-->>F: 409 (sin filas nuevas)
+    else El año de origen (fromYear) no existe
+        B-->>F: 404 "El año solicitado no existe."
     else Año de origen sin preguntas o con PROY inexacto
         B-->>F: 422 con el motivo
     else Se puede crear

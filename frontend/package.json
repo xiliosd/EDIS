@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --testTimeout=20000",
     "api:types": "openapi-typescript ../docs/api/openapi.yaml -o src/services/api-schema.d.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:admin-movil": "playwright test e2e/admin-cuestionario.spec.ts --project=movil"
   },
   "dependencies": {
     "@tanstack/react-query": "5.104.0",

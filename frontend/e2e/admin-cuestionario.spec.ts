@@ -46,11 +46,15 @@ test('el administrador crea un año, edita, ordena, agrega y desactiva sin tocar
   await expect(page.getByRole('cell', { name: 'Publicado' })).toBeVisible();
   const openDrafts = await page.getByRole('cell', { name: 'Borrador' }).count();
   // En una corrida completa el proyecto móvil llega con el borrador del proyecto Chromium abierto
-  // (solo hay un borrador por encuesta): se omite. Para correrlo, reinicie el backend antes.
-  test.skip(
-    openDrafts > 0 && testInfo.project.name !== 'chromium',
-    'Ya hay un borrador abierto por otro proyecto; reinicie el backend y borre RULES_DIR',
-  );
+  // (solo hay un borrador por encuesta): se omite, pero de forma visible en el reporte.
+  const skipReason =
+    'Ya hay un borrador abierto por otro proyecto. Reinicie el backend con un RULES_DIR limpio ' +
+    'y ejecute: npm run e2e:admin-movil';
+  const skipped = openDrafts > 0 && testInfo.project.name !== 'chromium';
+  if (skipped) {
+    test.info().annotations.push({ type: 'omitida', description: skipReason });
+  }
+  test.skip(skipped, skipReason);
   expect(
     openDrafts,
     'Ya hay un borrador abierto: reinicie el backend y borre RULES_DIR antes de esta prueba',
