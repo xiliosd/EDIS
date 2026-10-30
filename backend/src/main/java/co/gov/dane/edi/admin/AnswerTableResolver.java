@@ -6,6 +6,7 @@ import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -61,18 +62,39 @@ public class AnswerTableResolver {
     if (cached != null) {
       return cached;
     }
-    String table =
-        rulesFiles
-            .find(surveyCode, year)
-            .map(RuleSet::tables)
-            .map(tables -> tables.get(chapter.code()))
-            .orElse(chapter.tableName());
-    if (table == null) {
-      table = chapter.tableName();
-    }
+    String table = mappedTable(rulesFiles.find(surveyCode, year), chapter);
     requireValid(chapter, table);
     validated.put(key, table);
     return table;
+  }
+
+  /** Tabla de un capítulo para el editor; {@code missing}: aún no existe en el esquema. */
+  public record ResolvedTable(String name, boolean missing) {}
+
+  /**
+   * Como {@link #tableFor}, pero en un año en borrador acepta una tabla de nombre válido que aún no
+   * existe (la persona técnica la crea con el script): sus preguntas quedan pendientes. Un año
+   * publicado sigue siendo estricto. La tabla faltante no se guarda en memoria, así se nota en
+   * cuanto se crea.
+   */
+  public ResolvedTable resolve(Chapter chapter, String surveyCode, int year) {
+    String cached = validated.get(surveyCode + "-" + year + "-" + chapter.code());
+    if (cached != null) {
+      return new ResolvedTable(cached, false);
+    }
+    Optional<RuleSet> file = rulesFiles.find(surveyCode, year);
+    boolean draft =
+        file.map(RuleSet::effectiveState).filter(YearState.BORRADOR::equals).isPresent();
+    String table = mappedTable(file, chapter);
+    if (draft && check(table) == TableCheck.MISSING) {
+      return new ResolvedTable(table, true);
+    }
+    return new ResolvedTable(tableFor(chapter, surveyCode, year), false);
+  }
+
+  private static String mappedTable(Optional<RuleSet> file, Chapter chapter) {
+    String table = file.map(RuleSet::tables).map(tables -> tables.get(chapter.code())).orElse(null);
+    return table == null ? chapter.tableName() : table;
   }
 
   /** La misma resolución para la encuesta y el año activos. */

@@ -21,9 +21,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Crea el cuestionario de un año nuevo a partir de otro, todo o nada: bajo el candado global {@code
- * admin:frm}, copia las filas FRM_* en una transacción y, ya confirmada, escribe el archivo de
- * reglas del año (en borrador). Si el archivo no se puede escribir se borran las filas copiadas.
+ * Crea el cuestionario de un año nuevo a partir de otro, todo o nada: bajo el candado de
+ * administración ({@code SaveLocks.withAdminLock}), copia las filas FRM_* en una transacción y, ya
+ * confirmada, escribe el archivo de reglas del año (en borrador). Si el archivo no se puede
+ * escribir se borran las filas copiadas.
  *
  * <p>Los saltos heredados de FRM_SALTO del año de origen pasan al archivo como reglas {@code
  * legacy-<COL>}: el año nuevo no tiene filas en FRM_SALTO y sus saltos se editan solo en el
@@ -33,7 +34,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class YearCopyService {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(YearCopyService.class);
-  private static final String LOCK_KEY = "admin:frm";
   private static final String OPERATION = "crear-anio";
   private static final int MIN_YEAR = 2020;
   private static final int MAX_YEAR = 2100;
@@ -75,8 +75,7 @@ public class YearCopyService {
     if (year < MIN_YEAR || year > MAX_YEAR) {
       throw new InvalidEditException("year", "El año debe estar entre 2020 y 2100.");
     }
-    return locks.withLock(
-        LOCK_KEY,
+    return locks.withAdminLock(
         () -> {
           requireNewYear(survey, year);
           Optional<Integer> draft = years.draftYear(survey);
@@ -87,6 +86,9 @@ public class YearCopyService {
           if (copies.periodCount(survey, fromYear) == 0) {
             throw new InvalidEditException("fromYear", "El año de origen no tiene preguntas.");
           }
+          // Antes de leer las reglas: un PROY inexacto también duplica preguntas en la lectura.
+          // La copia lo vuelve a comprobar dentro de su transacción.
+          copies.requireExactProject(survey, fromYear);
           RuleSet draftRules =
               draftRulesFrom(effectiveRules.effectiveRules(survey, fromYear), year);
           RuleSetValidator.validate(draftRules);
@@ -99,6 +101,10 @@ public class YearCopyService {
           try {
             rulesFiles.save(
                 draftRules, 0, user, OPERATION, List.of(String.valueOf(year), "desde-" + fromYear));
+          } catch (ConflictException conflict) {
+            // El archivo ya existía antes de este guardado: no es nuestro y no se borra.
+            deleteRows(survey, year, copied, conflict);
+            throw conflict;
           } catch (RuntimeException exception) {
             compensate(survey, year, copied, exception);
           } finally {
@@ -138,10 +144,23 @@ public class YearCopyService {
         Map.of());
   }
 
-  /** Sin archivo el año no existe: se borran las filas ya confirmadas y se informa la causa. */
+  /**
+   * Sin archivo el año no existe: se borra el archivo si alcanzó a escribirse (la falla pudo ser
+   * posterior) y las filas ya confirmadas, y se informa la causa.
+   */
   private void compensate(String survey, int year, CopiedYear copied, RuntimeException cause) {
     String detail =
         "No fue posible guardar el archivo de reglas de " + year + "; el año no se creó.";
+    try {
+      rulesFiles.discardNewYear(survey, year);
+    } catch (RuntimeException discardFailure) {
+      LOGGER.error("No fue posible borrar el archivo de {} {}", survey, year, discardFailure);
+    }
+    deleteRows(survey, year, copied, cause);
+    throw new YearCreationFailedException(detail + " Intente de nuevo.", cause);
+  }
+
+  private void deleteRows(String survey, int year, CopiedYear copied, RuntimeException cause) {
     try {
       transaction.executeWithoutResult(status -> copies.delete(copied));
     } catch (RuntimeException deleteFailure) {
@@ -151,10 +170,12 @@ public class YearCopyService {
           year,
           deleteFailure);
       throw new YearCreationFailedException(
-          detail + " Además quedaron filas copiadas en la base: avise a la persona técnica.",
+          "No fue posible guardar el archivo de reglas de "
+              + year
+              + "; el año no se creó. Además quedaron filas copiadas en la base: avise a la"
+              + " persona técnica.",
           cause);
     }
-    throw new YearCreationFailedException(detail + " Intente de nuevo.", cause);
   }
 
   private void evictCaches() {

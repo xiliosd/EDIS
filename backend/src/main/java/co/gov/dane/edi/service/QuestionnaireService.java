@@ -1,6 +1,7 @@
 package co.gov.dane.edi.service;
 
 import co.gov.dane.edi.admin.AnswerTableResolver;
+import co.gov.dane.edi.admin.AnswerTableResolver.ResolvedTable;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.AnswerSpec;
@@ -96,7 +97,7 @@ public class QuestionnaireService {
         key ->
             buildEntries(
                     page.code(),
-                    answerColumns.findColumns(tables.tableFor(page.chapter(), surveyCode, year)),
+                    columnsOf(page.chapter(), surveyCode, year),
                     false,
                     surveyCode,
                     year)
@@ -110,9 +111,14 @@ public class QuestionnaireService {
    * opciones. No se guarda en memoria porque el editor debe ver siempre lo último.
    */
   public List<PageRow> pageRows(SurveyPage page, String surveyCode, int year) {
-    Set<String> columns =
-        answerColumns.findColumns(tables.tableFor(page.chapter(), surveyCode, year));
-    return buildEntries(page.code(), columns, true, surveyCode, year);
+    return buildEntries(
+        page.code(), columnsOf(page.chapter(), surveyCode, year), true, surveyCode, year);
+  }
+
+  /** Sin columnas si la tabla de un año en borrador aún no existe: todo queda pendiente. */
+  private Set<String> columnsOf(Chapter chapter, String surveyCode, int year) {
+    ResolvedTable table = tables.resolve(chapter, surveyCode, year);
+    return table.missing() ? Set.of() : answerColumns.findColumns(table.name());
   }
 
   /** Descarta las preguntas en memoria; las cachés derivadas comparan la generación. */

@@ -1,16 +1,18 @@
 package co.gov.dane.edi.admin;
 
+import co.gov.dane.edi.service.error.InvalidEditException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
  * Copia en FRM_* del cuestionario de un año en otro. Asume una transacción abierta por el servicio
- * y el candado global {@code admin:frm} (ver {@link FrmWriteRepository}).
+ * y el candado de administración ({@code SaveLocks.withAdminLock}, ver {@link FrmWriteRepository}).
  *
  * <p>Cada pregunta del año nuevo recibe su propio FRM_CAP_PROY (con su periodo, objeto, encabezados
  * y ayudas): así editar el año nuevo nunca choca con una fila de otro año. FRM_PRE_GRUPO y
@@ -59,6 +61,7 @@ public class YearCopyRepository {
    * y FRM_ENC_AYUDA.
    */
   public CopiedYear copy(String project, int fromYear, int year) {
+    requireExactProject(project, fromYear);
     List<CopiedRange> copied = new ArrayList<>();
     Map<Long, Long> capProys = copyCapProys(project, fromYear, year, copied);
     Map<Long, Long> headers = copyHeaders(project, fromYear, year, capProys, copied);
@@ -67,6 +70,31 @@ public class YearCopyRepository {
     copyObjects(project, fromYear, capProys, copied);
     copyHeaderHelp(project, fromYear, headers, copied);
     return new CopiedYear(copied);
+  }
+
+  /**
+   * El lector del encuestado busca los periodos con {@code PROY LIKE '%<ENC>%'} y la copia con
+   * {@code PROY = <ENC>}: si difieren, la copia dejaría preguntas atrás sin avisar.
+   */
+  public void requireExactProject(String project, int fromYear) {
+    Long exact =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM FRM_CAP_PERIODO WHERE PROY = ? AND ANIO = ?",
+            Long.class,
+            project,
+            fromYear);
+    Long similar =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM FRM_CAP_PERIODO WHERE PROY LIKE '%' || ? || '%' AND ANIO = ?",
+            Long.class, project, fromYear);
+    if (!Objects.equals(exact, similar)) {
+      throw new InvalidEditException(
+          "Hay filas del año "
+              + fromYear
+              + " cuyo PROY no es exactamente "
+              + project
+              + "; revise los datos antes de copiar.");
+    }
   }
 
   /** Deshace una copia ya confirmada: borra primero las hijas por si el esquema real tiene FK. */

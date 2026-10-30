@@ -166,6 +166,21 @@ public class RulesFileRepository {
     }
   }
 
+  /**
+   * Borra el archivo de un año recién creado cuya creación falló después de escribirlo (sin
+   * historial: el año nunca llegó a existir). Lo usa solo la compensación de la copia de año.
+   */
+  public synchronized void discardNewYear(String surveyCode, int year) {
+    String name = fileName(surveyCode, year);
+    try {
+      Files.deleteIfExists(rulesDir().resolve(name));
+    } catch (IOException exception) {
+      throw new UncheckedIOException("No fue posible borrar las reglas " + name, exception);
+    } finally {
+      cache.remove(name);
+    }
+  }
+
   /** Descarta la caché para releer los archivos del disco. */
   public void evict() {
     cache.clear();

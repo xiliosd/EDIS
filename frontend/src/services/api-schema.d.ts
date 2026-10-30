@@ -443,6 +443,7 @@ export interface components {
             chapterCode?: string;
             entries?: components["schemas"]["AdminEntry"][];
             pageCode?: string;
+            tableMissing?: boolean;
             tableName?: string;
         };
         AdminQuestionnaireView: {

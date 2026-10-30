@@ -44,6 +44,14 @@ class QuestionnaireServiceTest {
             org.mockito.ArgumentMatchers.anyString(),
             org.mockito.ArgumentMatchers.anyInt()))
         .thenAnswer(call -> call.<Chapter>getArgument(0).tableName());
+    when(tables.resolve(
+            org.mockito.ArgumentMatchers.any(Chapter.class),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.anyInt()))
+        .thenAnswer(
+            call ->
+                new AnswerTableResolver.ResolvedTable(
+                    call.<Chapter>getArgument(0).tableName(), false));
     return tables;
   }
 

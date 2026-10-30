@@ -1017,6 +1017,8 @@ components:
             $ref: "#/components/schemas/AdminEntry"
         pageCode:
           type: string
+        tableMissing:
+          type: boolean
         tableName:
           type: string
     AdminQuestionnaireView:

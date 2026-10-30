@@ -47,16 +47,16 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Edición de textos, encabezados, ayudas y orden de un año en borrador (copia al escribir).
  *
- * <p>Orden de cada cambio: candado global {@code admin:frm}; año en borrador y versión vigente; y
- * dentro de una sola transacción, las escrituras FRM_* y al final el guardado del archivo del año
- * (que sube su versión). Si el archivo no se puede guardar la transacción se revierte, así la base
- * y la versión no divergen por una falla de disco; solo un fallo del COMMIT, muy poco probable,
- * dejaría la versión subida sin cambio de datos, algo inocuo. Las cachés se descartan siempre.
+ * <p>Orden de cada cambio: candado global de administración ({@code SaveLocks.withAdminLock}); año
+ * en borrador y versión vigente; y dentro de una sola transacción, las escrituras FRM_* y al final
+ * el guardado del archivo del año (que sube su versión). Si el archivo no se puede guardar la
+ * transacción se revierte, así la base y la versión no divergen por una falla de disco; solo un
+ * fallo del COMMIT, muy poco probable, dejaría la versión subida sin cambio de datos, algo inocuo.
+ * Las cachés se descartan siempre.
  */
 @Service
 public class QuestionAdminService {
 
-  private static final String LOCK_KEY = "admin:frm";
   private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cc}&&[^\\n\\t]]");
   private static final int MAX_STORED_BYTES = 4000;
   private static final Pattern NUMERAL = Pattern.compile("[0-9A-Za-z_.* ]{1,20}");
@@ -512,8 +512,7 @@ public class QuestionAdminService {
       Supplier<List<String>> frmWrites,
       boolean warnAboutSkips,
       UnaryOperator<RuleSet> fileChange) {
-    locks.withLock(
-        LOCK_KEY,
+    locks.withAdminLock(
         () -> {
           try {
             years.requireDraft(survey, year);

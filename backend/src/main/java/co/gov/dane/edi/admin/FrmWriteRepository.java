@@ -15,11 +15,10 @@ import org.springframework.stereotype.Repository;
  * servicio.
  *
  * <p>Contrato del llamador: toda escritura estructural de FRM_* toma el candado global {@code
- * SaveLocks.withLock("admin:frm", ...)} antes de abrir la transacción, y dentro de ella respeta el
- * orden de escritura FRM_PREGUNTA, FRM_PRE_GRUPO, filas de FRM_CAP_PROY, FRM_ENCABEZADO y
- * FRM_PRE_AYUDA para evitar ORA-00060 (interbloqueo). Un candado por año no basta: dos años pueden
- * compartir filas. La ruta de copia de {@code updateOrder} lo respeta: inserta el grupo y luego
- * repunta el cap_proy.
+ * SaveLocks.withAdminLock(...)} antes de abrir la transacción, y dentro de ella respeta el orden de
+ * escritura FRM_PREGUNTA, FRM_PRE_GRUPO, filas de FRM_CAP_PROY, FRM_ENCABEZADO y FRM_PRE_AYUDA para
+ * evitar ORA-00060 (interbloqueo). Un candado por año no basta: dos años pueden compartir filas. La
+ * ruta de copia de {@code updateOrder} lo respeta: inserta el grupo y luego repunta el cap_proy.
  *
  * <p>Todo método que modifica una fila la deja solo para la pareja (encuesta, año) indicada, o
  * lanza {@link SharedRowException}. Una pareja con encuesta o año NULO se trata como "otra pareja"

@@ -4,6 +4,9 @@ import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -13,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.gov.dane.edi.admin.YearCopyRepository.CopiedRange;
+import co.gov.dane.edi.admin.YearCopyRepository.CopiedYear;
 import co.gov.dane.edi.admin.dto.AdminEntry;
 import co.gov.dane.edi.admin.dto.AdminHeader;
 import co.gov.dane.edi.admin.dto.AdminPage;
@@ -31,6 +35,7 @@ import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
 import co.gov.dane.edi.service.QuestionnaireService;
 import co.gov.dane.edi.service.SaveLocks;
+import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.YearCreationFailedException;
 import co.gov.dane.edi.support.DraftYearFixture;
 import co.gov.dane.edi.support.OracleIntegrationTest;
@@ -39,6 +44,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -105,6 +111,11 @@ class YearCopyIT extends OracleIntegrationTest {
 
   @Test
   void createYearCopiesRowsAndMaterializesLegacySkips(CapturedOutput output) throws Exception {
+    Map<SurveyPage, List<QuestionnaireEntry>> published = new LinkedHashMap<>();
+    for (SurveyPage page : SurveyPage.ordered()) {
+      published.put(page, questionnaire.pageEntries(page, "EDIN", 2026));
+    }
+
     createYear(2027, 2026)
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.year").value(2027))
@@ -117,8 +128,10 @@ class YearCopyIT extends OracleIntegrationTest {
     assertThat(shapeOf(after)).isEqualTo(shapeOf(before)).isNotEmpty();
     assertThat(after.tables()).isEqualTo(before.tables());
     for (SurveyPage page : SurveyPage.ordered()) {
+      // Copiar no cambia nada de 2026 y 2027 se ve igual (sin los ids).
+      assertThat(questionnaire.pageEntries(page, "EDIN", 2026)).isEqualTo(published.get(page));
       assertThat(respondentShape(questionnaire.pageEntries(page, "EDIN", 2027)))
-          .isEqualTo(respondentShape(questionnaire.pageEntries(page, "EDIN", 2026)));
+          .isEqualTo(respondentShape(published.get(page)));
     }
     // Cada pregunta de 2027 tiene su propio FRM_CAP_PROY (las ediciones no chocan con 2026).
     assertThat(count("FRM_CAP_PROY WHERE PROY = 'EDIN' AND ANIO = '2027'"))
@@ -207,6 +220,144 @@ class YearCopyIT extends OracleIntegrationTest {
 
     assertThat(counts()).isEqualTo(before);
     assertThat(rulesFiles.find("EDIN", 2027)).isEmpty();
+  }
+
+  @Test
+  void writtenFileIsRemovedWhenTheSaveFailsAfterWriting() {
+    Map<FrmTable, Long> before = counts();
+    RulesFileRepository failsAfterWriting =
+        new RulesFileRepository(jsonMapper, survey, seed, audit) {
+          @Override
+          public synchronized RuleSet save(
+              RuleSet rules,
+              int expectedVersion,
+              String user,
+              String operation,
+              List<String> codes) {
+            super.save(rules, expectedVersion, user, operation, codes);
+            throw new IllegalStateException("Falla simulada tras escribir el archivo");
+          }
+        };
+
+    assertThatThrownBy(
+            () -> serviceWith(copies, failsAfterWriting).createYear("EDIN", 2027, 2026, "t"))
+        .isInstanceOf(YearCreationFailedException.class);
+
+    assertThat(counts()).isEqualTo(before);
+    assertThat(rulesFiles.find("EDIN", 2027)).isEmpty();
+  }
+
+  @Test
+  void conflictingRulesFileIsAConflictAndLeavesNoRows() {
+    Map<FrmTable, Long> before = counts();
+    RulesFileRepository conflicting =
+        new RulesFileRepository(jsonMapper, survey, seed, audit) {
+          @Override
+          public synchronized RuleSet save(
+              RuleSet rules,
+              int expectedVersion,
+              String user,
+              String operation,
+              List<String> codes) {
+            throw new ConflictException("Otro usuario modificó el cuestionario.");
+          }
+        };
+
+    assertThatThrownBy(() -> serviceWith(copies, conflicting).createYear("EDIN", 2027, 2026, "t"))
+        .isInstanceOf(ConflictException.class);
+
+    assertThat(counts()).isEqualTo(before);
+  }
+
+  @Test
+  void failedCompensationSaysRowsWereLeft() {
+    Map<FrmTable, Long> before = counts();
+    YearCopyRepository cannotDelete =
+        new YearCopyRepository(jdbc, ids) {
+          @Override
+          public void delete(CopiedYear copied) {
+            throw new IllegalStateException("Falla simulada al borrar");
+          }
+        };
+    RulesFileRepository failingFiles =
+        new RulesFileRepository(jsonMapper, survey, seed, audit) {
+          @Override
+          public synchronized RuleSet save(
+              RuleSet rules,
+              int expectedVersion,
+              String user,
+              String operation,
+              List<String> codes) {
+            throw new UncheckedIOException(new java.io.IOException("Disco lleno simulado"));
+          }
+        };
+
+    assertThatThrownBy(
+            () -> serviceWith(cannotDelete, failingFiles).createYear("EDIN", 2027, 2026, "t"))
+        .isInstanceOf(YearCreationFailedException.class)
+        .hasMessageContaining("quedaron filas copiadas");
+
+    // Las filas quedan (las borra la limpieza de la prueba) y el archivo no existe.
+    assertThat(counts().get(FrmTable.CAP_PERIODO)).isGreaterThan(before.get(FrmTable.CAP_PERIODO));
+    assertThat(rulesFiles.find("EDIN", 2027)).isEmpty();
+  }
+
+  @Test
+  void sourceRowsWithInexactProjectAreRefused() throws Exception {
+    Map<FrmTable, Long> before = counts();
+    jdbc.update(
+        "INSERT INTO FRM_CAP_PERIODO (ID_PERIODO, ANIO, PROY, COD_CAP_PROY, NUMERAL)"
+            + " VALUES (?, 2026, 'XEDINX', 301, 'C01A.')",
+        DraftYearFixture.OFFSET + 40002);
+
+    createYear(2027, 2026)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.detail")
+                .value(
+                    "Hay filas del año 2026 cuyo PROY no es exactamente EDIN; revise los datos"
+                        + " antes de copiar."));
+
+    before.merge(FrmTable.CAP_PERIODO, 1L, Long::sum);
+    assertThat(counts()).isEqualTo(before);
+    assertThat(rulesFiles.find("EDIN", 2027)).isEmpty();
+  }
+
+  @Test
+  void draftWithMissingTableStillOpensAndAcceptsQuestions() throws Exception {
+    createYear(2027, 2026).andExpect(status().isCreated());
+    putTables("{\"B\":\"" + NEW_B_TABLE + "\"}", 1).andExpect(status().isOk());
+
+    mockMvc
+        .perform(get(DRAFT).cookie(admin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.tables.B").value(NEW_B_TABLE))
+        .andExpect(jsonPath("$.pages[?(@.pageCode == 'B1')].tableMissing").value(true))
+        .andExpect(jsonPath("$.pages[?(@.pageCode == 'C1')].tableMissing").value(false))
+        .andExpect(
+            jsonPath("$.pages[?(@.pageCode == 'B1')].entries[?(@.kind == 'ITEM')].columnStatus")
+                .value(everyItem(is("PENDING_COLUMN"))))
+        .andExpect(
+            jsonPath("$.pages[?(@.pageCode == 'B1')].entries[?(@.kind == 'ITEM')]")
+                .value(not(empty())));
+
+    mockMvc
+        .perform(
+            post(DRAFT + "/pages/B1/entries")
+                .with(realCsrf(mockMvc))
+                .cookie(admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"columnCode\":\"B30\",\"numeral\":\"B30.\",\"text\":\"Nueva\","
+                        + "\"inputType\":\"TEXT\",\"version\":2}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.page.tableMissing").value(true))
+        .andExpect(
+            jsonPath("$.page.entries[?(@.columnCode == 'B30')].columnStatus")
+                .value("PENDING_COLUMN"));
+
+    // Un año publicado sigue siendo estricto: 2026 no tolera una tabla faltante.
+    assertThat(tables.resolve(Chapter.B, "EDIN", 2026).missing()).isFalse();
   }
 
   @Test

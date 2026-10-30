@@ -28,7 +28,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class AnswerTableMappingService {
 
-  private static final String LOCK_KEY = "admin:frm";
   private static final String OPERATION = "editar-tablas";
 
   private final YearCatalogService years;
@@ -90,8 +89,7 @@ public class AnswerTableMappingService {
         missing.add(chapter.code());
       }
     }
-    return locks.withLock(
-        LOCK_KEY,
+    return locks.withAdminLock(
         () -> {
           years.requireDraft(survey, year);
           RuleSet rules = years.requireYear(survey, year);

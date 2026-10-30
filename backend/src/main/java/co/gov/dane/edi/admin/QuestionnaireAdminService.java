@@ -1,5 +1,6 @@
 package co.gov.dane.edi.admin;
 
+import co.gov.dane.edi.admin.AnswerTableResolver.ResolvedTable;
 import co.gov.dane.edi.admin.dto.AdminEntry;
 import co.gov.dane.edi.admin.dto.AdminHeader;
 import co.gov.dane.edi.admin.dto.AdminHelp;
@@ -55,15 +56,16 @@ public class QuestionnaireAdminService {
   public AdminQuestionnaireView view(String survey, int year) {
     RuleSet file = years.requireYear(survey, year);
     RuleSet rules = effectiveRules.effectiveRules(survey, year);
+    Map<String, ResolvedTable> resolved = new LinkedHashMap<>();
     Map<String, String> chapterTables = new LinkedHashMap<>();
     for (Chapter chapter : Chapter.values()) {
-      String table = tables.tableFor(chapter, survey, year);
-      refreshColumnsOfDraft(file, table);
-      chapterTables.put(chapter.code(), table);
+      ResolvedTable table = resolveForEditor(file, chapter, survey, year);
+      resolved.put(chapter.code(), table);
+      chapterTables.put(chapter.code(), table.name());
     }
     List<AdminPage> pages = new ArrayList<>();
     for (SurveyPage page : SurveyPage.ordered()) {
-      pages.add(toAdminPage(page, survey, year, rules, chapterTables.get(page.chapter().code())));
+      pages.add(toAdminPage(page, survey, year, rules, resolved.get(page.chapter().code())));
     }
     return new AdminQuestionnaireView(
         survey, year, file.effectiveState(), file.version(), chapterTables, pages);
@@ -73,9 +75,17 @@ public class QuestionnaireAdminService {
   public AdminPage page(String survey, int year, SurveyPage page) {
     RuleSet file = years.requireYear(survey, year);
     RuleSet rules = effectiveRules.effectiveRules(survey, year);
-    String table = tables.tableFor(page.chapter(), survey, year);
-    refreshColumnsOfDraft(file, table);
-    return toAdminPage(page, survey, year, rules, table);
+    return toAdminPage(
+        page, survey, year, rules, resolveForEditor(file, page.chapter(), survey, year));
+  }
+
+  /** En un borrador una tabla aún sin crear no impide abrir el editor (ver resolve). */
+  private ResolvedTable resolveForEditor(RuleSet file, Chapter chapter, String survey, int year) {
+    ResolvedTable table = tables.resolve(chapter, survey, year);
+    if (!table.missing()) {
+      refreshColumnsOfDraft(file, table.name());
+    }
+    return table;
   }
 
   /**
@@ -94,9 +104,13 @@ public class QuestionnaireAdminService {
   }
 
   private AdminPage toAdminPage(
-      SurveyPage page, String survey, int year, RuleSet rules, String tableName) {
+      SurveyPage page, String survey, int year, RuleSet rules, ResolvedTable table) {
     return new AdminPage(
-        page.code(), page.chapter().code(), tableName, entriesOf(page, survey, year, rules));
+        page.code(),
+        page.chapter().code(),
+        table.name(),
+        table.missing(),
+        entriesOf(page, survey, year, rules));
   }
 
   private List<AdminEntry> entriesOf(SurveyPage page, String survey, int year, RuleSet rules) {

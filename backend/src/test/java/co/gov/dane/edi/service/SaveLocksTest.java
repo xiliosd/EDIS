@@ -3,7 +3,9 @@ package co.gov.dane.edi.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,6 +50,51 @@ class SaveLocksTest {
   private static void sleepBriefly() {
     try {
       Thread.sleep(20);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  @Test
+  void adminLockNeverBlocksRespondentSaves() throws Exception {
+    SaveLocks locks = new SaveLocks();
+    // Claves que caen en cada una de las 64 franjas de los encuestados.
+    Map<Integer, String> keyPerStripe = new HashMap<>();
+    for (int i = 0; keyPerStripe.size() < 64; i++) {
+      String key = String.valueOf(1000000000L + i);
+      keyPerStripe.putIfAbsent(Math.floorMod(key.hashCode(), 64), key);
+    }
+    CountDownLatch adminInside = new CountDownLatch(1);
+    CountDownLatch releaseAdmin = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    Future<Integer> admin =
+        pool.submit(
+            () ->
+                locks.withAdminLock(
+                    () -> {
+                      adminInside.countDown();
+                      awaitQuietly(releaseAdmin);
+                      return 1;
+                    }));
+    assertThat(adminInside.await(5, TimeUnit.SECONDS)).isTrue();
+    try {
+      Future<Integer> respondents =
+          pool.submit(
+              () ->
+                  keyPerStripe.values().stream()
+                      .mapToInt(key -> locks.withLock(key, () -> 1))
+                      .sum());
+      assertThat(respondents.get(5, TimeUnit.SECONDS)).isEqualTo(64);
+    } finally {
+      releaseAdmin.countDown();
+    }
+    assertThat(admin.get(5, TimeUnit.SECONDS)).isEqualTo(1);
+    pool.shutdown();
+  }
+
+  private static void awaitQuietly(CountDownLatch latch) {
+    try {
+      latch.await(10, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
