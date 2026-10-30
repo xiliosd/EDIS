@@ -1,7 +1,6 @@
 import { useDocumentTitle } from '../../hooks/use-document-title';
 
 const UPCOMING_MODULES = [
-  { name: 'Cuestionario', description: 'Textos, preguntas y orden.' },
   { name: 'Reglas', description: 'Saltos y valores mínimos y máximos.' },
   { name: 'Reportes', description: 'Cobertura, estado operativo y exportaciones.' },
   { name: 'Novedades', description: 'Novedades por funcionario.' },

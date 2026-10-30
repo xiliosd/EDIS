@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
 import { Route, Routes } from 'react-router';
+import { AdminLayout } from './components/AdminLayout';
 import { AppLayout } from './components/AppLayout';
 import { SessionMenu } from './components/SessionMenu';
 import { AdminHomePage } from './features/admin/AdminHomePage';
+import { QuestionnaireTreePage } from './features/admin-questions/QuestionnaireTreePage';
+import { YearsPage } from './features/admin-questions/YearsPage';
 import { HomeRedirect } from './features/auth/HomeRedirect';
 import { LoginPage } from './features/auth/LoginPage';
 import { RequireRole } from './features/auth/RequireRole';
@@ -50,10 +53,28 @@ export function App() {
           path="admin"
           element={
             <RequireRole roles={ADMIN_ROLES}>
-              <AdminHomePage />
+              <AdminLayout />
             </RequireRole>
           }
-        />
+        >
+          <Route index element={<AdminHomePage />} />
+          <Route
+            path="cuestionario"
+            element={
+              <RequireRole roles={['ADMIN_CUESTIONARIO']}>
+                <YearsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="cuestionario/:encuesta/:anio"
+            element={
+              <RequireRole roles={['ADMIN_CUESTIONARIO']}>
+                <QuestionnaireTreePage />
+              </RequireRole>
+            }
+          />
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
