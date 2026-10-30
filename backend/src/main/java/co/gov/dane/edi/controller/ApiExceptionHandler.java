@@ -9,6 +9,7 @@ import co.gov.dane.edi.service.error.ReferencedByRulesException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.SurveyNotAvailableException;
 import co.gov.dane.edi.service.error.TooManyLoginAttemptsException;
+import co.gov.dane.edi.service.error.YearCreationFailedException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -101,6 +102,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
         .header(HttpHeaders.RETRY_AFTER, String.valueOf(exception.retryAfter().toSeconds()))
         .body(body);
+  }
+
+  @ExceptionHandler(YearCreationFailedException.class)
+  ProblemDetail handleYearCreationFailed(YearCreationFailedException exception) {
+    LOGGER.error("No se pudo crear el año del cuestionario", exception);
+    return problem(HttpStatus.INTERNAL_SERVER_ERROR, "No se creó el año", exception.getMessage());
   }
 
   @ExceptionHandler(DataAccessException.class)

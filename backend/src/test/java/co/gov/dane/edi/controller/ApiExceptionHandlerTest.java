@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.TooManyLoginAttemptsException;
+import co.gov.dane.edi.service.error.YearCreationFailedException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Duration;
@@ -72,6 +73,16 @@ class ApiExceptionHandlerTest {
   }
 
   @Test
+  void failedYearCreationExplainsTheCause() throws Exception {
+    mockMvc
+        .perform(get("/test/year-creation"))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.title").value("No se creó el año"))
+        .andExpect(jsonPath("$.detail").value("No fue posible guardar el archivo de reglas."))
+        .andExpect(content().string(not(containsString("ruta-interna"))));
+  }
+
+  @Test
   void validationErrorsAreListedPerField() throws Exception {
     mockMvc
         .perform(
@@ -106,6 +117,13 @@ class ApiExceptionHandlerTest {
     @GetMapping("/test/unexpected")
     void unexpected() {
       throw new IllegalStateException("detalle interno");
+    }
+
+    @GetMapping("/test/year-creation")
+    void yearCreation() {
+      throw new YearCreationFailedException(
+          "No fue posible guardar el archivo de reglas.",
+          new java.io.UncheckedIOException(new java.io.IOException("ruta-interna")));
     }
 
     @PostMapping("/test/validated")

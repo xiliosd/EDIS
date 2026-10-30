@@ -143,6 +143,46 @@ export interface paths {
         patch: operations["reorderPage"];
         trace?: never;
     };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Elegir la tabla de respuestas de cada capítulo de un año en borrador
+         * @description Reemplaza el mapeo del año. Una tabla que aún no existe se acepta y se informa en missing; se crea con el script del capítulo.
+         */
+        put: operations["saveTables"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/tables/{chapterCode}/create-script": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Script CREATE TABLE de la tabla nueva de un capítulo
+         * @description Texto plano que ejecuta la persona técnica: copia vacía de la tabla del año anterior.
+         */
+        get: operations["createTableScript"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/years/{encuesta}": {
         parameters: {
             query?: never;
@@ -153,7 +193,11 @@ export interface paths {
         /** Listar los años del cuestionario de una encuesta */
         get: operations["years"];
         put?: never;
-        post?: never;
+        /**
+         * Crear el cuestionario de un año a partir de otro
+         * @description Copia las preguntas del año de origen y deja el año nuevo en borrador, con los saltos heredados como reglas legacy-<COL>. Todo o nada.
+         */
+        post: operations["createYear"];
         delete?: never;
         options?: never;
         head?: never;
@@ -447,6 +491,12 @@ export interface components {
             valores?: string[];
             y?: components["schemas"]["Condition"][];
         };
+        CreateYearRequest: {
+            /** Format: int32 */
+            fromYear: number;
+            /** Format: int32 */
+            year: number;
+        };
         CsrfTokenResponse: {
             token?: string;
         };
@@ -609,6 +659,21 @@ export interface components {
             observationsSaved?: boolean;
             pages?: components["schemas"]["PageStatus"][];
             receipt?: string;
+        };
+        TablesRequest: {
+            tables: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            version: number;
+        };
+        TablesResult: {
+            missing?: string[];
+            tables?: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            version?: number;
         };
         YearSummary: {
             active?: boolean;
@@ -1069,6 +1134,111 @@ export interface operations {
             };
         };
     };
+    saveTables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TablesRequest"];
+            };
+        };
+        responses: {
+            /** @description Mapeo guardado, versión y tablas faltantes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TablesResult"];
+                };
+            };
+            /** @description Cuerpo inválido: faltan las tablas o la versión */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Capítulo inexistente, nombre de tabla inválido o tabla sin las columnas C_C, ESTADO y TC */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    createTableScript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                chapterCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sentencia CREATE TABLE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": unknown;
+                };
+            };
+            /** @description La encuesta, el año o el capítulo no existen, el capítulo no tiene tabla nueva, la tabla ya existe o no hay año anterior */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La tabla asignada o la del año anterior no son válidas */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     years: {
         parameters: {
             query?: never;
@@ -1091,6 +1261,77 @@ export interface operations {
             };
             /** @description La encuesta no existe */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    createYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateYearRequest"];
+            };
+        };
+        responses: {
+            /** @description Año creado en borrador */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearSummary"];
+                };
+            };
+            /** @description Cuerpo inválido: falta el año nuevo o el de origen */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta o el año de origen no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año ya existe o la encuesta ya tiene un borrador abierto */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Año fuera de rango o año de origen sin preguntas */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description No se pudo escribir el archivo de reglas; no quedan filas copiadas */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

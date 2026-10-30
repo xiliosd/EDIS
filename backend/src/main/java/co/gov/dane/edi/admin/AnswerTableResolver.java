@@ -27,6 +27,21 @@ public class AnswerTableResolver {
           + " WHERE c.OWNER = :owner AND c.TABLE_NAME = :tableName"
           + " AND c.COLUMN_NAME IN ('C_C', 'ESTADO', 'TC')";
 
+  private static final String EXISTS =
+      "SELECT COUNT(*) FROM ALL_TABLES WHERE OWNER = :owner AND TABLE_NAME = :tableName";
+
+  /** Resultado de revisar un nombre de tabla propuesto para un capítulo. */
+  public enum TableCheck {
+    /** Existe en el esquema y tiene C_C, ESTADO y TC. */
+    VALID,
+    /** El nombre es seguro pero la tabla aún no existe (se crea con el script). */
+    MISSING,
+    /** Existe pero le falta alguna de las columnas mínimas. */
+    INCOMPLETE,
+    /** El nombre no cumple el patrón: nunca llega al SQL. */
+    INVALID_NAME
+  }
+
   private final NamedParameterJdbcTemplate jdbc;
   private final SurveyProperties survey;
   private final RulesFileRepository rulesFiles;
@@ -68,6 +83,20 @@ public class AnswerTableResolver {
   /** Descarta lo validado: tras cambiar un mapeo o las tablas del esquema. */
   public void evict() {
     validated.clear();
+  }
+
+  /** Las mismas reglas de {@link #tableFor}, pero distingue la tabla que aún no existe. */
+  public TableCheck check(String table) {
+    if (table == null || !TABLE.matcher(table).matches()) {
+      return TableCheck.INVALID_NAME;
+    }
+    if (hasRequiredColumns(table)) {
+      return TableCheck.VALID;
+    }
+    Integer found =
+        jdbc.queryForObject(
+            EXISTS, Map.of("owner", survey.dbSchema(), "tableName", table), Integer.class);
+    return found != null && found > 0 ? TableCheck.INCOMPLETE : TableCheck.MISSING;
   }
 
   private void requireValid(Chapter chapter, String table) {

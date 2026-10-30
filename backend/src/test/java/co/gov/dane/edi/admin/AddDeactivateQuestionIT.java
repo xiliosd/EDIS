@@ -1,7 +1,6 @@
 package co.gov.dane.edi.admin;
 
 import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
-import static co.gov.dane.edi.support.DraftYearFixture.draftCapProy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -61,6 +60,7 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
   @Autowired private JdbcTemplate jdbc;
   @Autowired private RulesFileRepository rulesFiles;
   @Autowired private SurveyProperties survey;
+  @Autowired private YearCopyService yearCopy;
   @Autowired private QuestionnaireService questionnaire;
   @Autowired private AnswerColumnRepository answerColumns;
   @Autowired private tools.jackson.databind.json.JsonMapper jsonMapper;
@@ -69,7 +69,7 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
 
   @BeforeEach
   void installDraftYear() {
-    fixture = new DraftYearFixture(jdbc, rulesFiles, survey);
+    fixture = new DraftYearFixture(jdbc, rulesFiles, survey, yearCopy);
     fixture.install();
     questionnaire.evict();
   }
@@ -92,7 +92,12 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
     add(
             "C1",
             newQuestion(
-                "C30A", "C30A.", "Pregunta <b>nueva</b>", "SINGLE_CHOICE", 20, draftCapProy(C01A)))
+                "C30A",
+                "C30A.",
+                "Pregunta <b>nueva</b>",
+                "SINGLE_CHOICE",
+                20,
+                fixture.draftCapProy(C01A)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.version").value(2))
         .andExpect(jsonPath("$.page.entries[0].columnCode").value("C01A"))
@@ -143,7 +148,7 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
 
   @Test
   void pendingQuestionBecomesActiveWhenTheColumnIsCreatedAndTheTreeIsReloaded() throws Exception {
-    add("C2", newQuestion("C14", "C14.", "Pendiente", "TEXT", null, draftCapProy(C13)))
+    add("C2", newQuestion("C14", "C14.", "Pendiente", "TEXT", null, fixture.draftCapProy(C13)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.page.entries[1].columnCode").value("C14"))
         .andExpect(jsonPath("$.page.entries[1].columnStatus").value("PENDING_COLUMN"));
@@ -173,8 +178,8 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
 
     // Quedó de primera en su bloque: ORDEN 1, y las demás corrieron una posición.
     assertThat(orderOfCapProy(capProyOf("C15."))).isEqualTo(1);
-    assertThat(orderOfCapProy(draftCapProy(C01A))).isEqualTo(2);
-    assertThat(orderOfCapProy(draftCapProy(302))).isEqualTo(3);
+    assertThat(orderOfCapProy(fixture.draftCapProy(C01A))).isEqualTo(2);
+    assertThat(orderOfCapProy(fixture.draftCapProy(302))).isEqualTo(3);
     // La pregunta activa sí la ve el encuestado de 2027.
     assertThat(
             questionnaire.pageEntries(SurveyPage.find("C1").orElseThrow(), "EDIN", 2027).stream()
@@ -218,7 +223,9 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
     rejected("C1", newQuestion("C30A", "C30A.", "\\u0007", "TEXT", null, null), "text");
     // Pregunta de referencia en otra página.
     rejected(
-        "C1", newQuestion("C30A", "C30A.", "x", "TEXT", null, draftCapProy(C13)), "afterCapProyId");
+        "C1",
+        newQuestion("C30A", "C30A.", "x", "TEXT", null, fixture.draftCapProy(C13)),
+        "afterCapProyId");
 
     add("C1", newQuestion("C30A", "C30A.", "x", "TEXT", null, 301L))
         .andExpect(status().isNotFound());
@@ -249,7 +256,7 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
 
   @Test
   void deactivateRemovesOnlyThisYearsPeriodRow(CapturedOutput output) throws Exception {
-    long capProy = draftCapProy(C13);
+    long capProy = fixture.draftCapProy(C13);
     // La misma fila de FRM_CAP_PROY también se usa en otro año: ese periodo debe sobrevivir.
     jdbc.update(
         "INSERT INTO FRM_CAP_PERIODO (ID_PERIODO, ANIO, PROY, COD_CAP_PROY, NUMERAL)"
@@ -282,9 +289,9 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
 
   @Test
   void deactivateRejectedWhenRulesReferenceIt() throws Exception {
-    // El salto heredado de FRM_SALTO deshabilita C01B si C01A vale 2.
+    // El salto heredado de FRM_SALTO (2026) quedó en el archivo de 2027 al crear el año.
     mockMvc
-        .perform(deactivate(draftCapProy(C01A), 1))
+        .perform(deactivate(fixture.draftCapProy(C01A), 1))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.errors.rules[0]").value("legacy-C01A"));
 
@@ -309,12 +316,12 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
         "agregar-regla-prueba",
         List.of());
     mockMvc
-        .perform(deactivate(draftCapProy(C13), 2))
+        .perform(deactivate(fixture.draftCapProy(C13), 2))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.errors.rules", hasItem("regla-h01")));
 
-    assertThat(periodRows(draftCapProy(C01A), 2027)).isEqualTo(1);
-    assertThat(periodRows(draftCapProy(C13), 2027)).isEqualTo(1);
+    assertThat(periodRows(fixture.draftCapProy(C01A), 2027)).isEqualTo(1);
+    assertThat(periodRows(fixture.draftCapProy(C13), 2027)).isEqualTo(1);
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(2);
   }
 
@@ -330,9 +337,9 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
                 .with(realCsrf(mockMvc))
                 .cookie(admin()))
         .andExpect(status().isConflict());
-    mockMvc.perform(deactivate(draftCapProy(C13), 9)).andExpect(status().isConflict());
+    mockMvc.perform(deactivate(fixture.draftCapProy(C13), 9)).andExpect(status().isConflict());
     assertThat(periodRows(C13, 2026)).isEqualTo(1);
-    assertThat(periodRows(draftCapProy(C13), 2027)).isEqualTo(1);
+    assertThat(periodRows(fixture.draftCapProy(C13), 2027)).isEqualTo(1);
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
   }
 
@@ -399,7 +406,8 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
   @Test
   void textQuestionWithoutAnyTextPeerGetsNullGroup() throws Exception {
     jdbc.update(
-        "DELETE FROM FRM_OBJ_PRE WHERE COD_OBJ = 5 AND COD_CAP_PROY >= ?", DraftYearFixture.OFFSET);
+        "DELETE FROM FRM_OBJ_PRE WHERE COD_OBJ = 5 AND COD_CAP_PROY IN"
+            + " (SELECT COD_CAP_PROY FROM FRM_CAP_PROY WHERE PROY = 'EDIN' AND ANIO = '2027')");
     add("C1", newQuestion("C14", "C14.", "Sin pares", "TEXT", null, null))
         .andExpect(status().isCreated());
     assertThat(
@@ -414,11 +422,12 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
   void columnScriptWithUnusableNumeralIsUnprocessableNotServerError() throws Exception {
     jdbc.update(
         "UPDATE FRM_CAP_PERIODO SET NUMERAL = 'x-1' WHERE COD_CAP_PROY = ? AND ANIO = 2027",
-        draftCapProy(C01A));
+        fixture.draftCapProy(C01A));
     jdbc.update(
-        "UPDATE FRM_CAP_PROY SET NUMERAL = 'x-1' WHERE COD_CAP_PROY = ?", draftCapProy(C01A));
+        "UPDATE FRM_CAP_PROY SET NUMERAL = 'x-1' WHERE COD_CAP_PROY = ?",
+        fixture.draftCapProy(C01A));
     questionnaire.evict();
-    script(draftCapProy(C01A), "")
+    script(fixture.draftCapProy(C01A), "")
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.errors.columnCode").exists());
   }
@@ -434,7 +443,9 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
         .andExpect(status().isForbidden());
     mockMvc
         .perform(
-            delete(DRAFT + "/entries/" + draftCapProy(C13)).param("version", "1").cookie(admin()))
+            delete(DRAFT + "/entries/" + fixture.draftCapProy(C13))
+                .param("version", "1")
+                .cookie(admin()))
         .andExpect(status().isForbidden());
     Cookie national =
         new Cookie(
@@ -450,7 +461,9 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
                 .content(newQuestion("C30A", "C30A.", "x", "TEXT", null, null)))
         .andExpect(status().isForbidden());
     mockMvc
-        .perform(get(DRAFT + "/entries/" + draftCapProy(C13) + "/column-script").cookie(national))
+        .perform(
+            get(DRAFT + "/entries/" + fixture.draftCapProy(C13) + "/column-script")
+                .cookie(national))
         .andExpect(status().isForbidden());
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
   }

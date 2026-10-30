@@ -1,7 +1,6 @@
 package co.gov.dane.edi.admin;
 
 import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
-import static co.gov.dane.edi.support.DraftYearFixture.draftCapProy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -53,13 +52,14 @@ class QuestionEditIT extends OracleIntegrationTest {
   @Autowired private JdbcTemplate jdbc;
   @Autowired private RulesFileRepository rulesFiles;
   @Autowired private SurveyProperties survey;
+  @Autowired private YearCopyService yearCopy;
   @Autowired private QuestionnaireService questionnaire;
 
   private DraftYearFixture fixture;
 
   @BeforeEach
   void installDraftYear() {
-    fixture = new DraftYearFixture(jdbc, rulesFiles, survey);
+    fixture = new DraftYearFixture(jdbc, rulesFiles, survey, yearCopy);
     fixture.install();
     questionnaire.evict();
   }
@@ -73,7 +73,7 @@ class QuestionEditIT extends OracleIntegrationTest {
   @Test
   void editsTextOfDraftYear(CapturedOutput output) throws Exception {
     edit(
-            DRAFT + "/entries/" + draftCapProy(C01A) + "/text",
+            DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text",
             "{\"text\":\"Texto nuevo de C01A\",\"version\":1}")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.version").value(2))
@@ -92,8 +92,8 @@ class QuestionEditIT extends OracleIntegrationTest {
 
   @Test
   void editsHeaderAndHelpOfDraftYear() throws Exception {
-    long header = DraftYearFixture.OFFSET + 1;
-    long help = DraftYearFixture.OFFSET + 1;
+    long header = fixture.draftHeader(1);
+    long help = fixture.draftHelp(1);
     edit(DRAFT + "/headers/" + header, "{\"text\":\"Encabezado nuevo\",\"version\":1}")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.version").value(2))
@@ -123,14 +123,17 @@ class QuestionEditIT extends OracleIntegrationTest {
     List<Integer> ordersBefore = ordersOfGroups(201, 202);
 
     edit(
-            DRAFT + "/entries/" + draftCapProy(C01A) + "/text",
+            DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text",
             "{\"text\":\"Solo para 2027\",\"version\":1}")
         .andExpect(status().isOk());
     edit(
-            DRAFT + "/headers/" + (DraftYearFixture.OFFSET + 1),
+            DRAFT + "/headers/" + fixture.draftHeader(1),
             "{\"text\":\"Encabezado 2027\",\"version\":2}")
         .andExpect(status().isOk());
-    reorder(DRAFT + "/pages/C1/order", "[" + draftCapProy(C01B) + "," + draftCapProy(C01A) + "]", 3)
+    reorder(
+            DRAFT + "/pages/C1/order",
+            "[" + fixture.draftCapProy(C01B) + "," + fixture.draftCapProy(C01A) + "]",
+            3)
         .andExpect(status().isOk());
 
     assertThat(questionnaire.pageEntries(c1, "EDIN", 2026)).isEqualTo(c1Before);
@@ -168,18 +171,24 @@ class QuestionEditIT extends OracleIntegrationTest {
         "agregar-regla-prueba",
         List.of());
 
-    reorder(DRAFT + "/pages/C1/order", "[" + draftCapProy(C01B) + "," + draftCapProy(C01A) + "]", 2)
+    reorder(
+            DRAFT + "/pages/C1/order",
+            "[" + fixture.draftCapProy(C01B) + "," + fixture.draftCapProy(C01A) + "]",
+            2)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.page.entries[0].columnCode").value("C01B"))
         .andExpect(jsonPath("$.skipsTargetingEarlierQuestions[0]").value("regla-c01a"));
-    reorder(DRAFT + "/pages/C1/order", "[" + draftCapProy(C01A) + "," + draftCapProy(C01B) + "]", 3)
+    reorder(
+            DRAFT + "/pages/C1/order",
+            "[" + fixture.draftCapProy(C01A) + "," + fixture.draftCapProy(C01B) + "]",
+            3)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.skipsTargetingEarlierQuestions.length()").value(0));
   }
 
   @Test
   void staleEditIsRejectedWithConflict() throws Exception {
-    String path = DRAFT + "/entries/" + draftCapProy(C01A) + "/text";
+    String path = DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text";
     edit(path, "{\"text\":\"Primera pestaña\",\"version\":1}").andExpect(status().isOk());
     edit(path, "{\"text\":\"Segunda pestaña\",\"version\":1}")
         .andExpect(status().isConflict())
@@ -220,13 +229,19 @@ class QuestionEditIT extends OracleIntegrationTest {
   @Test
   void reorderRejectsMismatchedList() throws Exception {
     String detail = "La lista no coincide con las preguntas de la página.";
-    reorder(DRAFT + "/pages/C1/order", "[" + draftCapProy(C01A) + "]", 1)
+    reorder(DRAFT + "/pages/C1/order", "[" + fixture.draftCapProy(C01A) + "]", 1)
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.detail").value(detail));
-    reorder(DRAFT + "/pages/C1/order", "[" + draftCapProy(C01A) + "," + draftCapProy(C01A) + "]", 1)
+    reorder(
+            DRAFT + "/pages/C1/order",
+            "[" + fixture.draftCapProy(C01A) + "," + fixture.draftCapProy(C01A) + "]",
+            1)
         .andExpect(status().isUnprocessableContent());
     // Una pregunta de otra página no pertenece a esta.
-    reorder(DRAFT + "/pages/C1/order", "[" + draftCapProy(C01A) + "," + draftCapProy(303) + "]", 1)
+    reorder(
+            DRAFT + "/pages/C1/order",
+            "[" + fixture.draftCapProy(C01A) + "," + fixture.draftCapProy(303) + "]",
+            1)
         .andExpect(status().isUnprocessableContent());
     reorder(DRAFT + "/pages/C1/order", "[]", 1).andExpect(status().isBadRequest());
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
@@ -234,7 +249,7 @@ class QuestionEditIT extends OracleIntegrationTest {
 
   @Test
   void textIsStoredPlainAndRenderedEscaped() throws Exception {
-    String path = DRAFT + "/entries/" + draftCapProy(C01A) + "/text";
+    String path = DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text";
     edit(path, "{\"text\":\"<script>x</script>&amp;\\u0007\",\"version\":1}")
         .andExpect(status().isOk())
         .andExpect(
@@ -243,7 +258,7 @@ class QuestionEditIT extends OracleIntegrationTest {
         .andExpect(
             jsonPath("$.page.entries[?(@.columnCode == 'C01A')].rawText")
                 .value("<script>x</script>&amp;"));
-    assertThat(storedTextOf(draftCapProy(C01A)))
+    assertThat(storedTextOf(fixture.draftCapProy(C01A)))
         .isEqualTo("&lt;script&gt;x&lt;/script&gt;&amp;amp;");
     SurveyPage c1 = SurveyPage.find("C1").orElseThrow();
     assertThat(questionnaire.pageEntries(c1, "EDIN", 2027).get(0).text())
@@ -260,7 +275,7 @@ class QuestionEditIT extends OracleIntegrationTest {
 
   @Test
   void blankOrOversizedTextIsRejected() throws Exception {
-    String path = DRAFT + "/entries/" + draftCapProy(C01A) + "/text";
+    String path = DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text";
     edit(path, "{\"text\":\"\\u0007\\u0008\",\"version\":1}")
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.errors.text").value("El texto no puede quedar vacío."));
@@ -288,7 +303,7 @@ class QuestionEditIT extends OracleIntegrationTest {
                   .value("Ingreso del 200X"));
 
       edit(
-              DRAFT + "/entries/" + draftCapProy(C01A) + "/text",
+              DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text",
               "{\"text\":\"Gasto del 200X\",\"version\":1}")
           .andExpect(status().isOk())
           .andExpect(
@@ -296,7 +311,7 @@ class QuestionEditIT extends OracleIntegrationTest {
           .andExpect(
               jsonPath("$.page.entries[?(@.columnCode == 'C01A')].rawText")
                   .value("Gasto del 200X"));
-      assertThat(storedTextOf(draftCapProy(C01A))).isEqualTo("Gasto del 200X");
+      assertThat(storedTextOf(fixture.draftCapProy(C01A))).isEqualTo("Gasto del 200X");
     } finally {
       jdbc.update(
           "UPDATE FRM_PREGUNTA SET PREGUNTA = '&iquest;Pregunta ficticia C01A?'"
@@ -308,7 +323,7 @@ class QuestionEditIT extends OracleIntegrationTest {
   void ampersandAfterTheYearStemIsNotTreatedAsTheWildcard() throws Exception {
     mockMvc
         .perform(
-            put(DRAFT + "/entries/" + draftCapProy(C01A) + "/text")
+            put(DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text")
                 .with(realCsrf(mockMvc))
                 .cookie(admin())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -318,7 +333,7 @@ class QuestionEditIT extends OracleIntegrationTest {
             jsonPath("$.page.entries[?(@.columnCode == 'C01A')].text").value("Meta 200& más"))
         .andExpect(
             jsonPath("$.page.entries[?(@.columnCode == 'C01A')].rawText").value("Meta 200& más"));
-    assertThat(storedTextOf(draftCapProy(C01A))).isEqualTo("Meta 200&amp; más");
+    assertThat(storedTextOf(fixture.draftCapProy(C01A))).isEqualTo("Meta 200&amp; más");
     assertThat(
             questionnaire
                 .pageEntries(SurveyPage.find("C1").orElseThrow(), "EDIN", 2027)
@@ -329,7 +344,7 @@ class QuestionEditIT extends OracleIntegrationTest {
 
   @Test
   void reordersWithinAGroupBlock() throws Exception {
-    long first = draftCapProy(309);
+    long first = fixture.draftCapProy(309);
     long second = DraftYearFixture.H1_GROUP_1_SECOND;
     long third = DraftYearFixture.H1_GROUP_2_FIRST;
     long fourth = DraftYearFixture.H1_GROUP_2_SECOND;
@@ -347,7 +362,7 @@ class QuestionEditIT extends OracleIntegrationTest {
 
   @Test
   void reorderAcrossGroupsIsRejected() throws Exception {
-    long first = draftCapProy(309);
+    long first = fixture.draftCapProy(309);
     long second = DraftYearFixture.H1_GROUP_1_SECOND;
     long third = DraftYearFixture.H1_GROUP_2_FIRST;
     long fourth = DraftYearFixture.H1_GROUP_2_SECOND;
@@ -366,7 +381,7 @@ class QuestionEditIT extends OracleIntegrationTest {
   void csrfRequired() throws Exception {
     mockMvc
         .perform(
-            put(DRAFT + "/entries/" + draftCapProy(C01A) + "/text")
+            put(DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text")
                 .cookie(admin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"Sin token\",\"version\":1}"))
@@ -389,7 +404,7 @@ class QuestionEditIT extends OracleIntegrationTest {
     for (Cookie cookie : new Cookie[] {respondent, national}) {
       mockMvc
           .perform(
-              put(DRAFT + "/entries/" + draftCapProy(C01A) + "/text")
+              put(DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text")
                   .with(realCsrf(mockMvc))
                   .cookie(cookie)
                   .contentType(MediaType.APPLICATION_JSON)
