@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { server } from '../../test/msw-server';
+import { API_BASE, draftView } from '../../test/questionnaire-fixtures';
 import { renderApp } from '../../test/render-app';
 
 const YEARS = [
@@ -52,6 +53,7 @@ describe('YearsPage', () => {
           { status: 201 },
         );
       }),
+      http.get(API_BASE, () => HttpResponse.json(draftView({ version: 1 }))),
     );
     renderApp('/admin/cuestionario');
     const user = userEvent.setup();
@@ -64,6 +66,7 @@ describe('YearsPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Cuestionario EDIN 2027' }),
     ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Página C1' })).toBeInTheDocument();
     expect(body).toEqual({ year: 2027, fromYear: 2026 });
   });
 

@@ -49,7 +49,7 @@ export function ReorderList<T>({
     return `${idPrefix}-${direction}-${id}`;
   }
 
-  // Tras mover, el foco sigue en el botón usado; si quedó deshabilitado (borde), pasa al otro.
+  // Tras guardar, el foco vuelve al botón usado; si quedó deshabilitado (borde), pasa al otro.
   useEffect(() => {
     if (!focusAfterMove || busy) {
       return;
@@ -75,11 +75,11 @@ export function ReorderList<T>({
     const accepted = await onReorder(moveItem(ids, from, to));
     setBusy(false);
     if (accepted) {
-      const item = items[from];
-      setAnnouncement(`${getLabel(item)} ahora es la pregunta ${to + 1} de ${count}`);
-      if (direction) {
-        setFocusAfterMove({ id, direction });
-      }
+      setAnnouncement(`${getLabel(items[from])} ahora es la pregunta ${to + 1} de ${count}`);
+    }
+    // Con o sin éxito: mientras guardaba el botón estuvo deshabilitado y el navegador lo desenfocó.
+    if (direction) {
+      setFocusAfterMove({ id, direction });
     }
   }
 

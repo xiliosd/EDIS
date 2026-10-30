@@ -80,8 +80,9 @@ function validate(values: FormValues): Partial<Record<FieldName, string>> {
   if (values.inputType === 'SINGLE_CHOICE' && !values.optionGroup) {
     errors.optionGroup = 'Elija el grupo de opciones.';
   }
-  if (values.columnType && !/^\d+$/.test(values.columnLength.trim())) {
-    errors.columnLength = 'Indique la longitud de la columna.';
+  // La longitud o precisión de una columna Oracle empieza en 1.
+  if (values.columnType && !/^[1-9]\d*$/.test(values.columnLength.trim())) {
+    errors.columnLength = 'Indique la longitud de la columna (un número de 1 o más).';
   }
   return errors;
 }

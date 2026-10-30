@@ -7,6 +7,12 @@ import type {
 import { server } from './msw-server';
 
 // Datos ficticios del árbol de un año en borrador: dos páginas, una con la tabla sin crear.
+/**
+ * Plazo de los flujos largos (abrir el árbol, editar varias veces, recargar). Solos tardan ~3 s, pero
+ * con todos los archivos en paralelo en un equipo cargado superan los 5 s por defecto.
+ */
+export const LONG_FLOW_TIMEOUT = 15000;
+
 export const TREE_URL = '/admin/cuestionario/EDIN/2027';
 export const API_BASE = '*/api/v1/admin/questionnaire/EDIN/2027';
 

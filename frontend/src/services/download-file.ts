@@ -4,6 +4,10 @@ export function downloadTextFile(fileName: string, content: string): void {
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
+  // Firefox solo descarga desde un enlace que está en el documento.
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  // Revocar en el mismo turno puede cancelar la descarga antes de que el navegador la lea.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

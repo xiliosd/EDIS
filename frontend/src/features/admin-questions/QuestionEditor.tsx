@@ -173,8 +173,9 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
     setDeactivating(true);
     setActionError(null);
     try {
-      editing.onEdited(await deactivate(editing.survey, editing.year, capProyId, editing.version));
+      const result = await deactivate(editing.survey, editing.year, capProyId, editing.version);
       setConfirming(false);
+      editing.onDeactivated(result, capProyId, entry.columnCode || label);
     } catch (caught) {
       setConfirming(false);
       const rules = referencingRuleIds(caught);
@@ -235,7 +236,7 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
   return (
     <article aria-labelledby={`${idBase}-titulo`} className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <h3 id={`${idBase}-titulo`} className="text-base font-semibold">
+        <h3 id={`${idBase}-titulo`} tabIndex={-1} className="text-base font-semibold">
           {isItem ? label : 'Enunciado'}
         </h3>
         {entry.columnCode && <span>Columna {entry.columnCode}</span>}
@@ -260,13 +261,13 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
 
       {headers}
 
-      {editing ? (
+      {editing && entry.rawText != null ? (
         <EditableText
           id={`${idBase}-texto`}
           label={`Texto de ${label}`}
           editLabel={`Editar texto de ${label}`}
           display={textDisplay}
-          value={entry.rawText ?? entry.text ?? ''}
+          value={entry.rawText}
           hint="Escriba 200X donde debe ir el año; se reemplaza al mostrar la pregunta."
           editing={editing}
           save={(value) =>
@@ -274,7 +275,15 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
           }
         />
       ) : (
-        textDisplay
+        <>
+          {textDisplay}
+          {/* Sin el texto guardado no se edita: la vista previa ya trae el año y perdería 200X. */}
+          {editing && (
+            <p className="text-sm text-ink-muted">
+              Este texto no se puede editar porque no llegó el texto guardado. Recargue la página.
+            </p>
+          )}
+        </>
       )}
 
       {help &&

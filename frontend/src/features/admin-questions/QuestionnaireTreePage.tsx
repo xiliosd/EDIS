@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
@@ -59,6 +59,9 @@ export function QuestionnaireTreePage() {
   const [reorderErrors, setReorderErrors] = useState<Record<string, string>>({});
   // Al recargar tras un conflicto se reinician los editores abiertos con texto viejo.
   const [reloads, setReloads] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('');
+  // Id del elemento que recibe el foco cuando la pregunta enfocada sale de la lista.
+  const [focusTargetId, setFocusTargetId] = useState<string | null>(null);
 
   const view = treeQuery.data;
 
@@ -74,6 +77,29 @@ export function QuestionnaireTreePage() {
             ),
           }
         : current,
+    );
+  }
+
+  useEffect(() => {
+    if (focusTargetId) {
+      document.getElementById(focusTargetId)?.focus();
+      setFocusTargetId(null);
+    }
+  }, [focusTargetId, treeQuery.data]);
+
+  /**
+   * La pregunta desactivada desaparece con el botón enfocado (WCAG 2.4.3): el foco pasa al
+   * encabezado de la siguiente, o de la anterior, o al título de la página si era la única.
+   */
+  function applyDeactivation(result: AdminEditResult, capProyId: number, columnLabel: string) {
+    const pageCode = result.page?.pageCode ?? '';
+    const before = view?.pages?.find((page) => page.pageCode === pageCode)?.entries ?? [];
+    const index = before.findIndex((item) => item.capProyId === capProyId);
+    const neighbour = before[index + 1] ?? before[index - 1];
+    applyEdit(result);
+    setStatusMessage(`Se desactivó ${columnLabel}.`);
+    setFocusTargetId(
+      neighbour ? `pregunta-${pageCode}-${neighbour.capProyId}-titulo` : `pagina-${pageCode}`,
     );
   }
 
@@ -106,6 +132,7 @@ export function QuestionnaireTreePage() {
           year,
           version: view.version ?? 0,
           onEdited: applyEdit,
+          onDeactivated: applyDeactivation,
           onConflict: setConflict,
         }
       : null;
@@ -157,6 +184,10 @@ export function QuestionnaireTreePage() {
         />
       )}
 
+      <p role="status" className="sr-only">
+        {statusMessage}
+      </p>
+
       {conflict && (
         <div role="alert" className="mt-6 rounded-xl border border-danger/40 bg-surface p-4">
           <p className="text-danger">{conflict}</p>
@@ -191,7 +222,7 @@ export function QuestionnaireTreePage() {
             const warnings = skipWarnings[pageCode] ?? [];
             return (
               <section key={pageCode} aria-labelledby={`pagina-${pageCode}`} className="mt-8">
-                <h2 id={`pagina-${pageCode}`} className="text-xl font-semibold">
+                <h2 id={`pagina-${pageCode}`} tabIndex={-1} className="text-xl font-semibold">
                   Página {pageCode}
                 </h2>
                 <p className="text-ink-muted">

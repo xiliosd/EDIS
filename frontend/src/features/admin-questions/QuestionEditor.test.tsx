@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { server } from '../../test/msw-server';
 import {
   API_BASE,
+  LONG_FLOW_TIMEOUT,
   draftView,
   PAGE_C1,
+  PAGE_H1,
   problem,
   serveTree,
   TREE_URL,
@@ -19,52 +21,56 @@ function pageWith(changes: Partial<NonNullable<typeof PAGE_C1.entries>[number]>)
 }
 
 describe('QuestionEditor', () => {
-  it('editsTextWithVersionAndHandlesConflict', async () => {
-    const bodies: unknown[] = [];
-    serveTree();
-    server.use(
-      http.put(`${API_BASE}/entries/101/text`, async ({ request }) => {
-        const body = (await request.json()) as { text: string; version: number };
-        bodies.push(body);
-        if (bodies.length === 1) {
-          return HttpResponse.json({
-            version: 5,
-            page: pageWith({ text: body.text.replace('200X', '2027'), rawText: body.text }),
-            skipsTargetingEarlierQuestions: [],
-          });
-        }
-        return problem(409, 'Otro usuario modificó el cuestionario. Recargue la página.');
-      }),
-    );
-    renderApp(TREE_URL);
-    const user = userEvent.setup();
+  it(
+    'editsTextWithVersionAndHandlesConflict',
+    async () => {
+      const bodies: unknown[] = [];
+      serveTree();
+      server.use(
+        http.put(`${API_BASE}/entries/101/text`, async ({ request }) => {
+          const body = (await request.json()) as { text: string; version: number };
+          bodies.push(body);
+          if (bodies.length === 1) {
+            return HttpResponse.json({
+              version: 5,
+              page: pageWith({ text: body.text.replace('200X', '2027'), rawText: body.text }),
+              skipsTargetingEarlierQuestions: [],
+            });
+          }
+          return problem(409, 'Otro usuario modificó el cuestionario. Recargue la página.');
+        }),
+      );
+      renderApp(TREE_URL);
+      const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar texto de C05' }));
-    const field = screen.getByLabelText('Texto de C05');
-    expect(field).toHaveValue('¿En 200X trabajó en la entidad?');
-    expect(field).toHaveFocus();
-    await user.clear(field);
-    await user.paste('¿En 200X laboró?');
-    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      await user.click(await screen.findByRole('button', { name: 'Editar texto de C05' }));
+      const field = screen.getByLabelText('Texto de C05');
+      expect(field).toHaveValue('¿En 200X trabajó en la entidad?');
+      expect(field).toHaveFocus();
+      await user.clear(field);
+      await user.paste('¿En 200X laboró?');
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
 
-    expect(await screen.findByText('¿En 2027 laboró?')).toBeInTheDocument();
-    expect(bodies[0]).toEqual({ text: '¿En 200X laboró?', version: 4 });
-    expect(screen.getByRole('button', { name: 'Editar texto de C05' })).toHaveFocus();
+      expect(await screen.findByText('¿En 2027 laboró?')).toBeInTheDocument();
+      expect(bodies[0]).toEqual({ text: '¿En 200X laboró?', version: 4 });
+      expect(screen.getByRole('button', { name: 'Editar texto de C05' })).toHaveFocus();
 
-    // La segunda edición lleva la versión que devolvió la primera; el servidor responde 409.
-    await user.click(screen.getByRole('button', { name: 'Editar texto de C05' }));
-    await user.type(screen.getByLabelText('Texto de C05'), '!');
-    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      // La segunda edición lleva la versión que devolvió la primera; el servidor responde 409.
+      await user.click(screen.getByRole('button', { name: 'Editar texto de C05' }));
+      await user.type(screen.getByLabelText('Texto de C05'), '!');
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
 
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Otro usuario modificó el cuestionario. Recargue la página.');
-    expect(bodies[1]).toEqual({ text: '¿En 200X laboró?!', version: 5 });
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Otro usuario modificó el cuestionario. Recargue la página.');
+      expect(bodies[1]).toEqual({ text: '¿En 200X laboró?!', version: 5 });
 
-    server.use(http.get(API_BASE, () => HttpResponse.json(draftView({ version: 9 }))));
-    await user.click(within(alert).getByRole('button', { name: 'Recargar' }));
-    expect(await screen.findByText('Versión 9')).toBeInTheDocument();
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
+      server.use(http.get(API_BASE, () => HttpResponse.json(draftView({ version: 9 }))));
+      await user.click(within(alert).getByRole('button', { name: 'Recargar' }));
+      expect(await screen.findByText('Versión 9')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).toBeNull();
+    },
+    LONG_FLOW_TIMEOUT,
+  );
 
   it('showsFieldErrorAndCancelKeepsText', async () => {
     serveTree();
@@ -187,5 +193,46 @@ describe('QuestionEditor', () => {
     expect(await screen.findByText('Versión 5')).toBeInTheDocument();
     expect(screen.queryByRole('listitem', { name: 'Pregunta C06' })).toBeNull();
     expect(version).toBe('4');
+    // El foco pasa a la pregunta siguiente y se anuncia el cambio (WCAG 2.4.3 y 4.1.3).
+    expect(screen.getByRole('heading', { name: 'C07A' })).toHaveFocus();
+    expect(screen.getByText('Se desactivó C06.')).toBeInTheDocument();
+  });
+
+  it('deactivatingTheOnlyQuestionFocusesThePageHeading', async () => {
+    serveTree();
+    server.use(
+      http.delete(`${API_BASE}/entries/201`, () =>
+        HttpResponse.json({
+          version: 5,
+          page: { ...PAGE_H1, entries: [] },
+          skipsTargetingEarlierQuestions: [],
+        }),
+      ),
+    );
+    renderApp(TREE_URL);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar H01' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Desactivar H01' })).getByRole('button', {
+        name: 'Desactivar',
+      }),
+    );
+
+    expect(await screen.findByText('Se desactivó H01.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Página H1' })).toHaveFocus();
+  });
+
+  it('textWithoutRawTextIsNotEditable', async () => {
+    serveTree(draftView({ pages: [pageWith({ rawText: undefined })] }));
+    renderApp(TREE_URL);
+
+    expect(
+      await screen.findByText(
+        'Este texto no se puede editar porque no llegó el texto guardado. Recargue la página.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar texto de C05' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Editar ayuda de C05' })).toBeInTheDocument();
   });
 });

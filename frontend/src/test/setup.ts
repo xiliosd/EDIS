@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 import { server } from './msw-server';
 
 // Con cobertura, la primera carga de la app en cada archivo puede pasar de 1 s en equipos lentos.
-configure({ asyncUtilTimeout: 5000 });
+configure({ asyncUtilTimeout: 3000 });
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {

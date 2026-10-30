@@ -8,6 +8,8 @@ export interface TreeEditing {
   /** Versión del archivo del año que el cliente leyó por última vez; viaja en cada edición. */
   version: number;
   onEdited: (result: AdminEditResult) => void;
+  /** Tras desactivar: la pregunta sale de la lista y el árbol mueve el foco y lo anuncia. */
+  onDeactivated: (result: AdminEditResult, capProyId: number, columnLabel: string) => void;
   /** 409 de versión vieja o año publicado: se muestra arriba con el botón "Recargar". */
   onConflict: (message: string) => void;
 }

@@ -3,7 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { server } from '../../test/msw-server';
-import { API_BASE, PAGE_C1, problem, serveTree, TREE_URL } from '../../test/questionnaire-fixtures';
+import {
+  API_BASE,
+  LONG_FLOW_TIMEOUT,
+  PAGE_C1,
+  problem,
+  serveTree,
+  TREE_URL,
+} from '../../test/questionnaire-fixtures';
 import { renderApp } from '../../test/render-app';
 
 function serveReorder(bodies: unknown[], skips: string[] = []) {
@@ -29,33 +36,37 @@ function numeralsInOrder() {
 }
 
 describe('ReorderList', () => {
-  it('reorderByKeyboardAnnouncesPosition', async () => {
-    const bodies: unknown[] = [];
-    serveTree();
-    serveReorder(bodies, ['El salto de C09 apunta a C07A, que ahora está antes.']);
-    renderApp(TREE_URL);
-    const user = userEvent.setup();
+  it(
+    'reorderByKeyboardAnnouncesPosition',
+    async () => {
+      const bodies: unknown[] = [];
+      serveTree();
+      serveReorder(bodies, ['El salto de C09 apunta a C07A, que ahora está antes.']);
+      renderApp(TREE_URL);
+      const user = userEvent.setup();
 
-    const up = await screen.findByRole('button', { name: 'Subir C07A' });
-    expect(screen.getByRole('button', { name: 'Subir C05' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Bajar C07A' })).toBeDisabled();
-    up.focus();
-    await user.keyboard('{Enter}');
+      const up = await screen.findByRole('button', { name: 'Subir C07A' });
+      expect(screen.getByRole('button', { name: 'Subir C05' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Bajar C07A' })).toBeDisabled();
+      up.focus();
+      await user.keyboard('{Enter}');
 
-    expect(await screen.findByText('C07A ahora es la pregunta 2 de 3')).toBeInTheDocument();
-    expect(bodies[0]).toEqual({ capProyIds: [101, 103, 102], version: 4 });
-    expect(numeralsInOrder()).toEqual(['Pregunta C05', 'Pregunta C07A', 'Pregunta C06']);
-    expect(screen.getByRole('button', { name: 'Subir C07A' })).toHaveFocus();
-    expect(
-      screen.getByText('El salto de C09 apunta a C07A, que ahora está antes.'),
-    ).toBeInTheDocument();
+      expect(await screen.findByText('C07A ahora es la pregunta 2 de 3')).toBeInTheDocument();
+      expect(bodies[0]).toEqual({ capProyIds: [101, 103, 102], version: 4 });
+      expect(numeralsInOrder()).toEqual(['Pregunta C05', 'Pregunta C07A', 'Pregunta C06']);
+      expect(screen.getByRole('button', { name: 'Subir C07A' })).toHaveFocus();
+      expect(
+        screen.getByText('El salto de C09 apunta a C07A, que ahora está antes.'),
+      ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Subir C07A' }));
-    expect(await screen.findByText('C07A ahora es la pregunta 1 de 3')).toBeInTheDocument();
-    expect(bodies[1]).toEqual({ capProyIds: [103, 101, 102], version: 5 });
-    // En el borde, el foco pasa al otro botón porque Subir queda deshabilitado.
-    expect(screen.getByRole('button', { name: 'Bajar C07A' })).toHaveFocus();
-  });
+      await user.click(screen.getByRole('button', { name: 'Subir C07A' }));
+      expect(await screen.findByText('C07A ahora es la pregunta 1 de 3')).toBeInTheDocument();
+      expect(bodies[1]).toEqual({ capProyIds: [103, 101, 102], version: 5 });
+      // En el borde, el foco pasa al otro botón porque Subir queda deshabilitado.
+      expect(screen.getByRole('button', { name: 'Bajar C07A' })).toHaveFocus();
+    },
+    LONG_FLOW_TIMEOUT,
+  );
 
   it('reordersByDragAndDrop', async () => {
     const bodies: unknown[] = [];
@@ -77,9 +88,12 @@ describe('ReorderList', () => {
   it('showsServerRejectionWhenCrossingGroups', async () => {
     serveTree();
     server.use(
-      http.patch(`${API_BASE}/pages/C1/order`, () =>
-        problem(422, 'No se puede mover una pregunta a otro grupo.'),
-      ),
+      http.patch(`${API_BASE}/pages/C1/order`, () => {
+        // Chromium desenfoca el botón deshabilitado mientras se guarda; jsdom no (y su blur() no
+        // actúa sobre un botón deshabilitado), así que se simula llevando el foco a otro lado.
+        document.getElementById('pagina-C1')?.focus();
+        return problem(422, 'No se puede mover una pregunta a otro grupo.');
+      }),
     );
     renderApp(TREE_URL);
     const user = userEvent.setup();
@@ -90,5 +104,7 @@ describe('ReorderList', () => {
       'No se puede mover una pregunta a otro grupo.',
     );
     expect(numeralsInOrder()).toEqual(['Pregunta C05', 'Pregunta C06', 'Pregunta C07A']);
+    // Aunque el servidor rechace el orden, el foco vuelve al botón usado.
+    expect(screen.getByRole('button', { name: 'Bajar C05' })).toHaveFocus();
   });
 });

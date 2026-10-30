@@ -16,8 +16,6 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
-    // Las pruebas de integración montan la app entera; con cobertura en paralelo superan 5 s.
-    testTimeout: 20000,
     exclude: ['e2e/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
