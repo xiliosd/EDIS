@@ -531,11 +531,6 @@ export interface components {
             password: string;
             username: string;
         };
-        NewColumn: {
-            /** Format: int32 */
-            longitud?: number;
-            tipo?: string;
-        };
         NewQuestionRequest: {
             /** Format: int64 */
             afterCapProyId?: number;
@@ -612,19 +607,11 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
-        RuleSet: {
+        RespondentRules: {
             /** Format: int32 */
             anio?: number;
-            columnasNuevas?: {
-                [key: string]: components["schemas"]["NewColumn"];
-            };
             encuesta?: string;
-            /** @enum {string} */
-            estado?: "borrador" | "publicado";
             saltos?: components["schemas"]["SkipRule"][];
-            tablas?: {
-                [key: string]: string;
-            };
             validaciones?: {
                 [key: string]: components["schemas"]["FieldValidation"];
             };
@@ -1708,7 +1695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RuleSet"];
+                    "application/json": components["schemas"]["RespondentRules"];
                 };
             };
             /** @description La encuesta aún no está disponible (el año activo es un borrador) */

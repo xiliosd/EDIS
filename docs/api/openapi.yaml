@@ -924,7 +924,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RuleSet"
+                $ref: "#/components/schemas/RespondentRules"
           description: Reglas del archivo más saltos heredados
         "503":
           content:
@@ -1208,14 +1208,6 @@ components:
       - accountType
       - password
       - username
-    NewColumn:
-      type: object
-      properties:
-        longitud:
-          type: integer
-          format: int32
-        tipo:
-          type: string
     NewQuestionRequest:
       type: object
       properties:
@@ -1375,31 +1367,18 @@ components:
       required:
       - capProyIds
       - version
-    RuleSet:
+    RespondentRules:
       type: object
       properties:
         anio:
           type: integer
           format: int32
-        columnasNuevas:
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/NewColumn"
         encuesta:
           type: string
-        estado:
-          type: string
-          enum:
-          - borrador
-          - publicado
         saltos:
           type: array
           items:
             $ref: "#/components/schemas/SkipRule"
-        tablas:
-          type: object
-          additionalProperties:
-            type: string
         validaciones:
           type: object
           additionalProperties:

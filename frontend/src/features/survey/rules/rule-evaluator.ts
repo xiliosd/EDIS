@@ -1,6 +1,6 @@
 import type { components } from '../../../services/api-schema';
 
-export type RuleSet = components['schemas']['RuleSet'];
+export type RuleSet = components['schemas']['RespondentRules'];
 type Condition = components['schemas']['Condition'];
 type FieldValidation = components['schemas']['FieldValidation'];
 

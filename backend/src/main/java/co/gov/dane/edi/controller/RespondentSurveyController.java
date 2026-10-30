@@ -5,9 +5,9 @@ import co.gov.dane.edi.model.FinishResult;
 import co.gov.dane.edi.model.PageAnswersRequest;
 import co.gov.dane.edi.model.PageDetail;
 import co.gov.dane.edi.model.PageSaveResult;
+import co.gov.dane.edi.model.RespondentRules;
 import co.gov.dane.edi.model.SurveyProgress;
 import co.gov.dane.edi.rules.EffectiveRulesService;
-import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.security.SessionTokenService;
 import co.gov.dane.edi.service.SurveyAnswerService;
 import co.gov.dane.edi.service.SurveyProgressService;
@@ -61,8 +61,8 @@ public class RespondentSurveyController {
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(value = "/rules", produces = MediaType.APPLICATION_JSON_VALUE)
-  public RuleSet rules() {
-    return rules.effectiveRules();
+  public RespondentRules rules() {
+    return RespondentRules.from(rules.effectiveRules());
   }
 
   @Operation(summary = "Consultar el avance del encuestado")
