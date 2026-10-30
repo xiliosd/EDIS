@@ -86,7 +86,8 @@ cobertura, SAST (Semgrep), SCA, Trivy y E2E.
 > **Pendiente:** insertar los distintivos de estado del CI y de cobertura cuando exista el repositorio
 > remoto (su URL aún no está definida). Licencia: no hay archivo `LICENSE`.
 
-Cobertura mínima exigida: 80 % en `co.gov.dane.edi.security`, 60 % en el resto del backend y 60 % en el
+Cobertura mínima exigida: 80 % en `co.gov.dane.edi.security`, `co.gov.dane.edi.rules` y
+`co.gov.dane.edi.admin`, 60 % en el resto del backend y 60 % en el
 frontend.
 
 ## Ambiente de pruebas
@@ -468,3 +469,40 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
 - **Tomcat fijado** en 11.0.26 (`tomcat.version` en `backend/pom.xml`); retirar cuando Spring Boot
   incluya esa versión o superior.
 - **Bloqueo de intentos en memoria**, por instancia; ver rate limiting en Deployment.
+- **Año huérfano si la JVM muere durante la creación de un año.** La copia confirma las filas
+  `FRM_*` y después escribe el archivo de reglas; si el proceso muere entre ambos pasos no corre la
+  compensación: el año no aparece en el catálogo (no tiene archivo) pero crearlo de nuevo responde
+  409 «Ya existe un cuestionario para <año>». Recuperación en
+  [Recuperar un año huérfano](#recuperar-un-año-huérfano).
+
+### Recuperar un año huérfano
+
+Aplica solo si el año **no** tiene archivo `RULES_DIR/<ENCUESTA>-<AÑO>.json` (si lo tiene, el año sí
+existe y se administra desde la aplicación). Sin archivo nadie pudo editar el año, así que solo
+existen las filas de la copia: `FRM_PREGUNTA` y `FRM_PRE_GRUPO` siguen compartidas con el año de
+origen y no se tocan. Detenga el backend (o asegúrese de que nadie esté creando años), borre los
+temporales `RULES_DIR/<ENCUESTA>-<AÑO>.json*.tmp` si quedaron, y ejecute en una sola transacción,
+reemplazando `EDIN` y `2028` por la encuesta y el año huérfano. El orden es el mismo de la
+compensación de `YearCopyService` (`YearCopyRepository.delete`): primero las tablas hijas y al
+final `FRM_CAP_PROY`.
+
+```sql
+-- Preguntas del año huérfano: cada una tiene su propio FRM_CAP_PROY creado por la copia.
+DELETE FROM FRM_ENC_AYUDA WHERE COD_ENC IN (
+  SELECT E.COD_ENC FROM FRM_ENCABEZADO E WHERE E.COD_CAP_PROY IN (
+    SELECT C.COD_CAP_PROY FROM FRM_CAP_PROY C WHERE C.PROY = 'EDIN' AND C.ANIO = '2028'));
+DELETE FROM FRM_OBJ_PRE WHERE COD_CAP_PROY IN (
+  SELECT C.COD_CAP_PROY FROM FRM_CAP_PROY C WHERE C.PROY = 'EDIN' AND C.ANIO = '2028');
+DELETE FROM FRM_CAP_PERIODO WHERE PROY = 'EDIN' AND ANIO = 2028;
+DELETE FROM FRM_PRE_AYUDA WHERE COD_CAP_PROY IN (
+  SELECT C.COD_CAP_PROY FROM FRM_CAP_PROY C WHERE C.PROY = 'EDIN' AND C.ANIO = '2028');
+DELETE FROM FRM_ENCABEZADO WHERE COD_CAP_PROY IN (
+  SELECT C.COD_CAP_PROY FROM FRM_CAP_PROY C WHERE C.PROY = 'EDIN' AND C.ANIO = '2028');
+DELETE FROM FRM_CAP_PROY WHERE PROY = 'EDIN' AND ANIO = '2028';
+-- Debe dar 0 antes del COMMIT (si no, ROLLBACK y revise los datos).
+SELECT COUNT(*) FROM FRM_CAP_PERIODO WHERE PROY = 'EDIN' AND ANIO = 2028;
+COMMIT;
+```
+
+`FRM_CAP_PERIODO.ANIO` es numérico y `FRM_CAP_PROY.ANIO` es texto (esquema deducido de
+`db/dev/schema.sql`; confírmelo con el DDL de QA). Después cree el año de nuevo desde la aplicación.
