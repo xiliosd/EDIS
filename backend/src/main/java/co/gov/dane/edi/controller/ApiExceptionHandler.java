@@ -5,6 +5,7 @@ import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidCredentialsException;
 import co.gov.dane.edi.service.error.InvalidEditException;
+import co.gov.dane.edi.service.error.ReferencedByRulesException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.SurveyNotAvailableException;
 import co.gov.dane.edi.service.error.TooManyLoginAttemptsException;
@@ -41,6 +42,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(ConflictException.class)
   ProblemDetail handleConflict(ConflictException exception) {
     return problem(HttpStatus.CONFLICT, "Conflicto", exception.getMessage());
+  }
+
+  @ExceptionHandler(ReferencedByRulesException.class)
+  ProblemDetail handleReferencedByRules(ReferencedByRulesException exception) {
+    ProblemDetail body = problem(HttpStatus.CONFLICT, "Conflicto", exception.getMessage());
+    body.setProperty("errors", Map.of("rules", exception.ruleIds()));
+    return body;
   }
 
   @ExceptionHandler(SharedRowException.class)

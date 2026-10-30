@@ -16,6 +16,9 @@ public class FrmLookupRepository {
   /** Pregunta (FRM_CAP_PROY) tal como la ve un año: su página y su numeral. */
   public record CapProyRef(long capProyId, String pageCode, String numeral) {}
 
+  /** Bloque de orden (GRUPO) y posición (ORDEN) de una pregunta dentro de su página. */
+  public record GroupOrder(int group, int order) {}
+
   private final JdbcTemplate jdbc;
 
   public FrmLookupRepository(JdbcTemplate jdbc) {
@@ -65,6 +68,44 @@ public class FrmLookupRepository {
         },
         capProyIds.toArray());
     return groups;
+  }
+
+  /** GRUPO y ORDEN de cada FRM_CAP_PROY indicado. */
+  public Map<Long, GroupOrder> groupOrders(Collection<Long> capProyIds) {
+    Map<Long, GroupOrder> orders = new HashMap<>();
+    if (capProyIds.isEmpty()) {
+      return orders;
+    }
+    String placeholders = String.join(",", Collections.nCopies(capProyIds.size(), "?"));
+    jdbc.query(
+        "SELECT C.COD_CAP_PROY, G.GRUPO, G.ORDEN FROM FRM_CAP_PROY C"
+            + " JOIN FRM_PRE_GRUPO G ON G.COD_PRE_GRUPO = C.COD_PRE_GRUPO"
+            + " WHERE C.COD_CAP_PROY IN ("
+            + placeholders
+            + ")",
+        rows -> {
+          orders.put(rows.getLong(1), new GroupOrder(rows.getInt(2), rows.getInt(3)));
+        },
+        capProyIds.toArray());
+    return orders;
+  }
+
+  /** ¿Existe el grupo de opciones de respuesta (FRM_RTA_GRUPO.GRUPO)? */
+  public boolean optionGroupExists(int optionGroup) {
+    Long found =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM FRM_RTA_GRUPO WHERE GRUPO = ?", Long.class, optionGroup);
+    return found != null && found > 0;
+  }
+
+  /** Longitud del valor más largo del grupo de opciones (para dimensionar su columna). */
+  public int longestOptionValue(int optionGroup) {
+    Integer longest =
+        jdbc.queryForObject(
+            "SELECT NVL(MAX(LENGTH(VALOR)), 1) FROM FRM_RTA_GRUPO WHERE GRUPO = ?",
+            Integer.class,
+            optionGroup);
+    return longest == null ? 1 : longest;
   }
 
   private Optional<Long> first(String sql, Object... arguments) {

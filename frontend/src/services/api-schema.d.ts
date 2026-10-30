@@ -21,6 +21,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Desactivar una pregunta de un año en borrador */
+        delete: operations["deactivateQuestion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/column-script": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Script ALTER TABLE de la columna pendiente de una pregunta
+         * @description Texto plano que ejecuta la persona técnica; la aplicación nunca crea columnas. Sin columnType ni columnLength el tipo se deduce de la pregunta.
+         */
+        get: operations["columnScript"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text": {
         parameters: {
             query?: never;
@@ -66,6 +103,23 @@ export interface paths {
         /** Editar la ayuda de una pregunta de un año en borrador */
         put: operations["editHelp"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Agregar una pregunta a una página de un año en borrador */
+        post: operations["addQuestion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -426,6 +480,22 @@ export interface components {
             password: string;
             username: string;
         };
+        NewQuestionRequest: {
+            /** Format: int64 */
+            afterCapProyId?: number;
+            columnCode: string;
+            /** Format: int32 */
+            columnLength?: number;
+            columnType?: string;
+            /** @enum {string} */
+            inputType: "SINGLE_CHOICE" | "CHECKBOX" | "TEXT" | "UNKNOWN";
+            numeral: string;
+            /** Format: int32 */
+            optionGroup?: number;
+            text: string;
+            /** Format: int32 */
+            version: number;
+        };
         PageAnswersRequest: {
             answers: {
                 [key: string]: string;
@@ -573,6 +643,95 @@ export interface operations {
             };
             /** @description La encuesta o el año no existen */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deactivateQuestion: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                capProyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página actualizada y nueva versión del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEditResult"];
+                };
+            };
+            /** @description La encuesta, el año o la pregunta no existen en ese año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado, la versión cambió o reglas vigentes usan la pregunta (errors.rules lista sus ids) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    columnScript: {
+        parameters: {
+            query?: {
+                columnType?: string;
+                columnLength?: number;
+            };
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                capProyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sentencia ALTER TABLE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": unknown;
+                };
+            };
+            /** @description La pregunta no existe en ese año, no lleva columna o la columna ya existe */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Tipo o longitud de columna incoherentes */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -764,6 +923,70 @@ export interface operations {
                 };
             };
             /** @description El texto queda vacío o es demasiado largo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    addQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                pageCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Página actualizada y nueva versión del año */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEditResult"];
+                };
+            };
+            /** @description Cuerpo inválido: faltan campos obligatorios */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta, el año, la página o la pregunta de referencia no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado, la versión cambió o una fila la usa otro año */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Columna o numeral repetidos o inválidos, grupo de opciones inexistente o tipo de columna incoherente */
             422: {
                 headers: {
                     [name: string]: unknown;

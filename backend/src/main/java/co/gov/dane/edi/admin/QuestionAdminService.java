@@ -1,10 +1,17 @@
 package co.gov.dane.edi.admin;
 
 import co.gov.dane.edi.admin.FrmLookupRepository.CapProyRef;
+import co.gov.dane.edi.admin.FrmLookupRepository.GroupOrder;
+import co.gov.dane.edi.admin.FrmWriteRepository.NewQuestion;
 import co.gov.dane.edi.admin.dto.AdminEditResult;
 import co.gov.dane.edi.admin.dto.AdminEntry;
 import co.gov.dane.edi.admin.dto.AdminPage;
+import co.gov.dane.edi.admin.dto.NewQuestionRequest;
+import co.gov.dane.edi.model.EntryKind;
+import co.gov.dane.edi.model.InputType;
+import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
+import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.rules.EffectiveRulesService;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
@@ -14,16 +21,19 @@ import co.gov.dane.edi.service.QuestionnaireService.PageRow;
 import co.gov.dane.edi.service.SaveLocks;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidEditException;
+import co.gov.dane.edi.service.error.ReferencedByRulesException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.util.ColumnCodeResolver;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -46,6 +56,7 @@ public class QuestionAdminService {
   private static final String LOCK_KEY = "admin:frm";
   private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cc}&&[^\\n\\t]]");
   private static final int MAX_STORED_BYTES = 4000;
+  private static final Pattern NUMERAL = Pattern.compile("[0-9A-Za-z_.* ]{1,20}");
 
   private final YearCatalogService years;
   private final RulesFileRepository rulesFiles;
@@ -55,6 +66,8 @@ public class QuestionAdminService {
   private final QuestionnaireService questionnaire;
   private final EffectiveRulesService effectiveRules;
   private final AnswerTableResolver tables;
+  private final AnswerColumnRepository answerColumns;
+  private final ColumnScriptService scripts;
   private final SaveLocks locks;
   private final TransactionTemplate transaction;
 
@@ -67,6 +80,8 @@ public class QuestionAdminService {
       QuestionnaireService questionnaire,
       EffectiveRulesService effectiveRules,
       AnswerTableResolver tables,
+      AnswerColumnRepository answerColumns,
+      ColumnScriptService scripts,
       SaveLocks locks,
       PlatformTransactionManager transactionManager) {
     this.years = years;
@@ -77,6 +92,8 @@ public class QuestionAdminService {
     this.questionnaire = questionnaire;
     this.effectiveRules = effectiveRules;
     this.tables = tables;
+    this.answerColumns = answerColumns;
+    this.scripts = scripts;
     this.locks = locks;
     this.transaction = new TransactionTemplate(transactionManager);
   }
@@ -194,6 +211,238 @@ public class QuestionAdminService {
           return List.copyOf(codes);
         },
         true);
+  }
+
+  /**
+   * Agrega una pregunta propia al año en borrador. Su columna queda pendiente hasta que la persona
+   * técnica ejecute el script de {@link #columnScript}; si la columna ya existe, queda activa.
+   */
+  public AdminEditResult addQuestion(
+      String survey, int year, String pageCode, NewQuestionRequest request, String user) {
+    SurveyPage page = requirePage(pageCode);
+    years.requireDraft(survey, year);
+    String plain = normalize(request.text());
+    String numeral = validateNewQuestion(request);
+    return apply(
+        survey,
+        year,
+        request.version(),
+        user,
+        "agregar-pregunta",
+        page,
+        () -> insertQuestion(survey, year, page, request, numeral, plain),
+        false);
+  }
+
+  /** Quita la pregunta del año (solo su periodo); rechaza si alguna regla vigente la usa. */
+  public AdminEditResult deactivateQuestion(
+      String survey, int year, long capProyId, int version, String user) {
+    years.requireDraft(survey, year);
+    CapProyRef ref = requireCapProy(capProyId, survey, year);
+    return apply(
+        survey,
+        year,
+        version,
+        user,
+        "desactivar-pregunta",
+        requirePage(ref.pageCode()),
+        () -> {
+          Optional<String> column = ColumnCodeResolver.fromNumeral(ref.numeral());
+          if (column.isPresent()) {
+            List<String> rules =
+                QuestionnaireAdminService.rulesReferencing(
+                    effectiveRules.effectiveRules(survey, year), column.get());
+            if (!rules.isEmpty()) {
+              throw new ReferencedByRulesException(rules);
+            }
+          }
+          writes.deletePeriod(capProyId, survey, year);
+          return List.of(codeOf(ref));
+        },
+        false);
+  }
+
+  /**
+   * Script ALTER TABLE de la columna pendiente. Sin tipo explícito se deduce de la pregunta: las de
+   * opciones usan el valor más largo de su grupo y las de texto 4000 caracteres.
+   *
+   * @throws ResourceNotFoundException si la pregunta no existe, no lleva columna o ya la tiene
+   */
+  public String columnScript(
+      String survey, int year, long capProyId, String columnType, Integer columnLength) {
+    years.requireYear(survey, year);
+    CapProyRef ref = requireCapProy(capProyId, survey, year);
+    SurveyPage page = requirePage(ref.pageCode());
+    PageRow row =
+        questionnaire.pageRows(page, survey, year).stream()
+            .filter(built -> built.row().entryId() == capProyId)
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("La pregunta no existe en ese año."));
+    QuestionnaireEntry entry = row.entry();
+    String column = entry.answer() == null ? null : entry.answer().columnCode();
+    if (entry.kind() != EntryKind.ITEM || column == null) {
+      throw new ResourceNotFoundException("La pregunta no tiene columna de respuesta.");
+    }
+    String table = tables.tableFor(page.chapter(), survey, year);
+    answerColumns.evict(table);
+    if (answerColumns.findColumns(table).contains(column)) {
+      throw new ResourceNotFoundException("La columna ya existe en la tabla.");
+    }
+    String type = columnType;
+    Integer length = columnLength;
+    if (type == null && length == null) {
+      type = ColumnScriptService.VARCHAR2;
+      length = defaultLength(entry.answer().inputType(), row.row().optionGroup());
+    }
+    requireColumnDefinition(type, length);
+    return scripts.alterTable(table, column, type, length);
+  }
+
+  private int defaultLength(InputType inputType, Integer optionGroup) {
+    if (inputType == InputType.TEXT) {
+      return ColumnScriptService.MAX_VARCHAR2_LENGTH;
+    }
+    return optionGroup == null ? 1 : lookup.longestOptionValue(optionGroup);
+  }
+
+  private static void requireColumnDefinition(String type, Integer length) {
+    String problem = ColumnScriptService.describeProblem(type, length);
+    if (problem != null) {
+      boolean knownType =
+          ColumnScriptService.VARCHAR2.equalsIgnoreCase(type)
+              || ColumnScriptService.NUMBER.equalsIgnoreCase(type);
+      throw new InvalidEditException(knownType ? "columnLength" : "columnType", problem);
+    }
+  }
+
+  /** Valida lo que no depende de la base y devuelve el numeral recortado. */
+  private static String validateNewQuestion(NewQuestionRequest request) {
+    String code = request.columnCode().strip();
+    if (!ColumnScriptService.COLUMN.matcher(code).matches()) {
+      throw new InvalidEditException(
+          "columnCode", "El código de columna debe empezar con una letra mayúscula (2 a 30).");
+    }
+    String numeral = request.numeral().strip();
+    if (!NUMERAL.matcher(numeral).matches()
+        || !ColumnCodeResolver.fromNumeral(numeral).filter(code::equals).isPresent()) {
+      throw new InvalidEditException(
+          "numeral", "El numeral debe corresponder a la columna, por ejemplo C30A.");
+    }
+    InputType inputType = request.inputType();
+    if (inputType == InputType.UNKNOWN) {
+      throw new InvalidEditException("inputType", "Elija un tipo de respuesta.");
+    }
+    if (inputType == InputType.SINGLE_CHOICE && request.optionGroup() == null) {
+      throw new InvalidEditException("optionGroup", "Elija el grupo de opciones.");
+    }
+    if (inputType == InputType.TEXT && request.optionGroup() != null) {
+      throw new InvalidEditException(
+          "optionGroup", "Las preguntas de texto no llevan grupo de opciones.");
+    }
+    if (request.columnType() != null || request.columnLength() != null) {
+      requireColumnDefinition(request.columnType(), request.columnLength());
+    }
+    return numeral;
+  }
+
+  private List<String> insertQuestion(
+      String survey,
+      int year,
+      SurveyPage page,
+      NewQuestionRequest request,
+      String numeral,
+      String plain) {
+    String code = request.columnCode().strip();
+    for (SurveyPage sibling : SurveyPage.ordered()) {
+      if (!sibling.chapter().equals(page.chapter())) {
+        continue;
+      }
+      for (PageRow row : questionnaire.pageRows(sibling, survey, year)) {
+        QuestionnaireEntry entry = row.entry();
+        if (entry.answer() != null && code.equals(entry.answer().columnCode())) {
+          throw new InvalidEditException(
+              "columnCode", "Ya existe una pregunta con esa columna en el capítulo.");
+        }
+        if (sibling.equals(page) && numeral.equalsIgnoreCase(entry.numeral())) {
+          throw new InvalidEditException("numeral", "Ese numeral ya existe en la página.");
+        }
+      }
+    }
+    if (request.optionGroup() != null && !lookup.optionGroupExists(request.optionGroup())) {
+      throw new InvalidEditException("optionGroup", "El grupo de opciones no existe.");
+    }
+    List<Long> ids =
+        questionnaire.pageRows(page, survey, year).stream()
+            .map(row -> row.row().entryId())
+            .distinct()
+            .toList();
+    Long anchor = request.afterCapProyId();
+    if (anchor != null) {
+      requireCapProy(anchor, survey, year);
+      if (!ids.contains(anchor)) {
+        throw new InvalidEditException(
+            "afterCapProyId", "La pregunta de referencia está en otra página.");
+      }
+    }
+    Map<Long, GroupOrder> orders = lookup.groupOrders(ids);
+    int group = 1;
+    int newOrder = 1;
+    List<Long> following = new ArrayList<>();
+    if (!ids.isEmpty()) {
+      GroupOrder reference = orders.get(anchor == null ? ids.get(0) : anchor);
+      group = reference.group();
+      newOrder = anchor == null ? reference.order() : reference.order() + 1;
+      int start = anchor == null ? 0 : ids.indexOf(anchor) + 1;
+      for (int position = start; position < ids.size(); position++) {
+        if (orders.get(ids.get(position)).group() == group) {
+          following.add(ids.get(position));
+        }
+      }
+    }
+    // Solo se corren las siguientes lo necesario para dejar libre el nuevo ORDEN del mismo GRUPO.
+    Map<Long, Integer> reorder = new LinkedHashMap<>();
+    int previous = newOrder;
+    for (Long id : following) {
+      int current = orders.get(id).order();
+      int target = current <= previous ? previous + 1 : current;
+      if (target != current) {
+        reorder.put(id, target);
+      }
+      previous = target;
+    }
+    long capProyId =
+        writes.insertQuestion(
+            new NewQuestion(
+                survey,
+                year,
+                page.code(),
+                numeral,
+                plain,
+                objectCodeOf(request.inputType()),
+                request.optionGroup(),
+                group,
+                newOrder),
+            reorder);
+    List<Long> expected = new ArrayList<>(ids);
+    expected.add(anchor == null ? 0 : ids.indexOf(anchor) + 1, capProyId);
+    List<Long> reread =
+        questionnaire.pageRows(page, survey, year).stream()
+            .map(row -> row.row().entryId())
+            .distinct()
+            .toList();
+    if (!reread.equals(expected)) {
+      throw new IllegalStateException("La pregunta nueva no quedó en la posición solicitada.");
+    }
+    return List.of(code);
+  }
+
+  private static int objectCodeOf(InputType inputType) {
+    return switch (inputType) {
+      case SINGLE_CHOICE -> 1;
+      case CHECKBOX -> 2;
+      case TEXT -> 5;
+      case UNKNOWN -> throw new IllegalArgumentException("Tipo de respuesta desconocido");
+    };
   }
 
   /**

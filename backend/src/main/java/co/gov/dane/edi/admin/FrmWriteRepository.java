@@ -3,6 +3,7 @@ package co.gov.dane.edi.admin;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
@@ -89,6 +90,85 @@ public class FrmWriteRepository {
     requireOne(
         jdbc.update("UPDATE FRM_PRE_GRUPO SET ORDEN = ? WHERE COD_PRE_GRUPO = ?", order, target),
         "grupo " + target);
+  }
+
+  /** Datos de una pregunta nueva; {@code optionGroup} es nulo en las de texto libre. */
+  public record NewQuestion(
+      String project,
+      int year,
+      String pageCode,
+      String numeral,
+      String plainText,
+      int objectCode,
+      Integer optionGroup,
+      int group,
+      int order) {}
+
+  /**
+   * Inserta una pregunta propia del año: FRM_PREGUNTA, FRM_PRE_GRUPO, el nuevo orden de las
+   * siguientes del mismo bloque ({@code reorder}: FRM_CAP_PROY a su nuevo ORDEN, con copia al
+   * escribir), FRM_CAP_PROY, FRM_CAP_PERIODO y FRM_OBJ_PRE, en el orden de bloqueo documentado.
+   * Devuelve el COD_CAP_PROY nuevo.
+   */
+  public long insertQuestion(NewQuestion question, Map<Long, Integer> reorder) {
+    long questionId = ids.next(FrmTable.PREGUNTA);
+    jdbc.update(
+        "INSERT INTO FRM_PREGUNTA (COD_PRE, PREGUNTA, TIPO) VALUES (?, ?, 'L')",
+        questionId,
+        question.plainText());
+    long groupId = ids.next(FrmTable.PRE_GRUPO);
+    jdbc.update(
+        "INSERT INTO FRM_PRE_GRUPO (COD_PRE_GRUPO, GRUPO, ORDEN, COD_PRE) VALUES (?, ?, ?, ?)",
+        groupId,
+        question.group(),
+        question.order(),
+        questionId);
+    reorder.forEach(
+        (capProyId, order) ->
+            updateOrder(capProyId, question.project(), String.valueOf(question.year()), order));
+    long capProyId = ids.next(FrmTable.CAP_PROY);
+    jdbc.update(
+        "INSERT INTO FRM_CAP_PROY (COD_CAP_PROY, CAPITULO, NUMERAL, COD_PRE_GRUPO, PROY, ANIO)"
+            + " VALUES (?, ?, ?, ?, ?, ?)",
+        capProyId,
+        question.pageCode(),
+        question.numeral(),
+        groupId,
+        question.project(),
+        String.valueOf(question.year()));
+    jdbc.update(
+        "INSERT INTO FRM_CAP_PERIODO (ID_PERIODO, ANIO, PROY, COD_CAP_PROY, NUMERAL)"
+            + " VALUES (?, ?, ?, ?, ?)",
+        ids.next(FrmTable.CAP_PERIODO),
+        question.year(),
+        question.project(),
+        capProyId,
+        question.numeral());
+    jdbc.update(
+        "INSERT INTO FRM_OBJ_PRE (COD_OBJ_PRE, COD_GRUPO, GRUPO, COD_OBJ, COD_CAP_PROY)"
+            + " VALUES (?, ?, ?, ?, ?)",
+        ids.next(FrmTable.OBJ_PRE),
+        question.optionGroup(),
+        question.optionGroup(),
+        question.objectCode(),
+        capProyId);
+    return capProyId;
+  }
+
+  /**
+   * Desactiva la pregunta solo para esta pareja (encuesta, año): borra su fila de FRM_CAP_PERIODO.
+   * Las filas de FRM_CAP_PROY, FRM_PRE_GRUPO y FRM_PREGUNTA quedan (otro año puede usarlas).
+   *
+   * @throws NoSuchElementException si la pareja no tiene periodo para ese cap_proy
+   */
+  public void deletePeriod(long capProyId, String project, int year) {
+    requireOne(
+        jdbc.update(
+            "DELETE FROM FRM_CAP_PERIODO WHERE COD_CAP_PROY = ? AND PROY = ? AND ANIO = ?",
+            capProyId,
+            project,
+            year),
+        "periodo de la pregunta " + capProyId);
   }
 
   /** Texto de una pregunta ya privada: obtenga {@code codPre} de {@link #copyQuestionForYear}. */

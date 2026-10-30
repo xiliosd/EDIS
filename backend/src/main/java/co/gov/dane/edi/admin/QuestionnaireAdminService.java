@@ -9,6 +9,7 @@ import co.gov.dane.edi.model.AnswerSpec;
 import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
+import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.repository.QuestionnaireRepository;
 import co.gov.dane.edi.rules.Condition;
 import co.gov.dane.edi.rules.EffectiveRulesService;
@@ -34,18 +35,21 @@ public class QuestionnaireAdminService {
   private final EffectiveRulesService effectiveRules;
   private final AnswerTableResolver tables;
   private final QuestionnaireRepository repository;
+  private final AnswerColumnRepository answerColumns;
 
   public QuestionnaireAdminService(
       YearCatalogService years,
       QuestionnaireService questionnaire,
       EffectiveRulesService effectiveRules,
       AnswerTableResolver tables,
-      QuestionnaireRepository repository) {
+      QuestionnaireRepository repository,
+      AnswerColumnRepository answerColumns) {
     this.years = years;
     this.questionnaire = questionnaire;
     this.effectiveRules = effectiveRules;
     this.tables = tables;
     this.repository = repository;
+    this.answerColumns = answerColumns;
   }
 
   public AdminQuestionnaireView view(String survey, int year) {
@@ -53,7 +57,9 @@ public class QuestionnaireAdminService {
     RuleSet rules = effectiveRules.effectiveRules(survey, year);
     Map<String, String> chapterTables = new LinkedHashMap<>();
     for (Chapter chapter : Chapter.values()) {
-      chapterTables.put(chapter.code(), tables.tableFor(chapter, survey, year));
+      String table = tables.tableFor(chapter, survey, year);
+      refreshColumnsOfDraft(file, table);
+      chapterTables.put(chapter.code(), table);
     }
     List<AdminPage> pages = new ArrayList<>();
     for (SurveyPage page : SurveyPage.ordered()) {
@@ -65,9 +71,26 @@ public class QuestionnaireAdminService {
 
   /** Una sola página, con los datos de la base y las reglas vigentes (tras una edición). */
   public AdminPage page(String survey, int year, SurveyPage page) {
-    years.requireYear(survey, year);
+    RuleSet file = years.requireYear(survey, year);
     RuleSet rules = effectiveRules.effectiveRules(survey, year);
-    return toAdminPage(page, survey, year, rules, tables.tableFor(page.chapter(), survey, year));
+    String table = tables.tableFor(page.chapter(), survey, year);
+    refreshColumnsOfDraft(file, table);
+    return toAdminPage(page, survey, year, rules, table);
+  }
+
+  /**
+   * En un año en borrador la persona técnica crea columnas con el script generado: se relee el
+   * diccionario de Oracle para que la pregunta pase de pendiente a activa sin reiniciar.
+   */
+  private void refreshColumnsOfDraft(RuleSet file, String table) {
+    if (file.effectiveState() == YearState.BORRADOR) {
+      answerColumns.evict(table);
+    }
+  }
+
+  /** Ids de las reglas que mencionan la columna (como condición o como destino). */
+  static List<String> rulesReferencing(RuleSet rules, String column) {
+    return rules.skips().stream().filter(rule -> mentions(rule, column)).map(SkipRule::id).toList();
   }
 
   private AdminPage toAdminPage(
@@ -126,10 +149,7 @@ public class QuestionnaireAdminService {
     if (entry.columnCode() == null) {
       return List.of();
     }
-    return rules.skips().stream()
-        .filter(rule -> mentions(rule, entry.columnCode()))
-        .map(SkipRule::id)
-        .toList();
+    return rulesReferencing(rules, entry.columnCode());
   }
 
   private static boolean mentions(SkipRule rule, String column) {

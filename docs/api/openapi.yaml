@@ -47,6 +47,111 @@ paths:
       summary: Consultar el árbol del cuestionario de una encuesta y año
       tags:
       - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}:
+    delete:
+      operationId: deactivateQuestion
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: capProyId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: version
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEditResult"
+          description: Página actualizada y nueva versión del año
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "La encuesta, el año o la pregunta no existen en ese año"
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El año está publicado, la versión cambió o reglas vigentes\
+            \ usan la pregunta (errors.rules lista sus ids)"
+      summary: Desactivar una pregunta de un año en borrador
+      tags:
+      - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/column-script:
+    get:
+      description: Texto plano que ejecuta la persona técnica; la aplicación nunca
+        crea columnas. Sin columnType ni columnLength el tipo se deduce de la pregunta.
+      operationId: columnScript
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: capProyId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: columnType
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: columnLength
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            text/plain: {}
+          description: Sentencia ALTER TABLE
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "La pregunta no existe en ese año, no lleva columna o la columna\
+            \ ya existe"
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Tipo o longitud de columna incoherentes
+      summary: Script ALTER TABLE de la columna pendiente de una pregunta
+      tags:
+      - Administración del cuestionario
   /api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text:
     put:
       operationId: editQuestionText
@@ -237,6 +342,69 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: El texto queda vacío o es demasiado largo
       summary: Editar la ayuda de una pregunta de un año en borrador
+      tags:
+      - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/entries:
+    post:
+      operationId: addQuestion
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: pageCode
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewQuestionRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEditResult"
+          description: Página actualizada y nueva versión del año
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Cuerpo inválido: faltan campos obligatorios"
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "La encuesta, el año, la página o la pregunta de referencia\
+            \ no existen"
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El año está publicado, la versión cambió o una fila la usa\
+            \ otro año"
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Columna o numeral repetidos o inválidos, grupo de opciones\
+            \ inexistente o tipo de columna incoherente"
+      summary: Agregar una pregunta a una página de un año en borrador
       tags:
       - Administración del cuestionario
   /api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/order:
@@ -869,6 +1037,46 @@ components:
       - accountType
       - password
       - username
+    NewQuestionRequest:
+      type: object
+      properties:
+        afterCapProyId:
+          type: integer
+          format: int64
+        columnCode:
+          type: string
+          minLength: 1
+        columnLength:
+          type: integer
+          format: int32
+        columnType:
+          type: string
+        inputType:
+          type: string
+          enum:
+          - SINGLE_CHOICE
+          - CHECKBOX
+          - TEXT
+          - UNKNOWN
+        numeral:
+          type: string
+          minLength: 1
+        optionGroup:
+          type: integer
+          format: int32
+        text:
+          type: string
+          maxLength: 4000
+          minLength: 0
+        version:
+          type: integer
+          format: int32
+      required:
+      - columnCode
+      - inputType
+      - numeral
+      - text
+      - version
     PageAnswersRequest:
       type: object
       properties:
