@@ -294,11 +294,21 @@ Cambios respecto a lo escrito arriba, decididos durante la Fase 3b (plan
    (el JSON sí la admite).
 4. **Dominios de la enumeración (§5, §12).** Para las preguntas de opciones, el dominio es sus
    valores más «sin responder»; para una casilla, `0` y `1`; para texto, vacío, cada literal usado
-   en una condición (con ±1 si es numérico) y un valor centinela. Si el producto supera 4096
-   combinaciones por pregunta o regla, el elemento sale con la advertencia `NO_ANALIZABLE`.
-5. **Presupuesto de 200 000 evaluaciones por análisis.** Además del tope por elemento, cada
-   `analyze` tiene un presupuesto total, en orden determinista de elementos; al agotarse, los
-   restantes emiten `NO_ANALIZABLE`. Acota el tiempo de un guardado a costa de algunos avisos.
+   en una condición (con ±1 si es numérico) y un valor centinela. De cada dominio queda un solo
+   valor por grupo de respuestas que todas las condiciones sobre esa columna tratan igual (con solo
+   `eq 2`, basta «2» y otra respuesta); el resultado no cambia porque el motor solo mira la columna
+   a través de esas condiciones. Si el producto supera 4096 combinaciones por pregunta o regla, el
+   elemento sale con la advertencia `NO_ANALIZABLE`.
+5. **Presupuesto de trabajo por análisis (`MAX_TOTAL_WORK` = 15 000 000).** Además del tope por
+   elemento, cada `analyze` tiene un presupuesto en reglas evaluadas (evaluaciones × número de
+   reglas, más una unidad por columna al planear cada análisis), elegido para que un análisis quede
+   por debajo de 1,5 s en el equipo de desarrollo (cada guardado analiza dos veces dentro del
+   candado). Disparadores, destinos y la clausura por columna se calculan una sola vez; los
+   análisis se ejecutan de menor a mayor producto, con el orden de preguntas, reglas y pares como
+   desempate. Al agotarse, lo que falta sale en **un solo** `NO_ANALIZABLE` con elemento `archivo`,
+   sin preguntas: «El análisis de lógica se detuvo por tamaño; N elementos quedaron sin
+   analizar.». El `NO_ANALIZABLE` por elemento queda solo para un producto mayor que 4096. Medido:
+   500 reglas disjuntas con el mismo destino pasaron de unos 100 s a menos de 1 s por análisis.
 6. **Identidad estable de los hallazgos.** `CICLO` se emite por componente fuertemente conexo (una
    vez por regla con una arista dentro del componente, con `questions` = columnas del componente
    ordenadas) y `PREGUNTA_INEXISTENTE` y `VALOR_NO_ES_OPCION` uno por columna. Así corregir una parte

@@ -424,7 +424,9 @@ escapados en la base, y se muestran escapados.
    muestran. Un cambio que **agrega errores** se rechaza (422): el diálogo sigue abierto con lo
    escrito y la alerta lo explica. Los errores que el archivo ya tenía se muestran pero no bloquean
    cambios que no los agravan; las advertencias nunca bloquean. Si un análisis supera 4096
-   combinaciones o 200 000 evaluaciones, el elemento sale como "No se pudo analizar".
+   combinaciones, el elemento sale como "No se pudo analizar"; si el archivo es tan grande que se
+   agota el tiempo de análisis, un solo aviso del archivo dice cuántos elementos quedaron sin
+   analizar.
 4. **Validaciones.** Cada pregunta de la página admite obligatoriedad, tipo y rango.
 5. **Archivo JSON.** Se puede ver, descargar e importar (hasta 1 MB); la importación reemplaza
    saltos, validaciones y casos y pasa por el mismo análisis.

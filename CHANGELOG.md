@@ -40,8 +40,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   constructor accesible (una condición o un nivel de Y/O), edición de validaciones, vista, descarga e
   importación del JSON de reglas (hasta 1 MB) y análisis de lógica en cada guardado (ciclos,
   preguntas inexistentes, valores que no son opciones, rangos, reglas que nunca se cumplen o
-  solapadas). Solo bloquean (422) los errores que el archivo vigente no tenía; las advertencias
-  nunca. Simulador con los mismos campos de la encuesta que muestra qué regla oculta cada pregunta, y
+  solapadas), acotado en tiempo: lo que no alcanza a analizarse sale en un solo aviso del archivo.
+  Solo bloquean (422) los errores que el archivo vigente no tenía; las advertencias nunca; un JSON
+  con `null` donde va una condición, un valor o una pregunta responde 422 `ESTRUCTURA`. Desactivar
+  una pregunta nombra las reglas y los casos que lo impiden, con enlace al simulador. Simulador con los mismos campos de la encuesta que muestra qué regla oculta cada pregunta, y
   casos de prueba guardados en el archivo de reglas que pasan, fallan o quedan por revisar. Los 12
   casos reales de 2026 viajan en la semilla; el contrato `/api/v1/admin/questionnaire/**` suma
   `rules` y `simulator`.
