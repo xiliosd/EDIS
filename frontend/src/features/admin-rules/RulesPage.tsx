@@ -17,6 +17,7 @@ import {
   fetchRules,
   importRules,
   rulesQueryKey,
+  simulatorQueryKey,
   saveSkip,
   saveValidation,
   type AnalysisReport,
@@ -138,7 +139,10 @@ export function RulesPage() {
     setGeneralError(null);
     setStatusMessage('');
     try {
-      const result = await action(view.version ?? 0);
+      // La versión se lee de la caché al enviar: la del render puede ser de antes del último guardado.
+      const sentVersion =
+        queryClient.getQueryData<RulesEditorView>(queryKey)?.version ?? view.version ?? 0;
+      const result = await action(sentVersion);
       queryClient.setQueryData<RulesEditorView>(queryKey, (current) =>
         current
           ? {
@@ -150,6 +154,8 @@ export function RulesPage() {
           : current,
       );
       void queryClient.invalidateQueries({ queryKey });
+      // El simulador trae las mismas reglas con su versión: sin releerlo, no dejaría guardar casos.
+      void queryClient.invalidateQueries({ queryKey: simulatorQueryKey(encuesta, year) });
       setStatusMessage(announcement);
       return { status: 'ok' };
     } catch (caught) {

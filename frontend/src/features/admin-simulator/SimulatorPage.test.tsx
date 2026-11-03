@@ -278,4 +278,66 @@ describe('SimulatorPage', () => {
     },
     LONG_FLOW_TIMEOUT,
   );
+
+  it('si las reglas cambiaron no guarda: refresca el simulador y avisa', async () => {
+    let simulatorReads = 0;
+    let puts = 0;
+    server.use(
+      http.get(SIMULATOR_API, () => {
+        simulatorReads += 1;
+        return HttpResponse.json(simulatorView());
+      }),
+      http.get(RULES_API, () => HttpResponse.json(rulesView({ version: 5 }))),
+      http.put(`${RULES_API}/cases/:id`, () => {
+        puts += 1;
+        return HttpResponse.json({ version: 6 });
+      }),
+    );
+    renderApp(SIMULATOR_URL);
+    await screen.findByRole('radiogroup', { name: /C01A/ });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Guardar como caso de prueba' }));
+    await user.type(screen.getByLabelText('Identificador del caso'), 'nuevo');
+    await user.type(screen.getByLabelText('Nombre del caso'), 'Nuevo');
+    await user.click(screen.getByRole('button', { name: 'Guardar caso' }));
+
+    expect(
+      await screen.findByText('Las reglas cambiaron; revise el resultado antes de guardar.'),
+    ).toBeInTheDocument();
+    expect(puts).toBe(0);
+    await waitFor(() => expect(simulatorReads).toBeGreaterThanOrEqual(2));
+  });
+
+  it(
+    'dos casos guardados seguidos envían la versión nueva',
+    async () => {
+      let current = 4;
+      const sent: number[] = [];
+      server.use(
+        http.put(`${RULES_API}/cases/:id`, async ({ request }) => {
+          const body = (await request.json()) as { version: number };
+          sent.push(body.version);
+          current += 1;
+          return HttpResponse.json({ version: current, report: { errors: [], warnings: [] } });
+        }),
+      );
+      await openSimulator();
+      const user = userEvent.setup();
+
+      for (const id of ['primero', 'segundo']) {
+        await user.click(screen.getByRole('button', { name: 'Guardar como caso de prueba' }));
+        await user.type(screen.getByLabelText('Identificador del caso'), id);
+        await user.type(screen.getByLabelText('Nombre del caso'), id);
+        await user.click(screen.getByRole('button', { name: 'Guardar caso' }));
+        expect(await screen.findByText(`Caso ${id} guardado.`)).toBeInTheDocument();
+      }
+
+      expect(sent).toEqual([4, 5]);
+      expect(
+        screen.queryByText('Las reglas cambiaron; revise el resultado antes de guardar.'),
+      ).toBeNull();
+    },
+    LONG_FLOW_TIMEOUT,
+  );
 });

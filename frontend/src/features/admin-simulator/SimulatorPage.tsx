@@ -168,6 +168,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
+  const [rulesChanged, setRulesChanged] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
   const pageCode =
@@ -186,6 +187,12 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
   const cases = rulesView.cases ?? [];
   const editable = rulesView.state === 'borrador';
   const rulesKey = rulesQueryKey(survey, year);
+  const simulatorKey = simulatorQueryKey(survey, year);
+
+  /** La versión vigente según la caché al enviar, no la del render (puede ser anterior). */
+  function currentRulesVersion(): number {
+    return queryClient.getQueryData<RulesEditorView>(rulesKey)?.version ?? rulesView.version ?? 0;
+  }
 
   const handleAnswersChange = useCallback((values: PageValues) => {
     setAnswers((current) => {
@@ -224,15 +231,30 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
           }
         : current,
     );
+    // Un caso no cambia las reglas: el simulador sigue valiendo con la versión nueva del archivo.
+    queryClient.setQueryData<SimulatorView>(simulatorKey, (current) =>
+      current ? { ...current, version: result.version ?? current.version } : current,
+    );
   }
 
   async function saveCurrentCase(draft: { id: string; name: string }) {
+    const rulesVersion = currentRulesVersion();
+    const simulatorVersion = queryClient.getQueryData<SimulatorView>(simulatorKey)?.version;
+    setRulesChanged(false);
+    // El resultado esperado sale del simulador: si sus reglas no son las vigentes, no se guarda.
+    if ((simulatorVersion ?? view.version) !== rulesVersion) {
+      setSaveOpen(false);
+      setRulesChanged(true);
+      void queryClient.invalidateQueries({ queryKey: simulatorKey });
+      void queryClient.invalidateQueries({ queryKey: rulesKey });
+      return;
+    }
     const testCase = caseFromSimulation(draft.id, draft.name, pageCode, answers, simulation, view);
     setSaveBusy(true);
     setSaveError(null);
     setConflict(null);
     try {
-      const result = await saveCase(survey, year, testCase, rulesView.version ?? 0);
+      const result = await saveCase(survey, year, testCase, rulesVersion);
       applyResult(result, (current) =>
         current.some((item) => item.id === testCase.id)
           ? current.map((item) => (item.id === testCase.id ? testCase : item))
@@ -257,7 +279,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
     setDeleteError(null);
     setConflict(null);
     try {
-      const result = await deleteCase(survey, year, caseId, rulesView.version ?? 0);
+      const result = await deleteCase(survey, year, caseId, currentRulesVersion());
       applyResult(result, (current) => current.filter((item) => item.id !== caseId));
       setStatusMessage(`Caso ${caseId} eliminado.`);
       // La fila desaparece con el botón enfocado: el foco pasa al título de la lista.
@@ -294,6 +316,11 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
       </p>
       {conflict && (
         <ConflictNotice message={conflict} onReload={onReload} focusOnShow={!saveOpen} />
+      )}
+      {rulesChanged && (
+        <p role="alert" className="mt-4 rounded-xl border border-danger/40 bg-surface p-4">
+          Las reglas cambiaron; revise el resultado antes de guardar.
+        </p>
       )}
       {!editable && (
         <p className="mt-4 rounded-xl border border-ink-muted/30 bg-surface p-4">

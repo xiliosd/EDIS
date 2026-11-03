@@ -6,7 +6,7 @@ import { server } from '../../test/msw-server';
 import { LONG_FLOW_TIMEOUT } from '../../test/questionnaire-fixtures';
 import { renderApp } from '../../test/render-app';
 import { RULES_API, RULES_URL, rulesView } from '../../test/rules-fixtures';
-import type { RulesEditorView } from './rules-api';
+import { simulatorQueryKey, type RulesEditorView } from './rules-api';
 
 const EXPORT_TEXT = '{\n  "encuesta": "EDIN",\n  "anio": 2027\n}';
 const PROBLEM = { 'Content-Type': 'application/problem+json' };
@@ -432,5 +432,63 @@ describe('RulesPage', () => {
     expect(row).toHaveFocus();
     expect(within(row).getByRole('button', { name: 'Editar regla huerfana' })).toBeEnabled();
     expect(within(row).getByRole('button', { name: 'Eliminar regla huerfana' })).toBeEnabled();
+  });
+
+  it('dos guardados de validación seguidos no dan 409', async () => {
+    // Servidor con estado: cada guardado sube la versión y rechaza la versión vieja.
+    let current = 4;
+    const sent: number[] = [];
+    const statuses: number[] = [];
+    server.use(
+      http.get(RULES_API, () => HttpResponse.json(rulesView({ version: current }))),
+      http.put(`${RULES_API}/validations/:column`, async ({ request }) => {
+        const body = (await request.json()) as { version: number };
+        sent.push(body.version);
+        if (body.version !== current) {
+          statuses.push(409);
+          return HttpResponse.json(
+            { title: 'Conflicto', detail: 'Otro usuario modificó el cuestionario.' },
+            { status: 409, headers: PROBLEM },
+          );
+        }
+        current += 1;
+        statuses.push(200);
+        return HttpResponse.json({ version: current, report: { errors: [], warnings: [] } });
+      }),
+    );
+    renderApp(RULES_URL);
+    await screen.findByText('Si C01A = No → no se muestra C01B');
+    const user = userEvent.setup();
+
+    const first = screen.getByRole('group', { name: 'Validación de C01A' });
+    const second = screen.getByRole('group', { name: 'Validación de C01B' });
+    await user.click(within(first).getByLabelText('Obligatoria'));
+    await user.click(within(second).getByLabelText('Obligatoria'));
+    await user.click(within(first).getByRole('button', { name: 'Guardar validación de C01A' }));
+    await user.click(within(second).getByRole('button', { name: 'Guardar validación de C01B' }));
+
+    await waitFor(() => expect(statuses).toHaveLength(2));
+    expect(statuses).toEqual([200, 200]);
+    expect(sent).toEqual([4, 5]);
+  });
+
+  it('tras guardar o importar marca también el simulador para recargarlo', async () => {
+    server.use(
+      http.put(`${RULES_API}/validations/:column`, () =>
+        HttpResponse.json({ version: 5, report: { errors: [], warnings: [] } }),
+      ),
+    );
+    serveRules();
+    const { queryClient } = renderApp(RULES_URL);
+    await screen.findByText('Si C01A = No → no se muestra C01B');
+    queryClient.setQueryData(simulatorQueryKey('EDIN', 2027), { version: 4 });
+    const user = userEvent.setup();
+
+    const row = screen.getByRole('group', { name: 'Validación de C01A' });
+    await user.click(within(row).getByLabelText('Obligatoria'));
+    await user.click(within(row).getByRole('button', { name: 'Guardar validación de C01A' }));
+
+    expect(await screen.findByText('Validación guardada.')).toBeInTheDocument();
+    expect(queryClient.getQueryState(simulatorQueryKey('EDIN', 2027))?.isInvalidated).toBe(true);
   });
 });
