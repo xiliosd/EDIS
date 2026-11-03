@@ -1,5 +1,6 @@
 package co.gov.dane.edi.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,13 +37,16 @@ class SurveyRulesIT extends OracleIntegrationTest {
 
   @Test
   void respondentGetsSeedValidationsPlusLegacySkips() throws Exception {
+    assertThat(rulesFiles.load(survey.code(), survey.year()).cases()).isNotEmpty();
     mockMvc
         .perform(get("/api/v1/survey/rules").cookie(session(SessionPrincipal.respondent("1"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.encuesta").value("EDIN"))
         .andExpect(jsonPath("$.validaciones.B06.min").value(15))
         .andExpect(
-            jsonPath("$.saltos[?(@.id == 'legacy-C01A')].entonces.preguntas[0]").value("C01B"));
+            jsonPath("$.saltos[?(@.id == 'legacy-C01A')].entonces.preguntas[0]").value("C01B"))
+        // Los casos de prueba son del administrador: nunca viajan al encuestado.
+        .andExpect(jsonPath("$.casos").doesNotExist());
   }
 
   @Test

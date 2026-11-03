@@ -103,7 +103,7 @@ public final class RuleSetAnalyzer {
         .forEach(column -> addUnknown("validacion:" + column, Set.of(column), facts, errors));
     for (TestCase testCase : rules.cases()) {
       Set<String> columns = new TreeSet<>(testCase.answers().keySet());
-      columns.addAll(testCase.expected().hidden());
+      testCase.expected().hidden().stream().filter(Objects::nonNull).forEach(columns::add);
       if (testCase.expected().errors() != null) {
         columns.addAll(testCase.expected().errors().keySet());
       }
@@ -260,7 +260,7 @@ public final class RuleSetAnalyzer {
       values.add(condition.value());
     }
     if (condition.values() != null) {
-      values.addAll(condition.values());
+      condition.values().stream().filter(Objects::nonNull).forEach(values::add);
     }
     for (String column : leafColumns(condition)) {
       QuestionFacts question = facts.get(column);
@@ -427,12 +427,13 @@ public final class RuleSetAnalyzer {
     return columns;
   }
 
+  /** Los hijos null los reporta el validador estructural; aquí se saltan para no fallar. */
   private static void forEachNested(Condition condition, Consumer<Condition> action) {
     if (condition.and() != null) {
-      condition.and().forEach(action);
+      condition.and().stream().filter(Objects::nonNull).forEach(action);
     }
     if (condition.or() != null) {
-      condition.or().forEach(action);
+      condition.or().stream().filter(Objects::nonNull).forEach(action);
     }
   }
 }

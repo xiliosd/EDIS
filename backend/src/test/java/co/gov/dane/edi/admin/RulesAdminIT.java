@@ -540,6 +540,96 @@ class RulesAdminIT extends OracleIntegrationTest {
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
   }
 
+  @Test
+  void nullsInsideASkipAreRejectedAs422Estructura() throws Exception {
+    String[] conditions = {
+      "{\"y\":[null]}",
+      "{\"o\":[{\"pregunta\":\"C01A\",\"op\":\"eq\",\"valor\":\"1\"},null]}",
+      "{\"pregunta\":\"C01A\",\"op\":\"in\",\"valores\":[null]}",
+      "{\"todas\":[null],\"op\":\"eq\",\"valor\":\"1\"}",
+    };
+    for (String condition : conditions) {
+      String body =
+          """
+          {"rule":{"id":"con-nulos","si":%s,
+            "entonces":{"accion":"deshabilitar","preguntas":["C01B"]}},"version":1}"""
+              .formatted(condition);
+      send(put(DRAFT + "/skips/con-nulos"), body)
+          .andExpect(status().isUnprocessableContent())
+          .andExpect(jsonPath("$.report.errors[0].code").value("ESTRUCTURA"));
+    }
+    String nullTarget =
+        """
+        {"rule":{"id":"con-nulos","si":{"pregunta":"C01A","op":"eq","valor":"1"},
+          "entonces":{"accion":"deshabilitar","preguntas":[null]}},"version":1}""";
+    send(put(DRAFT + "/skips/con-nulos"), nullTarget)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.report.errors[0].code").value("ESTRUCTURA"));
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void nullsInsideACaseAreRejectedAs422Estructura() throws Exception {
+    String[] parts = {
+      "\"respuestas\":{},\"esperado\":{\"ocultas\":[null]}",
+      "\"respuestas\":{},\"esperado\":{\"ocultas\":[null,\"C01B\",null]}",
+      "\"respuestas\":{\"C01A\":null},\"esperado\":{\"ocultas\":[]}",
+      "\"respuestas\":{},\"esperado\":{\"ocultas\":[],\"errores\":{\"C01A\":null}}",
+    };
+    for (String part : parts) {
+      String body =
+          """
+          {"testCase":{"id":"caso-nulos","nombre":"Caso con nulos","pagina":"C1",%s},
+            "version":1}"""
+              .formatted(part);
+      send(put(DRAFT + "/cases/caso-nulos"), body)
+          .andExpect(status().isUnprocessableContent())
+          .andExpect(jsonPath("$.report.errors[0].code").value("ESTRUCTURA"));
+    }
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void importWithNullsIsRejectedAs422Estructura() throws Exception {
+    String[] bodies = {
+      importOf("regla-ok", "caso-ok")
+          .replace(
+              "\"si\":{\"pregunta\":\"C01A\",\"op\":\"eq\",\"valor\":\"1\"}",
+              "\"si\":{\"y\":[null]}"),
+      importOf("regla-ok", "caso-ok").replace("\"ocultas\":[\"C01B\"]", "\"ocultas\":[null]"),
+      importOf("regla-ok", "caso-ok").replace("\"C01A\":\"2\"", "\"C01A\":null"),
+    };
+    for (String body : bodies) {
+      send(put(DRAFT + "/import"), body)
+          .andExpect(status().isUnprocessableContent())
+          .andExpect(jsonPath("$.report.errors[0].code").value("ESTRUCTURA"));
+    }
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void ruleWhoseAnalysisIsNotAnalyzableIsSaved() throws Exception {
+    // Nueve combos con tres respuestas distinguibles cada uno: 3^9 combinaciones, más de 4096.
+    String combos =
+        "[\"B02\",\"C01A\",\"C13\",\"D01A\",\"D09\",\"E01A\",\"F01A\",\"G01A\",\"H01\"]";
+    String body =
+        """
+        {"rule":{"id":"muchas-preguntas","si":{"o":[
+            {"alguna":%s,"op":"eq","valor":"1"},{"alguna":%s,"op":"ne","valor":"1"}]},
+          "entonces":{"accion":"deshabilitar","preguntas":["D05"]}},"version":1}"""
+            .formatted(combos, combos);
+
+    send(put(DRAFT + "/skips/muchas-preguntas"), body)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version").value(2))
+        .andExpect(
+            jsonPath(
+                    "$.report.warnings[?(@.code == 'NO_ANALIZABLE'"
+                        + " && @.element == 'regla:muchas-preguntas')]")
+                .exists());
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(2);
+  }
+
   /** Filas de todas las tablas de respuestas de EDIN: el simulador nunca debe tocarlas. */
   private long answerRows() {
     long total = 0;

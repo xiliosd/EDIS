@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -117,6 +118,27 @@ public final class RuleSetValidator {
       if (SurveyPage.find(testCase.pageCode()).isEmpty()) {
         problems.add("Caso " + id + ": página desconocida " + testCase.pageCode());
       }
+      checkCaseNulls(id, testCase, problems);
+    }
+  }
+
+  /** Un null del JSON no es una respuesta ni una pregunta: se rechaza en vez de adivinarlo. */
+  private static void checkCaseNulls(String id, TestCase testCase, List<String> problems) {
+    testCase.answers().entrySet().stream()
+        .filter(entry -> entry.getValue() == null)
+        .forEach(
+            entry ->
+                problems.add("Caso " + id + ": la respuesta de " + entry.getKey() + " es null"));
+    if (testCase.expected().hidden().stream().anyMatch(Objects::isNull)) {
+      problems.add("Caso " + id + ": las preguntas ocultas esperadas tienen un null");
+    }
+    if (testCase.expected().errors() != null) {
+      testCase.expected().errors().entrySet().stream()
+          .filter(entry -> entry.getValue() == null)
+          .forEach(
+              entry ->
+                  problems.add(
+                      "Caso " + id + ": el error esperado de " + entry.getKey() + " es null"));
     }
   }
 
@@ -135,6 +157,10 @@ public final class RuleSetValidator {
 
   private static void checkCondition(
       String id, Condition condition, Set<String> triggers, List<String> problems) {
+    if (condition == null) {
+      problems.add("Regla " + id + ": hay una condición vacía (null)");
+      return;
+    }
     if (condition.and() != null || condition.or() != null) {
       List<Condition> nested = condition.and() != null ? condition.and() : condition.or();
       if (nested.isEmpty()) {
@@ -153,6 +179,9 @@ public final class RuleSetValidator {
     if (targets == null || targets.isEmpty()) {
       problems.add("Regla " + id + ": la condición no indica preguntas");
       return;
+    }
+    if (condition.values() != null && condition.values().stream().anyMatch(Objects::isNull)) {
+      problems.add("Regla " + id + ": la lista de valores tiene un valor vacío (null)");
     }
     targets.forEach(q -> checkColumn(id, q, problems));
     triggers.addAll(targets);

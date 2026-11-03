@@ -3,6 +3,7 @@ package co.gov.dane.edi.rules;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -18,7 +19,14 @@ public record ExpectedOutcome(
         Map<String, String> errors) {
 
   public ExpectedOutcome {
-    hidden = hidden == null ? List.of() : hidden.stream().sorted().distinct().toList();
+    // Los null se conservan para que el validador los reporte; ordenarlos no debe fallar.
+    hidden =
+        hidden == null
+            ? List.of()
+            : hidden.stream()
+                .sorted(Comparator.nullsFirst(Comparator.naturalOrder()))
+                .distinct()
+                .toList();
     errors = errors == null ? null : Collections.unmodifiableMap(new TreeMap<>(errors));
   }
 }
