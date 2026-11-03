@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Route, Routes } from 'react-router';
 import { AdminLayout } from './components/AdminLayout';
 import { AppLayout } from './components/AppLayout';
@@ -15,6 +15,24 @@ import { watchSessionGeneration } from './features/survey/page-drafts';
 import { SurveyHomePage } from './features/survey/SurveyHomePage';
 import { SurveyPageView } from './features/survey/SurveyPageView';
 import { NotFoundPage } from './pages/NotFoundPage';
+
+// Las secciones de reglas y simulador se cargan al abrirlas: no pesan en el resto de la app.
+const RulesPage = lazy(() =>
+  import('./features/admin-rules/RulesPage').then((module) => ({ default: module.RulesPage })),
+);
+const SimulatorPage = lazy(() =>
+  import('./features/admin-rules/SimulatorPage').then((module) => ({
+    default: module.SimulatorPage,
+  })),
+);
+
+function LoadingSection() {
+  return (
+    <p role="status" aria-live="polite" className="mt-6 text-ink-muted">
+      Cargando…
+    </p>
+  );
+}
 
 export function App() {
   // Si otra pestaña ingresa o cierra sesión, los borradores de esta se descartan de inmediato.
@@ -71,6 +89,26 @@ export function App() {
             element={
               <RequireRole roles={['ADMIN_CUESTIONARIO']}>
                 <QuestionnaireTreePage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="cuestionario/:encuesta/:anio/reglas"
+            element={
+              <RequireRole roles={['ADMIN_CUESTIONARIO']}>
+                <Suspense fallback={<LoadingSection />}>
+                  <RulesPage />
+                </Suspense>
+              </RequireRole>
+            }
+          />
+          <Route
+            path="cuestionario/:encuesta/:anio/simulador"
+            element={
+              <RequireRole roles={['ADMIN_CUESTIONARIO']}>
+                <Suspense fallback={<LoadingSection />}>
+                  <SimulatorPage />
+                </Suspense>
               </RequireRole>
             }
           />

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
+import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
 import { ErrorState } from '../../components/ErrorState';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import {
@@ -171,6 +172,7 @@ export function QuestionnaireTreePage() {
       <h1 id="titulo-arbol" className="text-2xl font-semibold">
         {title}
       </h1>
+      <QuestionnaireTabs survey={encuesta} year={year} />
 
       {treeQuery.isPending && (
         <p role="status" aria-live="polite" className="mt-6 text-ink-muted">

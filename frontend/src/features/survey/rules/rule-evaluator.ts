@@ -104,28 +104,45 @@ function sameSet(left: Set<string>, right: Set<string>): boolean {
   return left.size === right.size && [...left].every((item) => right.has(item));
 }
 
+interface Resolution {
+  disabled: Set<string>;
+  /** Para cada columna deshabilitada, las reglas que la deshabilitan en la ronda estable. */
+  reasons: Map<string, string[]>;
+}
+
+/** Punto fijo de los saltos (spec §5.2): una columna deshabilitada cuenta como sin respuesta. */
+function resolveSkips(rules: RuleSet, answers: Record<string, string | undefined>): Resolution {
+  const skips = rules.saltos ?? [];
+  let disabled = new Set<string>();
+  let reasons = new Map<string, string[]>();
+  for (let round = 0; round <= skips.length; round += 1) {
+    const effective = { ...answers };
+    disabled.forEach((column) => delete effective[column]);
+    const next = new Map<string, string[]>();
+    for (const rule of skips) {
+      if (rule.si && matches(rule.si, effective)) {
+        for (const column of rule.entonces?.preguntas ?? []) {
+          next.set(column, [...(next.get(column) ?? []), rule.id ?? '']);
+        }
+      }
+    }
+    const nextColumns = new Set(next.keys());
+    reasons = next;
+    if (sameSet(nextColumns, disabled)) {
+      break;
+    }
+    disabled = nextColumns;
+  }
+  return { disabled, reasons };
+}
+
 /** Espejo de RuleEvaluator.java (spec §5.2): mismo punto fijo, mismos operadores y códigos. */
 export function evaluate(
   rules: RuleSet,
   answers: Record<string, string | undefined>,
   itemColumns: string[],
 ): Evaluation {
-  const skips = rules.saltos ?? [];
-  let disabled = new Set<string>();
-  for (let round = 0; round <= skips.length; round += 1) {
-    const effective = { ...answers };
-    disabled.forEach((column) => delete effective[column]);
-    const next = new Set<string>();
-    for (const rule of skips) {
-      if (rule.si && matches(rule.si, effective)) {
-        (rule.entonces?.preguntas ?? []).forEach((column) => next.add(column));
-      }
-    }
-    if (sameSet(next, disabled)) {
-      break;
-    }
-    disabled = next;
-  }
+  const { disabled } = resolveSkips(rules, answers);
   const errors: Record<string, string> = {};
   for (const column of itemColumns) {
     if (disabled.has(column)) {
@@ -137,4 +154,12 @@ export function evaluate(
     }
   }
   return { disabled: [...disabled].sort(), errors };
+}
+
+/** Por qué está deshabilitada cada columna: los ids de las reglas que coinciden en la ronda estable. */
+export function explain(
+  rules: RuleSet,
+  answers: Record<string, string | undefined>,
+): Record<string, string[]> {
+  return Object.fromEntries(resolveSkips(rules, answers).reasons);
 }
