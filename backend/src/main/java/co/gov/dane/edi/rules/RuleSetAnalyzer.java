@@ -30,6 +30,9 @@ public final class RuleSetAnalyzer {
   /** Tope de combinaciones que se enumeran por pregunta o regla; más allá, NO_ANALIZABLE. */
   public static final int MAX_COMBINATIONS = 4096;
 
+  /** Evaluaciones totales por llamada a analyze; al agotarse, el resto es NO_ANALIZABLE. */
+  public static final int MAX_TOTAL_EVALUATIONS = 200_000;
+
   private static final Set<String> VALUE_OPERATORS = Set.of("eq", "ne", "in", "notIn");
 
   private RuleSetAnalyzer() {}

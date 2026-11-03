@@ -5,11 +5,13 @@ import co.gov.dane.edi.model.InputType;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -20,7 +22,9 @@ import java.util.stream.Stream;
  * Avisos de lógica (spec §5, avisos 1 a 5). Enumera las combinaciones de respuestas de los
  * disparadores relevantes y las evalúa con el mismo motor del encuestado, de modo que las cascadas
  * se comportan igual. Si el producto de dominios supera {@link RuleSetAnalyzer#MAX_COMBINATIONS}
- * emite {@code NO_ANALIZABLE} en vez de enumerar.
+ * emite {@code NO_ANALIZABLE} en vez de enumerar; lo mismo cuando se agota el presupuesto total de
+ * evaluaciones de la llamada. Si el análisis trae un error {@code ESTRUCTURA}, el llamador omite la
+ * enumeración por completo.
  */
 final class LogicWarnings {
 
@@ -33,12 +37,27 @@ final class LogicWarnings {
   private final List<SkipRule> skips;
   private final Map<String, Set<String>> literalsByColumn = new HashMap<>();
   private final Map<String, Finding> findings = new LinkedHashMap<>();
+  private final Map<String, Set<String>> notAnalyzable = new TreeMap<>();
+  private final Map<String, Set<String>> overlapPartners = new TreeMap<>();
+  private final Map<String, Set<String>> overlapShared = new HashMap<>();
+  private final Map<String, Set<String>> overlapColumns = new HashMap<>();
+  private long remainingEvaluations;
 
   /**
    * @param rules reglas efectivas, sin problemas estructurales (el llamador lo garantiza)
    * @param cyclicRuleIds reglas que ya tienen {@code CICLO}: no se enumeran ni se reportan
    */
   LogicWarnings(RuleSet rules, Map<String, QuestionFacts> facts, Set<String> cyclicRuleIds) {
+    this(rules, facts, cyclicRuleIds, RuleSetAnalyzer.MAX_TOTAL_EVALUATIONS);
+  }
+
+  /** Con presupuesto total de evaluaciones propio: lo usan las pruebas. */
+  LogicWarnings(
+      RuleSet rules,
+      Map<String, QuestionFacts> facts,
+      Set<String> cyclicRuleIds,
+      long totalEvaluations) {
+    this.remainingEvaluations = totalEvaluations;
     this.rules = rules;
     this.facts = facts;
     this.cyclicRuleIds = cyclicRuleIds;
@@ -93,7 +112,10 @@ final class LogicWarnings {
     return found;
   }
 
-  /** Avisos por enumeración. */
+  /**
+   * Avisos por enumeración. El orden es determinista (preguntas por código, reglas por id, pares
+   * por (a, b)) para que el presupuesto total se agote siempre en los mismos elementos.
+   */
   List<Finding> enumerated() {
     findings.clear();
     Set<String> targets = new TreeSet<>();
@@ -105,13 +127,28 @@ final class LogicWarnings {
     targets.removeAll(cyclicTargets);
     targets.forEach(this::checkNeverShown);
     List<SkipRule> analyzable =
-        skips.stream().filter(rule -> !cyclicRuleIds.contains(rule.id())).toList();
+        skips.stream()
+            .filter(rule -> !cyclicRuleIds.contains(rule.id()))
+            .sorted(Comparator.comparing(SkipRule::id))
+            .toList();
     analyzable.forEach(this::checkNeverMatches);
     for (int first = 0; first < analyzable.size(); first++) {
       for (int second = first + 1; second < analyzable.size(); second++) {
         checkOverlap(analyzable.get(first), analyzable.get(second));
       }
     }
+    emitOverlaps();
+    notAnalyzable.forEach(
+        (element, columns) ->
+            add(
+                AnalysisCodes.NO_ANALIZABLE,
+                element,
+                "Hay demasiadas combinaciones de "
+                    + String.join(", ", columns)
+                    + " para analizar (más de "
+                    + RuleSetAnalyzer.MAX_COMBINATIONS
+                    + " por elemento o el presupuesto total se agotó).",
+                List.copyOf(columns)));
     return List.copyOf(findings.values());
   }
 
@@ -140,7 +177,7 @@ final class LogicWarnings {
               return true;
             });
     if (!analyzed) {
-      add(AnalysisCodes.NO_ANALIZABLE, element, notAnalyzable(columns), involved);
+      markNotAnalyzable(element, involved);
     } else if (!shownSomewhere[0]) {
       add(
           AnalysisCodes.NUNCA_SE_MUESTRA,
@@ -160,14 +197,15 @@ final class LogicWarnings {
         enumerate(
             columns,
             combination -> {
-              if (matchesAfterCascades(rule, combination)) {
+              Evaluation evaluation = RuleEvaluator.evaluate(rules, combination, List.of());
+              if (matchesAfterCascades(rule, combination, evaluation)) {
                 matchesSomewhere[0] = true;
                 return false;
               }
               return true;
             });
     if (!analyzed) {
-      add(AnalysisCodes.NO_ANALIZABLE, element, notAnalyzable(columns), columns);
+      markNotAnalyzable(element, columns);
     } else if (!matchesSomewhere[0]) {
       add(
           AnalysisCodes.NUNCA_SE_CUMPLE,
@@ -179,62 +217,77 @@ final class LogicWarnings {
 
   // ---- REGLAS_SOLAPADAS ----
 
-  private void checkOverlap(SkipRule one, SkipRule other) {
-    Set<String> shared = new TreeSet<>(RuleSetAnalyzer.targetsOf(one));
-    shared.retainAll(RuleSetAnalyzer.targetsOf(other));
+  /** {@code one} y {@code other} llegan en orden de id: el aviso es de la primera. */
+  private void checkOverlap(SkipRule first, SkipRule second) {
+    Set<String> shared = new TreeSet<>(RuleSetAnalyzer.targetsOf(first));
+    shared.retainAll(RuleSetAnalyzer.targetsOf(second));
     if (shared.isEmpty()) {
       return;
     }
-    SkipRule first = one.id().compareTo(other.id()) <= 0 ? one : other;
-    SkipRule second = first == one ? other : one;
     Set<String> seeds = new TreeSet<>(RuleSetAnalyzer.triggersOf(first));
     seeds.addAll(RuleSetAnalyzer.triggersOf(second));
     List<String> columns = closure(seeds);
-    Set<String> involved = new TreeSet<>(seeds);
-    involved.addAll(shared);
     String element = "regla:" + first.id();
     boolean[] both = {false};
     boolean analyzed =
         enumerate(
             columns,
             combination -> {
-              if (matchesAfterCascades(first, combination)
-                  && matchesAfterCascades(second, combination)) {
+              Evaluation evaluation = RuleEvaluator.evaluate(rules, combination, List.of());
+              if (matchesAfterCascades(first, combination, evaluation)
+                  && matchesAfterCascades(second, combination, evaluation)) {
                 both[0] = true;
                 return false;
               }
               return true;
             });
     if (!analyzed) {
-      add(AnalysisCodes.NO_ANALIZABLE, element, notAnalyzable(columns), columns);
+      markNotAnalyzable(element, columns);
     } else if (both[0]) {
-      add(
-          AnalysisCodes.REGLAS_SOLAPADAS,
-          element,
-          "La regla se solapa con " + second.id() + " sobre: " + String.join(", ", shared) + ".",
-          List.copyOf(involved));
+      overlapPartners.computeIfAbsent(first.id(), key -> new TreeSet<>()).add(second.id());
+      overlapShared.computeIfAbsent(first.id(), key -> new TreeSet<>()).addAll(shared);
+      overlapColumns.computeIfAbsent(first.id(), key -> new TreeSet<>()).addAll(seeds);
     }
+  }
+
+  /** Un solo aviso por regla de menor id, con todos sus socios y la unión de columnas. */
+  private void emitOverlaps() {
+    overlapPartners.forEach(
+        (ruleId, partners) -> {
+          Set<String> columns = new TreeSet<>(overlapColumns.get(ruleId));
+          columns.addAll(overlapShared.get(ruleId));
+          add(
+              AnalysisCodes.REGLAS_SOLAPADAS,
+              "regla:" + ruleId,
+              "La regla se solapa con "
+                  + String.join(", ", partners)
+                  + " sobre: "
+                  + String.join(", ", overlapShared.get(ruleId))
+                  + ".",
+              List.copyOf(columns));
+        });
   }
 
   // ---- Enumeración ----
 
-  private boolean matchesAfterCascades(SkipRule rule, Map<String, String> combination) {
-    Evaluation evaluation = RuleEvaluator.evaluate(rules, combination, List.of());
+  private boolean matchesAfterCascades(
+      SkipRule rule, Map<String, String> combination, Evaluation evaluation) {
     Map<String, String> effective = new HashMap<>(combination);
     evaluation.disabled().forEach(effective::remove);
     return RuleEvaluator.matches(rule.when(), effective);
   }
 
   /**
-   * Recorre el producto de dominios de las columnas hasta que {@code visitor} devuelva falso.
-   * Devuelve falso, sin visitar nada, si el producto supera el límite.
+   * Recorre el producto de dominios de las columnas hasta que {@code visitor} devuelva falso, y
+   * descuenta cada visita del presupuesto total. Devuelve falso, sin visitar nada, si el producto
+   * supera el límite por elemento o el presupuesto que queda.
    */
   private boolean enumerate(List<String> columns, Predicate<Map<String, String>> visitor) {
     List<List<String>> domains = columns.stream().map(this::domainOf).toList();
     long product = 1;
     for (List<String> domain : domains) {
       product *= domain.size();
-      if (product > RuleSetAnalyzer.MAX_COMBINATIONS) {
+      if (product > RuleSetAnalyzer.MAX_COMBINATIONS || product > remainingEvaluations) {
         return false;
       }
     }
@@ -244,6 +297,7 @@ final class LogicWarnings {
       for (int index = 0; index < cursor.length; index++) {
         combination.put(columns.get(index), domains.get(index).get(cursor[index]));
       }
+      remainingEvaluations--;
       if (!visitor.test(combination)) {
         return true;
       }
@@ -315,7 +369,7 @@ final class LogicWarnings {
         values.add(condition.value());
       }
       if (condition.values() != null) {
-        values.addAll(condition.values());
+        condition.values().stream().filter(Objects::nonNull).forEach(values::add);
       }
       List<String> columns = new ArrayList<>();
       if (condition.question() != null) {
@@ -341,12 +395,9 @@ final class LogicWarnings {
     }
   }
 
-  private static String notAnalyzable(List<String> columns) {
-    return "Hay demasiadas combinaciones de "
-        + String.join(", ", columns)
-        + " para analizar (más de "
-        + RuleSetAnalyzer.MAX_COMBINATIONS
-        + ").";
+  /** Un solo NO_ANALIZABLE por elemento: se fusionan las columnas de todos sus análisis. */
+  private void markNotAnalyzable(String element, Collection<String> columns) {
+    notAnalyzable.computeIfAbsent(element, key -> new TreeSet<>()).addAll(columns);
   }
 
   /** Un solo aviso por (código, elemento, preguntas): el mismo par no se reporta dos veces. */

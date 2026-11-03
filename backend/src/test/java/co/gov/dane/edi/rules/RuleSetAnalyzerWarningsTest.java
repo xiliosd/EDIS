@@ -251,4 +251,175 @@ class RuleSetAnalyzerWarningsTest {
     assertThat(warnings(report)).contains("NO_ANALIZABLE@regla:r-trece");
     assertThat(report.hasErrors()).isFalse();
   }
+
+  @Test
+  void overlapWithTwoPartnersIsOneWarning() {
+    Map<String, QuestionFacts> facts =
+        facts(
+            single("C01A", 0, "1", "2"),
+            single("C01B", 1, "1", "2"),
+            single("C01D", 2, "1", "2"),
+            text("C01C", 3));
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(
+                rule("a-primera", eq("C01A", "1"), "C01C"),
+                rule("b-segunda", eq("C01B", "1"), "C01C"),
+                rule("c-tercera", eq("C01D", "1"), "C01C")),
+            facts);
+
+    List<Finding> overlaps =
+        report.warnings().stream().filter(f -> f.code().equals("REGLAS_SOLAPADAS")).toList();
+
+    assertThat(overlaps).hasSize(2);
+    Finding ofFirst = overlaps.get(0);
+    assertThat(ofFirst.element()).isEqualTo("regla:a-primera");
+    assertThat(ofFirst.message()).contains("b-segunda", "c-tercera");
+    assertThat(ofFirst.questions()).containsExactly("C01A", "C01B", "C01C", "C01D");
+  }
+
+  @Test
+  void notAnalyzableIsOnePerElementWhenOverlapAndOwnAnalysisBothExceed() {
+    List<QuestionFacts> questions = new ArrayList<>();
+    List<String> columns = new ArrayList<>();
+    for (int index = 0; index < 13; index++) {
+      String column = String.format("K%02d", index);
+      columns.add(column);
+      questions.add(checkbox(column, index));
+    }
+    questions.add(text("K99", 13));
+    Condition anyOf = new Condition(null, "eq", "1", null, null, columns, null, null);
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(rule("r-a", anyOf, "K99"), rule("r-b", anyOf, "K99")),
+            facts(questions.toArray(QuestionFacts[]::new)));
+
+    assertThat(
+            report.warnings().stream()
+                .filter(f -> f.code().equals("NO_ANALIZABLE") && f.element().equals("regla:r-a")))
+        .hasSize(1);
+  }
+
+  @Test
+  void totalBudgetMakesRemainingElementsNotAnalyzable() {
+    Map<String, QuestionFacts> facts =
+        facts(single("C01A", 0, "1", "2"), text("C01B", 1), text("C01C", 2));
+    RuleSet set =
+        rules(
+            rule("r-eq", eq("C01A", "1"), "C01B", "C01C"),
+            rule("r-ne", leaf("C01A", "ne", "1"), "C01B", "C01C"),
+            rule("r-empty", leaf("C01A", "empty", null), "C01B", "C01C"));
+
+    List<Finding> found = new LogicWarnings(set, facts, java.util.Set.of(), 4).enumerated();
+    List<String> codes = found.stream().map(f -> f.code() + "@" + f.element()).toList();
+
+    // C01B gasta 3 de las 4 evaluaciones; a C01C y a las reglas solo les queda 1.
+    assertThat(codes)
+        .contains(
+            "NUNCA_SE_MUESTRA@pregunta:C01B",
+            "NO_ANALIZABLE@pregunta:C01C",
+            "NO_ANALIZABLE@regla:r-eq");
+    assertThat(codes).doesNotContain("NUNCA_SE_MUESTRA@pregunta:C01C");
+  }
+
+  @Test
+  void realisticQuestionnaireAnalyzesQuickly() {
+    List<QuestionFacts> questions = new ArrayList<>();
+    for (int index = 0; index < 150; index++) {
+      questions.add(
+          new QuestionFacts(
+              String.format("Q%03d", index),
+              "P" + (index / 17),
+              index,
+              InputType.SINGLE_CHOICE,
+              List.of("1", "2", "9"),
+              ColumnStatus.ACTIVE,
+              null));
+    }
+    List<SkipRule> skips = new ArrayList<>();
+    for (int chain = 0; chain < 4; chain++) {
+      int base = chain * 10;
+      for (int step = 0; step < 4; step++) {
+        skips.add(
+            rule(
+                String.format("cadena-%d-%d", chain, step),
+                eq(String.format("Q%03d", base + step), "1"),
+                String.format("Q%03d", base + step + 1)));
+      }
+      skips.add(
+          rule(
+              String.format("cadena-%d-alterna", chain),
+              eq(String.format("Q%03d", base), "2"),
+              String.format("Q%03d", base + 1)));
+    }
+    for (int index = 0; index < 4; index++) {
+      skips.add(
+          rule(
+              "suelta-" + index,
+              eq(String.format("Q%03d", 100 + index), "1"),
+              String.format("Q%03d", 120 + index)));
+    }
+    RuleSet set = rules(skips.toArray(SkipRule[]::new));
+    Map<String, QuestionFacts> facts = facts(questions.toArray(QuestionFacts[]::new));
+
+    AnalysisReport report =
+        assertTimeoutPreemptively(
+            Duration.ofMillis(2000), () -> RuleSetAnalyzer.analyze(set, facts));
+
+    assertThat(report.hasErrors()).isFalse();
+    // Mismo destino pero condiciones disjuntas (1 frente a 2): no hay solape.
+    assertThat(warnings(report)).noneMatch(code -> code.startsWith("REGLAS_SOLAPADAS"));
+  }
+
+  @Test
+  void neighbourValuesLetStrictComparisonsMatch() {
+    Map<String, QuestionFacts> facts = facts(text("C01A", 0), text("C01B", 1));
+
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(
+                rule("r-igual", eq("C01A", "5"), "C01B"),
+                rule("r-mayor", leaf("C01A", "gt", "5"), "C01B"),
+                rule("r-menor", leaf("C01A", "lt", "5"), "C01B")),
+            facts);
+
+    // Con solo el literal 5 ni gt ni lt se cumplirían: hacen falta 6 y 4.
+    assertThat(warnings(report)).noneMatch(code -> code.startsWith("NUNCA_SE_CUMPLE"));
+  }
+
+  @Test
+  void arbitraryTextSentinelLetsNotEmptyMatch() {
+    Map<String, QuestionFacts> facts = facts(text("C01A", 0), text("C01B", 1));
+
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(rule("r-lleno", leaf("C01A", "notEmpty", null), "C01B")), facts);
+
+    assertThat(warnings(report)).doesNotContain("NUNCA_SE_CUMPLE@regla:r-lleno");
+  }
+
+  @Test
+  void twelveCheckboxesAreAnalyzableAndThirteenAreNot() {
+    for (int count : new int[] {12, 13}) {
+      List<QuestionFacts> questions = new ArrayList<>();
+      List<String> columns = new ArrayList<>();
+      for (int index = 0; index < count; index++) {
+        String column = String.format("K%02d", index);
+        columns.add(column);
+        questions.add(checkbox(column, index));
+      }
+      questions.add(text("K99", count));
+      Condition anyOf = new Condition(null, "eq", "1", null, null, columns, null, null);
+
+      AnalysisReport report =
+          RuleSetAnalyzer.analyze(
+              rules(rule("r-borde", anyOf, "K99")), facts(questions.toArray(QuestionFacts[]::new)));
+
+      if (count == 12) {
+        assertThat(warnings(report)).doesNotContain("NO_ANALIZABLE@regla:r-borde");
+      } else {
+        assertThat(warnings(report)).contains("NO_ANALIZABLE@regla:r-borde");
+      }
+    }
+  }
 }
