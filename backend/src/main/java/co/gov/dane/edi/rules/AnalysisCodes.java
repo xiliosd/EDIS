@@ -11,5 +11,12 @@ public final class AnalysisCodes {
   public static final String RANGO_EXCEDE_COLUMNA = "RANGO_EXCEDE_COLUMNA";
   public static final String VALIDACION_EN_OPCION = "VALIDACION_EN_OPCION";
 
+  public static final String NUNCA_SE_MUESTRA = "NUNCA_SE_MUESTRA";
+  public static final String NUNCA_SE_CUMPLE = "NUNCA_SE_CUMPLE";
+  public static final String NO_ANALIZABLE = "NO_ANALIZABLE";
+  public static final String DESTINO_ANTES = "DESTINO_ANTES";
+  public static final String REGLAS_SOLAPADAS = "REGLAS_SOLAPADAS";
+  public static final String PENDIENTE_COLUMNA = "PENDIENTE_COLUMNA";
+
   private AnalysisCodes() {}
 }

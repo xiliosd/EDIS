@@ -27,6 +27,9 @@ import java.util.function.Consumer;
  */
 public final class RuleSetAnalyzer {
 
+  /** Tope de combinaciones que se enumeran por pregunta o regla; más allá, NO_ANALIZABLE. */
+  public static final int MAX_COMBINATIONS = 4096;
+
   private static final Set<String> VALUE_OPERATORS = Set.of("eq", "ne", "in", "notIn");
 
   private RuleSetAnalyzer() {}
@@ -52,7 +55,29 @@ public final class RuleSetAnalyzer {
         Comparator.comparing(Finding::element)
             .thenComparing(Finding::code)
             .thenComparing(Finding::message));
-    return new AnalysisReport(errors, List.of());
+    return new AnalysisReport(errors, warnings(effective, facts, errors));
+  }
+
+  /**
+   * Los avisos salen ordenados por elemento y código. La enumeración se omite si hay problemas
+   * estructurales y salta las reglas que ya tienen CICLO, para no duplicar errores.
+   */
+  private static List<Finding> warnings(
+      RuleSet effective, Map<String, QuestionFacts> facts, List<Finding> errors) {
+    List<Finding> warnings = new ArrayList<>(LogicWarnings.structural(effective, facts));
+    boolean structural = errors.stream().anyMatch(f -> f.code().equals(AnalysisCodes.ESTRUCTURA));
+    if (!structural) {
+      Set<String> cyclicRuleIds = new HashSet<>();
+      errors.stream()
+          .filter(f -> f.code().equals(AnalysisCodes.CICLO))
+          .forEach(f -> cyclicRuleIds.add(f.element().substring("regla:".length())));
+      warnings.addAll(new LogicWarnings(effective, facts, cyclicRuleIds).enumerated());
+    }
+    warnings.sort(
+        Comparator.comparing(Finding::element)
+            .thenComparing(Finding::code)
+            .thenComparing(f -> String.join(",", f.questions())));
+    return warnings;
   }
 
   // ---- PREGUNTA_INEXISTENTE ----
@@ -357,7 +382,7 @@ public final class RuleSetAnalyzer {
 
   // ---- Condiciones ----
 
-  private static Set<String> triggersOf(SkipRule rule) {
+  static Set<String> triggersOf(SkipRule rule) {
     Set<String> columns = new LinkedHashSet<>();
     if (rule.when() != null) {
       collectLeafColumns(rule.when(), columns);
@@ -365,7 +390,7 @@ public final class RuleSetAnalyzer {
     return columns;
   }
 
-  private static Set<String> targetsOf(SkipRule rule) {
+  static Set<String> targetsOf(SkipRule rule) {
     if (rule.then() == null || rule.then().questions() == null) {
       return Set.of();
     }
