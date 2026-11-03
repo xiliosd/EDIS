@@ -2,6 +2,7 @@ package co.gov.dane.edi.rules;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import co.gov.dane.edi.admin.YearState;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -50,5 +51,18 @@ class RuleSetJsonTest {
     String json = mapper.writeValueAsString(new ExpectedOutcome(List.of("B", "A"), null));
 
     assertThat(json).isEqualTo("{\"ocultas\":[\"A\",\"B\"]}");
+  }
+
+  @Test
+  void withersKeepCases() {
+    List<TestCase> cases = List.of(simulatorCase(null));
+    RuleSet base = RuleSet.empty("EDIN", 2026).withCases(cases);
+
+    assertThat(base.withState(YearState.BORRADOR).cases()).isEqualTo(cases);
+    assertThat(base.withTables(Map.of("B", "TABLA_B")).cases()).isEqualTo(cases);
+    assertThat(base.withVersion(5).cases()).isEqualTo(cases);
+    assertThat(base.withNewColumns(Map.of()).cases()).isEqualTo(cases);
+    assertThat(base.withSkips(List.of()).cases()).isEqualTo(cases);
+    assertThat(base.withValidations(Map.of()).cases()).isEqualTo(cases);
   }
 }

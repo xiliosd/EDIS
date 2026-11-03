@@ -71,7 +71,8 @@ public record RuleSet(
   }
 
   public RuleSet withTables(Map<String, String> newTables) {
-    return new RuleSet(survey, year, version, skips, validations, state, newTables, newColumns);
+    return new RuleSet(
+        survey, year, version, skips, validations, state, newTables, newColumns, cases);
   }
 
   public RuleSet withVersion(int newVersion) {
