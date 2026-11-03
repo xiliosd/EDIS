@@ -1500,7 +1500,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string;
+                    "application/json": components["schemas"]["RuleSet"];
                 };
             };
             /** @description La encuesta o el año no existen */
@@ -1541,6 +1541,15 @@ export interface operations {
             };
             /** @description El año está publicado o la versión cambió */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El cuerpo supera 1 MB */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -21,7 +21,7 @@ public final class RuleSetValidator {
   private static final Pattern COLUMN = Pattern.compile("[A-Z][0-9A-Z_]{1,29}");
   private static final Pattern TABLE = Pattern.compile("[A-Z][A-Z0-9_]{1,29}");
 
-  private static final Pattern CASE_ID = Pattern.compile("[a-z0-9][a-z0-9-]{0,40}");
+  private static final Pattern CASE_ID = Pattern.compile("[a-z0-9][a-z0-9-]{0,39}");
   private static final int MAX_CASE_NAME = 100;
 
   private RuleSetValidator() {}

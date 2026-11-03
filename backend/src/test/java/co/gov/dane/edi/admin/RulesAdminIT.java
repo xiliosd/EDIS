@@ -405,6 +405,108 @@ class RulesAdminIT extends OracleIntegrationTest {
         .andExpect(status().isBadRequest());
   }
 
+  private static String importOf(String skipId, String caseId) {
+    return """
+        {"rules":{"encuesta":"EDIN","anio":2027,"version":0,"saltos":[
+          {"id":"%s","si":{"pregunta":"C01A","op":"eq","valor":"1"},
+           "entonces":{"accion":"deshabilitar","preguntas":["C01B"]}}],
+         "validaciones":{},
+         "casos":[{"id":"%s","nombre":"Caso","pagina":"C1","respuestas":{"C01A":"2"},
+           "esperado":{"ocultas":["C01B"]}}]},"version":1}"""
+        .formatted(skipId, caseId);
+  }
+
+  @Test
+  void importWithIdBeyondAuditLimitIs422() throws Exception {
+    String tooLong = "a".repeat(41);
+    for (String body :
+        new String[] {
+          importOf(tooLong, "caso-ok"),
+          importOf("regla.1", "caso-ok"),
+          importOf("regla con espacios", "caso-ok"),
+          importOf("regla-ok", tooLong),
+          importOf("regla-ok", "caso.1")
+        }) {
+      send(put(DRAFT + "/import"), body).andExpect(status().isUnprocessableContent());
+    }
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void importKeepsMixedCaseLegacyIds() throws Exception {
+    send(put(DRAFT + "/import"), importOf("legacy-C01A", "caso-ok")).andExpect(status().isOk());
+  }
+
+  @Test
+  void newIdOfFortyCharactersIsAcceptedAndFortyOneRejected() throws Exception {
+    String forty = "a".repeat(40);
+    String rule =
+        """
+        {"rule":{"id":"%s","si":{"pregunta":"C01A","op":"eq","valor":"1"},
+          "entonces":{"accion":"deshabilitar","preguntas":["C01B"]}},"version":%d}""";
+    send(put(DRAFT + "/skips/" + "a".repeat(41)), rule.formatted("a".repeat(41), 1))
+        .andExpect(status().isUnprocessableContent());
+    send(put(DRAFT + "/skips/" + forty), rule.formatted(forty, 1))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version").value(2));
+    send(delete(DRAFT + "/skips/" + forty + "?version=2"), null).andExpect(status().isOk());
+    String testCase =
+        """
+        {"testCase":{"id":"%s","nombre":"Caso","pagina":"C1","respuestas":{},
+          "esperado":{"ocultas":[]}},"version":%d}""";
+    send(put(DRAFT + "/cases/" + "b".repeat(41)), testCase.formatted("b".repeat(41), 3))
+        .andExpect(status().isUnprocessableContent());
+    send(put(DRAFT + "/cases/" + "b".repeat(40)), testCase.formatted("b".repeat(40), 3))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void importLargerThanOneMegabyteIs413() throws Exception {
+    String body =
+        importOf("regla-ok", "caso-ok").replace("\"Caso\"", "\"" + "x".repeat(1_100_000) + "\"");
+    send(put(DRAFT + "/import"), body)
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.detail").value("El archivo supera 1 MB."));
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void importWithStructuralProblemsIs422Estructura() throws Exception {
+    String longName =
+        importOf("regla-ok", "caso-ok").replace("\"Caso\"", "\"" + "n".repeat(101) + "\"");
+    send(put(DRAFT + "/import"), longName)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.report.errors[0].code").value("ESTRUCTURA"));
+    String duplicated =
+        """
+        {"rules":{"encuesta":"EDIN","anio":2027,"version":0,"saltos":[],"validaciones":{},
+         "casos":[
+          {"id":"caso-1","nombre":"Uno","pagina":"C1","respuestas":{},"esperado":{}},
+          {"id":"caso-1","nombre":"Dos","pagina":"C1","respuestas":{},"esperado":{}}]},
+         "version":1}""";
+    send(put(DRAFT + "/import"), duplicated)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.report.errors[0].code").value("ESTRUCTURA"));
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  @Test
+  void malformedImportJsonIs400() throws Exception {
+    send(put(DRAFT + "/import"), "{\"rules\":").andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void importWithoutCsrfIs403() throws Exception {
+    mockMvc
+        .perform(
+            put(DRAFT + "/import")
+                .cookie(admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(importOf("regla-ok", "caso-ok")))
+        .andExpect(status().isForbidden());
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
   private ResultActions send(MockHttpServletRequestBuilder builder, String body) throws Exception {
     builder.with(realCsrf(mockMvc)).cookie(admin());
     if (body != null) {

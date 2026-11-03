@@ -626,8 +626,7 @@ paths:
           content:
             application/json:
               schema:
-                type: string
-                format: byte
+                $ref: "#/components/schemas/RuleSet"
           description: Archivo EDIN-AAAA.json
         "404":
           content:
@@ -676,6 +675,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: El año está publicado o la versión cambió
+        "413":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El cuerpo supera 1 MB
         "422":
           content:
             application/problem+json:

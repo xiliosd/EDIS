@@ -137,6 +137,10 @@ class RuleSetValidatorTest {
         .isEmpty();
     assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "x".repeat(101), "C1"))))
         .hasSize(1);
+    assertThat(RuleSetValidator.problems(withCases(testCase("a".repeat(40), "Nombre", "C1"))))
+        .isEmpty();
+    assertThat(RuleSetValidator.problems(withCases(testCase("a".repeat(41), "Nombre", "C1"))))
+        .hasSize(1);
     assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "Nombre", "Z9"))))
         .hasSize(1);
   }

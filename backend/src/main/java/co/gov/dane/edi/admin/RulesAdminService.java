@@ -46,6 +46,9 @@ public class RulesAdminService {
   /** Un id nuevo de regla o caso: el límite de 40 caracteres es el de los códigos de auditoría. */
   private static final Pattern NEW_ID = Pattern.compile("[a-z0-9][a-z0-9-]{0,39}");
 
+  /** Lo que admite un código de auditoría: los ids importados deben poder auditarse al editarse. */
+  private static final Pattern AUDITABLE_ID = Pattern.compile("[A-Za-z0-9_-]{1,40}");
+
   private static final Pattern COLUMN = Pattern.compile("[A-Z][0-9A-Z_]{1,29}");
 
   private final YearCatalogService years;
@@ -233,6 +236,15 @@ public class RulesAdminService {
     if (!survey.equals(imported.survey()) || year != imported.year()) {
       throw new InvalidEditException("El archivo no corresponde a la encuesta y año indicados.");
     }
+    boolean badId =
+        imported.skips().stream().map(SkipRule::id).anyMatch(RulesAdminService::notAuditable)
+            || imported.cases().stream()
+                .map(TestCase::id)
+                .anyMatch(RulesAdminService::notAuditable);
+    if (badId) {
+      throw new InvalidEditException(
+          "Los ids de reglas y casos admiten letras, números, guion y guion bajo (hasta 40).");
+    }
     return apply(
         survey,
         year,
@@ -260,34 +272,30 @@ public class RulesAdminService {
       CandidateBuilder build) {
     return locks.withAdminLock(
         () -> {
-          try {
-            years.requireDraft(survey, year);
-            RuleSet current = years.requireYear(survey, year);
-            if (current.version() != version) {
-              throw new ConflictException(
-                  "Otro usuario modificó el cuestionario. Recargue la página.");
-            }
-            List<SkipRule> legacy = effectiveRules.legacySkips(survey, year);
-            RuleSet candidate = build.build(current, legacy);
-            Map<String, QuestionFacts> facts = factsService.facts(survey, year);
-            AnalysisReport before =
-                RuleSetAnalyzer.analyze(EffectiveRulesService.merge(current, legacy), facts);
-            AnalysisReport after =
-                RuleSetAnalyzer.analyze(EffectiveRulesService.merge(candidate, legacy), facts);
-            rejectStructuralProblems(candidate, after);
-            List<Finding> added = after.newErrorsComparedTo(before);
-            if (!added.isEmpty()) {
-              throw new InvalidRulesException(new AnalysisReport(added, after.warnings()));
-            }
-            RuleSet saved = rulesFiles.save(candidate, version, user, operation, codes);
-            effectiveRules.evict();
-            return new RulesEditResult(
-                saved.version(),
-                after,
-                CaseRunner.runAll(EffectiveRulesService.merge(saved, legacy), facts));
-          } finally {
-            effectiveRules.evict();
+          years.requireDraft(survey, year);
+          RuleSet current = years.requireYear(survey, year);
+          if (current.version() != version) {
+            throw new ConflictException(
+                "Otro usuario modificó el cuestionario. Recargue la página.");
           }
+          List<SkipRule> legacy = effectiveRules.legacySkips(survey, year);
+          RuleSet candidate = build.build(current, legacy);
+          Map<String, QuestionFacts> facts = factsService.facts(survey, year);
+          AnalysisReport before =
+              RuleSetAnalyzer.analyze(EffectiveRulesService.merge(current, legacy), facts);
+          AnalysisReport after =
+              RuleSetAnalyzer.analyze(EffectiveRulesService.merge(candidate, legacy), facts);
+          rejectStructuralProblems(candidate, after);
+          List<Finding> added = after.newErrorsComparedTo(before);
+          if (!added.isEmpty()) {
+            throw new InvalidRulesException(new AnalysisReport(added, after.warnings()));
+          }
+          RuleSet saved = rulesFiles.save(candidate, version, user, operation, codes);
+          effectiveRules.evict();
+          return new RulesEditResult(
+              saved.version(),
+              after,
+              CaseRunner.runAll(EffectiveRulesService.merge(saved, legacy), facts));
         });
   }
 
@@ -302,6 +310,11 @@ public class RulesAdminService {
         problem ->
             findings.add(new Finding(AnalysisCodes.ESTRUCTURA, "archivo", problem, List.of())));
     throw new InvalidRulesException(new AnalysisReport(findings, after.warnings()));
+  }
+
+  /** Un id nulo lo reporta el validador estructural; aquí solo importa poder auditarlo. */
+  private static boolean notAuditable(String id) {
+    return id != null && !AUDITABLE_ID.matcher(id).matches();
   }
 
   private static void requireColumn(String column) {

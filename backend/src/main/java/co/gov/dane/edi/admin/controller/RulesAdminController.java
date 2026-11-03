@@ -7,6 +7,7 @@ import co.gov.dane.edi.admin.dto.RulesEditorView;
 import co.gov.dane.edi.admin.dto.SkipRuleRequest;
 import co.gov.dane.edi.admin.dto.TestCaseRequest;
 import co.gov.dane.edi.admin.dto.ValidationRequest;
+import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.security.SessionTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -220,7 +222,13 @@ public class RulesAdminController {
   @Operation(
       summary = "Descargar el archivo de reglas del año",
       description = "El archivo guardado, con saltos, validaciones y casos, como adjunto JSON.")
-  @ApiResponse(responseCode = "200", description = "Archivo EDIN-AAAA.json")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Archivo EDIN-AAAA.json",
+      content =
+          @Content(
+              mediaType = "application/json",
+              schema = @Schema(implementation = RuleSet.class)))
   @ApiResponse(
       responseCode = "404",
       description = "La encuesta o el año no existen",
@@ -233,7 +241,10 @@ public class RulesAdminController {
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
-            "attachment; filename=\"" + survey + "-" + year + ".json\"")
+            ContentDisposition.attachment()
+                .filename(survey + "-" + year + ".json")
+                .build()
+                .toString())
         .contentType(MediaType.APPLICATION_JSON)
         .body(content);
   }
@@ -248,6 +259,11 @@ public class RulesAdminController {
   @ApiResponse(
       responseCode = "409",
       description = "El año está publicado o la versión cambió",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "413",
+      description = "El cuerpo supera 1 MB",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
