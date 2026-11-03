@@ -269,4 +269,113 @@ class RuleSetAnalyzerErrorsTest {
     assertThat(candidate.hasErrors()).isTrue();
     assertThat(new AnalysisReport(List.of(), List.of()).hasErrors()).isFalse();
   }
+
+  private static Condition nested(String op, Condition... children) {
+    List<Condition> list = List.of(children);
+    return "y".equals(op)
+        ? new Condition(null, null, null, null, null, null, list, null)
+        : new Condition(null, null, null, null, null, null, null, list);
+  }
+
+  @Test
+  void nestedConditionsAreAnalyzed() {
+    Condition invalid = nested("y", eq("C02", "x"), nested("o", eq("C01A", "3"), eq("C03", "1")));
+    Condition valid = nested("y", eq("C02", "x"), nested("o", eq("C01A", "2"), eq("C03", "1")));
+
+    AnalysisReport bad =
+        RuleSetAnalyzer.analyze(rules(List.of(rule("r1", invalid, "C01B")), Map.of()), FACTS);
+    AnalysisReport good =
+        RuleSetAnalyzer.analyze(rules(List.of(rule("r1", valid, "C01B")), Map.of()), FACTS);
+
+    assertThat(codes(bad)).containsExactly("VALOR_NO_ES_OPCION@regla:r1");
+    assertThat(good.errors()).isEmpty();
+  }
+
+  @Test
+  void nestedLeavesAreCycleTriggers() {
+    RuleSet set =
+        rules(
+            List.of(
+                rule("r1", nested("y", eq("C01A", "1"), eq("C03", "1")), "C01B"),
+                rule("r2", eq("C01B", "x"), "C03")),
+            Map.of());
+
+    assertThat(codes(RuleSetAnalyzer.analyze(set, FACTS)))
+        .containsExactly("CICLO@regla:r1", "CICLO@regla:r2");
+  }
+
+  @Test
+  void partialFixCreatesNoNewErrors() {
+    AnalysisReport before =
+        RuleSetAnalyzer.analyze(
+            rules(
+                List.of(rule("r1", nested("o", eq("X01", "1"), eq("X02", "1")), "C01B")), Map.of()),
+            FACTS);
+    AnalysisReport after =
+        RuleSetAnalyzer.analyze(
+            rules(List.of(rule("r1", eq("X02", "1"), "C01B")), Map.of()), FACTS);
+
+    assertThat(before.errors()).hasSize(2);
+    assertThat(after.newErrorsComparedTo(before)).isEmpty();
+  }
+
+  @Test
+  void partialFixOfOptionValuesCreatesNoNewErrors() {
+    Condition both = nested("o", eq("C01A", "8"), eq("C03", "9"));
+    AnalysisReport before =
+        RuleSetAnalyzer.analyze(rules(List.of(rule("r1", both, "C01B")), Map.of()), FACTS);
+    AnalysisReport after =
+        RuleSetAnalyzer.analyze(
+            rules(List.of(rule("r1", eq("C03", "9"), "C01B")), Map.of()), FACTS);
+
+    assertThat(before.errors()).hasSize(2);
+    assertThat(after.newErrorsComparedTo(before)).isEmpty();
+  }
+
+  @Test
+  void cycleFindingsStableWhenOneCycleRemoved() {
+    SkipRule ab = rule("r1", eq("C01A", "1"), "C01B");
+    SkipRule bc = rule("r2", eq("C01B", "x"), "C02");
+    SkipRule ca = rule("r3", eq("C02", "x"), "C01A");
+    SkipRule ba = rule("r4", eq("C01B", "x"), "C01A");
+    AnalysisReport before =
+        RuleSetAnalyzer.analyze(rules(List.of(ab, bc, ca, ba), Map.of()), FACTS);
+    AnalysisReport after = RuleSetAnalyzer.analyze(rules(List.of(ab, bc, ca), Map.of()), FACTS);
+
+    assertThat(codes(before))
+        .containsExactly("CICLO@regla:r1", "CICLO@regla:r2", "CICLO@regla:r3", "CICLO@regla:r4");
+    assertThat(codes(after)).hasSize(3);
+    assertThat(after.newErrorsComparedTo(before)).isEmpty();
+  }
+
+  @Test
+  void selfCycle() {
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(rules(List.of(rule("r1", eq("C02", "x"), "C02")), Map.of()), FACTS);
+
+    assertThat(codes(report)).containsExactly("CICLO@regla:r1");
+    assertThat(report.errors())
+        .anySatisfy(
+            f -> {
+              assertThat(f.code()).isEqualTo("CICLO");
+              assertThat(f.questions()).containsExactly("C02");
+            });
+  }
+
+  @Test
+  void threeNodeCycle() {
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(
+                List.of(
+                    rule("r1", eq("C01A", "1"), "C01B"),
+                    rule("r2", eq("C01B", "x"), "C02"),
+                    rule("r3", eq("C02", "x"), "C01A")),
+                Map.of()),
+            FACTS);
+
+    assertThat(codes(report)).containsExactly("CICLO@regla:r1", "CICLO@regla:r2", "CICLO@regla:r3");
+    assertThat(report.errors())
+        .allSatisfy(f -> assertThat(f.questions()).containsExactly("C01A", "C01B", "C02"));
+  }
 }

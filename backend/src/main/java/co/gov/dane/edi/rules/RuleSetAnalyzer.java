@@ -4,8 +4,11 @@ import co.gov.dane.edi.model.AnswerColumn;
 import co.gov.dane.edi.model.InputType;
 import co.gov.dane.edi.service.SurveyAnswerService;
 import java.math.BigDecimal;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -75,22 +78,30 @@ public final class RuleSetAnalyzer {
     }
   }
 
+  /** Un hallazgo por (elemento, columna): corregir una sola no cambia la identidad de las otras. */
   private static void addUnknown(
       String element, Set<String> columns, Map<String, QuestionFacts> facts, List<Finding> errors) {
-    List<String> missing =
-        columns.stream().filter(column -> !facts.containsKey(column)).sorted().toList();
-    if (!missing.isEmpty()) {
-      errors.add(
-          new Finding(
-              AnalysisCodes.PREGUNTA_INEXISTENTE,
-              element,
-              "Pregunta inexistente en el cuestionario: " + String.join(", ", missing) + ".",
-              missing));
-    }
+    columns.stream()
+        .filter(column -> !facts.containsKey(column))
+        .sorted()
+        .forEach(
+            column ->
+                errors.add(
+                    new Finding(
+                        AnalysisCodes.PREGUNTA_INEXISTENTE,
+                        element,
+                        "Pregunta inexistente en el cuestionario: " + column + ".",
+                        List.of(column))));
   }
 
   // ---- CICLO ----
 
+  /**
+   * Una regla es parte de un ciclo si alguna de sus aristas (disparador a destino) queda dentro de
+   * un componente fuertemente conexo no trivial, autociclos incluidos. {@code questions} son las
+   * columnas del componente; así, borrar una regla de un componente con varios ciclos no crea
+   * errores nuevos.
+   */
   private static void checkCycles(RuleSet rules, List<Finding> errors) {
     Map<String, Set<String>> graph = new TreeMap<>();
     for (SkipRule rule : rules.skips()) {
@@ -98,84 +109,83 @@ public final class RuleSetAnalyzer {
         graph.computeIfAbsent(trigger, key -> new TreeSet<>()).addAll(targetsOf(rule));
       }
     }
-    Set<String> reported = new HashSet<>();
-    for (String start : graph.keySet()) {
-      if (reported.contains(start)) {
-        continue;
-      }
-      List<String> cycle = cycleThrough(start, graph);
-      if (!cycle.isEmpty()) {
-        // Un componente se informa una sola vez, desde su código menor.
-        reported.addAll(componentOf(start, graph));
-        reportCycle(rules, cycle, errors);
+    Map<String, List<String>> componentOf = new HashMap<>();
+    for (List<String> component : new StrongComponents(graph).find()) {
+      boolean selfLoop =
+          component.size() == 1
+              && graph.getOrDefault(component.get(0), Set.of()).contains(component.get(0));
+      if (component.size() > 1 || selfLoop) {
+        component.forEach(column -> componentOf.put(column, component));
       }
     }
-  }
-
-  /** El ciclo más corto que vuelve a {@code start}, o vacío si {@code start} no está en uno. */
-  private static List<String> cycleThrough(String start, Map<String, Set<String>> graph) {
-    Map<String, String> parent = new HashMap<>();
-    List<String> queue = new ArrayList<>(List.of(start));
-    for (int index = 0; index < queue.size(); index++) {
-      String current = queue.get(index);
-      for (String next : graph.getOrDefault(current, Set.of())) {
-        if (next.equals(start)) {
-          List<String> path = new ArrayList<>();
-          for (String node = current; node != null; node = parent.get(node)) {
-            path.add(0, node);
-          }
-          return path;
-        }
-        if (parent.putIfAbsent(next, current) == null) {
-          queue.add(next);
-        }
-      }
-    }
-    return List.of();
-  }
-
-  /** Los nodos que {@code start} alcanza y que a su vez lo alcanzan. */
-  private static Set<String> componentOf(String start, Map<String, Set<String>> graph) {
-    Set<String> forward = reachable(start, graph);
-    Map<String, Set<String>> reversed = new HashMap<>();
-    graph.forEach(
-        (from, targets) ->
-            targets.forEach(to -> reversed.computeIfAbsent(to, key -> new HashSet<>()).add(from)));
-    forward.retainAll(reachable(start, reversed));
-    return forward;
-  }
-
-  private static Set<String> reachable(String start, Map<String, Set<String>> graph) {
-    Set<String> seen = new HashSet<>();
-    List<String> pending = new ArrayList<>(List.of(start));
-    while (!pending.isEmpty()) {
-      String current = pending.remove(pending.size() - 1);
-      for (String next : graph.getOrDefault(current, Set.of())) {
-        if (seen.add(next)) {
-          pending.add(next);
-        }
-      }
-    }
-    return seen;
-  }
-
-  private static void reportCycle(RuleSet rules, List<String> cycle, List<Finding> errors) {
-    String path = String.join(" -> ", cycle) + " -> " + cycle.get(0);
     for (SkipRule rule : rules.skips()) {
-      Set<String> triggers = triggersOf(rule);
-      Set<String> targets = targetsOf(rule);
-      for (int index = 0; index < cycle.size(); index++) {
-        String from = cycle.get(index);
-        String to = cycle.get((index + 1) % cycle.size());
-        if (triggers.contains(from) && targets.contains(to)) {
-          errors.add(
-              new Finding(
-                  AnalysisCodes.CICLO,
-                  "regla:" + rule.id(),
-                  "La regla forma un ciclo de saltos: " + path + ".",
-                  cycle));
-          break;
+      List<String> component = cycleComponentOf(rule, componentOf);
+      if (component != null) {
+        errors.add(
+            new Finding(
+                AnalysisCodes.CICLO,
+                "regla:" + rule.id(),
+                "La regla forma un ciclo de saltos entre: " + String.join(", ", component) + ".",
+                component));
+      }
+    }
+  }
+
+  private static List<String> cycleComponentOf(
+      SkipRule rule, Map<String, List<String>> componentOf) {
+    Set<String> targets = targetsOf(rule);
+    for (String trigger : triggersOf(rule)) {
+      List<String> component = componentOf.get(trigger);
+      if (component != null && targets.stream().anyMatch(component::contains)) {
+        return component;
+      }
+    }
+    return null;
+  }
+
+  /** Tarjan sobre un grafo ordenado: componentes y miembros salen en orden determinista. */
+  private static final class StrongComponents {
+    private final Map<String, Set<String>> graph;
+    private final Map<String, Integer> index = new HashMap<>();
+    private final Map<String, Integer> low = new HashMap<>();
+    private final Deque<String> stack = new ArrayDeque<>();
+    private final Set<String> onStack = new HashSet<>();
+    private final List<List<String>> components = new ArrayList<>();
+
+    StrongComponents(Map<String, Set<String>> graph) {
+      this.graph = graph;
+    }
+
+    List<List<String>> find() {
+      Set<String> nodes = new TreeSet<>(graph.keySet());
+      graph.values().forEach(nodes::addAll);
+      nodes.stream().filter(node -> !index.containsKey(node)).forEach(this::visit);
+      return components;
+    }
+
+    private void visit(String node) {
+      index.put(node, index.size());
+      low.put(node, index.get(node));
+      stack.push(node);
+      onStack.add(node);
+      for (String next : graph.getOrDefault(node, Set.of())) {
+        if (!index.containsKey(next)) {
+          visit(next);
+          low.put(node, Math.min(low.get(node), low.get(next)));
+        } else if (onStack.contains(next)) {
+          low.put(node, Math.min(low.get(node), index.get(next)));
         }
+      }
+      if (low.get(node).equals(index.get(node))) {
+        List<String> component = new ArrayList<>();
+        String member;
+        do {
+          member = stack.pop();
+          onStack.remove(member);
+          component.add(member);
+        } while (!member.equals(node));
+        Collections.sort(component);
+        components.add(component);
       }
     }
   }
@@ -189,24 +199,27 @@ public final class RuleSetAnalyzer {
       if (rule.when() != null) {
         collectBadValues(rule.when(), facts, badValues);
       }
-      if (!badValues.isEmpty()) {
-        List<String> details = new ArrayList<>();
-        badValues.forEach(
-            (column, values) -> details.add(column + " (" + String.join(", ", values) + ")"));
-        errors.add(
-            new Finding(
-                AnalysisCodes.VALOR_NO_ES_OPCION,
-                "regla:" + rule.id(),
-                "El valor no es una opción de la pregunta: " + String.join("; ", details) + ".",
-                List.copyOf(badValues.keySet())));
-      }
+      // Un hallazgo por (regla, columna), por la misma razón que PREGUNTA_INEXISTENTE.
+      badValues.forEach(
+          (column, values) ->
+              errors.add(
+                  new Finding(
+                      AnalysisCodes.VALOR_NO_ES_OPCION,
+                      "regla:" + rule.id(),
+                      "El valor no es una opción de la pregunta "
+                          + column
+                          + ": "
+                          + String.join(", ", values)
+                          + ".",
+                      List.of(column))));
     }
   }
 
   private static void collectBadValues(
       Condition condition, Map<String, QuestionFacts> facts, Map<String, Set<String>> bad) {
     forEachNested(condition, child -> collectBadValues(child, facts, bad));
-    if (!VALUE_OPERATORS.contains(condition.op())) {
+    // Los nodos y/o no tienen operador: solo las hojas se revisan.
+    if (condition.op() == null || !VALUE_OPERATORS.contains(condition.op())) {
       return;
     }
     List<String> values = new ArrayList<>();
