@@ -51,13 +51,18 @@ public class EffectiveRulesService {
     return computed;
   }
 
-  private RuleSet compute(String surveyCode, int year) {
+  /** Los saltos genéricos de FRM_SALTO traducidos a reglas, en el orden de las páginas. */
+  public List<SkipRule> legacySkips(String surveyCode, int year) {
     List<SkipRule> legacy = new ArrayList<>();
     for (SurveyPage page : SurveyPage.ordered()) {
       legacy.addAll(
           LegacySkipTranslator.translate(questionnaire.pageEntries(page, surveyCode, year)));
     }
-    return merge(rulesFile.load(surveyCode, year), legacy);
+    return legacy;
+  }
+
+  private RuleSet compute(String surveyCode, int year) {
+    return merge(rulesFile.load(surveyCode, year), legacySkips(surveyCode, year));
   }
 
   private record CachedRules(long generation, RuleSet rules) {}

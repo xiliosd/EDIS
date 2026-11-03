@@ -1,5 +1,6 @@
 package co.gov.dane.edi.controller;
 
+import co.gov.dane.edi.admin.InvalidRulesException;
 import co.gov.dane.edi.admin.SharedRowException;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
@@ -67,6 +68,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     if (exception.field() != null) {
       body.setProperty("errors", Map.of(exception.field(), exception.getMessage()));
     }
+    return body;
+  }
+
+  @ExceptionHandler(InvalidRulesException.class)
+  ProblemDetail handleInvalidRules(InvalidRulesException exception) {
+    ProblemDetail body =
+        problem(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "Las reglas tienen errores.",
+            "Corrija los errores marcados antes de guardar.");
+    body.setProperty("report", exception.report());
     return body;
   }
 

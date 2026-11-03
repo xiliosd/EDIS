@@ -13,6 +13,8 @@ tags:
   name: Autenticación
 - description: Lectura y diligenciamiento del cuestionario
   name: Encuesta
+- description: "Reglas de salto, validaciones y casos de prueba de un año (rol ADMIN_CUESTIONARIO)"
+  name: Administración de reglas
 - description: Consulta y edición de años y árbol del cuestionario (rol ADMIN_CUESTIONARIO)
   name: Administración del cuestionario
 paths:
@@ -472,6 +474,426 @@ paths:
       summary: Reordenar las preguntas de una página de un año en borrador
       tags:
       - Administración del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/rules:
+    get:
+      description: "Incluye las reglas efectivas (archivo más heredadas), el análisis\
+        \ de lógica, el resultado de cada caso y las preguntas del año. También responde\
+        \ para años publicados, en modo de solo lectura."
+      operationId: view
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditorView"
+          description: Reglas del año con su análisis
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta o el año no existen
+      summary: "Consultar las reglas, validaciones y casos de un año"
+      tags:
+      - Administración de reglas
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/cases/{caseId}:
+    delete:
+      operationId: deleteCase
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: caseId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: version
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditResult"
+          description: "Versión nueva, análisis y resultado de casos"
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El caso no existe en el archivo del año
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año está publicado o la versión cambió
+      summary: Borrar un caso de prueba
+      tags:
+      - Administración de reglas
+    put:
+      description: Crea el caso o reemplaza el que tiene el mismo id y lo da por revisado.
+      operationId: saveCase
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: caseId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestCaseRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditResult"
+          description: "Versión nueva, análisis y resultado de casos"
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año está publicado o la versión cambió
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El id no coincide o no es válido, o el caso no es válido"
+      summary: Guardar un caso de prueba
+      tags:
+      - Administración de reglas
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/export:
+    get:
+      description: "El archivo guardado, con saltos, validaciones y casos, como adjunto\
+        \ JSON."
+      operationId: export
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+          description: Archivo EDIN-AAAA.json
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta o el año no existen
+      summary: Descargar el archivo de reglas del año
+      tags:
+      - Administración de reglas
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/import:
+    put:
+      description: "Reemplaza solo los saltos, las validaciones y los casos del añ\
+        o en borrador. El estado, las tablas y las columnas nuevas del archivo importado\
+        \ se ignoran. Se rechaza con 422 si el análisis encuentra errores nuevos,\
+        \ por ejemplo un ciclo entre reglas."
+      operationId: importRules
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRulesRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditResult"
+          description: "Versión nueva, análisis y resultado de casos"
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año está publicado o la versión cambió
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El archivo es de otra encuesta o año, o agrega errores (propiedad\
+            \ report)"
+      summary: "Importar reglas, validaciones y casos"
+      tags:
+      - Administración de reglas
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/skips/{ruleId}:
+    delete:
+      operationId: deleteSkip
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: ruleId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: version
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditResult"
+          description: "Versión nueva, análisis y resultado de casos"
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La regla no existe en el archivo del año
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año está publicado o la versión cambió
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Al borrarla quedan errores nuevos (propiedad report)
+      summary: Borrar una regla de salto del archivo del año
+      tags:
+      - Administración de reglas
+    put:
+      description: Crea la regla o reemplaza la que tiene el mismo id. Se rechaza
+        con 422 si agrega errores que el archivo vigente no tenía; los avisos nunca
+        bloquean.
+      operationId: saveSkip
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: ruleId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkipRuleRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditResult"
+          description: "Versión nueva, análisis y resultado de casos"
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta o el año no existen
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año está publicado o la versión cambió
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "El id no coincide, no es válido o la regla agrega errores\
+            \ (propiedad report)"
+      summary: Guardar una regla de salto
+      tags:
+      - Administración de reglas
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/validations/{column}:
+    delete:
+      operationId: deleteValidation
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: column
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: version
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditResult"
+          description: "Versión nueva, análisis y resultado de casos"
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La columna no tiene validación en el archivo del año
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año está publicado o la versión cambió
+      summary: Borrar la validación de una columna
+      tags:
+      - Administración de reglas
+    put:
+      description: Crea la validación o reemplaza la de la columna indicada.
+      operationId: saveValidation
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: column
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidationRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesEditResult"
+          description: "Versión nueva, análisis y resultado de casos"
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año está publicado o la versión cambió
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La columna no es válida o la validación agrega errores (propiedad
+            report)
+      summary: Guardar la validación de una columna
+      tags:
+      - Administración de reglas
   /api/v1/admin/questionnaire/{encuesta}/{anio}/tables:
     put:
       description: Reemplaza el mapeo del año. Una tabla que aún no existe se acepta
@@ -1045,6 +1467,17 @@ components:
         year:
           type: integer
           format: int32
+    AnalysisReport:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
     AnswerOption:
       type: object
       properties:
@@ -1073,6 +1506,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AnswerOption"
+    CaseResult:
+      type: object
+      properties:
+        actualErrors:
+          type: object
+          additionalProperties:
+            type: string
+        actualHidden:
+          type: array
+          items:
+            type: string
+        differences:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+          - pasa
+          - falla
+          - por_revisar
     ChapterDetail:
       type: object
       properties:
@@ -1154,6 +1610,17 @@ components:
       required:
       - text
       - version
+    ExpectedOutcome:
+      type: object
+      properties:
+        errores:
+          type: object
+          additionalProperties:
+            type: string
+        ocultas:
+          type: array
+          items:
+            type: string
     FieldValidation:
       type: object
       properties:
@@ -1168,6 +1635,19 @@ components:
           type: boolean
         tipo:
           type: string
+    Finding:
+      type: object
+      properties:
+        code:
+          type: string
+        element:
+          type: string
+        message:
+          type: string
+        questions:
+          type: array
+          items:
+            type: string
     FinishRequest:
       type: object
       properties:
@@ -1180,6 +1660,17 @@ components:
       properties:
         receipt:
           type: string
+    ImportRulesRequest:
+      type: object
+      properties:
+        rules:
+          $ref: "#/components/schemas/RuleSet"
+        version:
+          type: integer
+          format: int32
+      required:
+      - rules
+      - version
     LegacySkip:
       type: object
       properties:
@@ -1208,6 +1699,14 @@ components:
       - accountType
       - password
       - username
+    NewColumn:
+      type: object
+      properties:
+        longitud:
+          type: integer
+          format: int32
+        tipo:
+          type: string
     NewQuestionRequest:
       type: object
       properties:
@@ -1386,6 +1885,118 @@ components:
         version:
           type: integer
           format: int32
+    RuleQuestion:
+      type: object
+      properties:
+        column:
+          type: string
+        columnStatus:
+          type: string
+          enum:
+          - ACTIVE
+          - PENDING_COLUMN
+        inputType:
+          type: string
+        numeral:
+          type: string
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnswerOption"
+        pageCode:
+          type: string
+        text:
+          type: string
+    RuleSet:
+      type: object
+      properties:
+        anio:
+          type: integer
+          format: int32
+        casos:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestCase"
+        columnasNuevas:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/NewColumn"
+        encuesta:
+          type: string
+        estado:
+          type: string
+          enum:
+          - borrador
+          - publicado
+        saltos:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkipRule"
+        tablas:
+          type: object
+          additionalProperties:
+            type: string
+        validaciones:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/FieldValidation"
+        version:
+          type: integer
+          format: int32
+    RulesEditResult:
+      type: object
+      properties:
+        caseResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaseResult"
+        report:
+          $ref: "#/components/schemas/AnalysisReport"
+        version:
+          type: integer
+          format: int32
+    RulesEditorView:
+      type: object
+      properties:
+        caseResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaseResult"
+        cases:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestCase"
+        legacySkipIds:
+          type: array
+          items:
+            type: string
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleQuestion"
+        report:
+          $ref: "#/components/schemas/AnalysisReport"
+        skips:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkipRule"
+        state:
+          type: string
+          enum:
+          - borrador
+          - publicado
+        survey:
+          type: string
+        validations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/FieldValidation"
+        version:
+          type: integer
+          format: int32
+        year:
+          type: integer
+          format: int32
     SectionHeader:
       type: object
       properties:
@@ -1435,6 +2046,17 @@ components:
           type: string
         si:
           $ref: "#/components/schemas/Condition"
+    SkipRuleRequest:
+      type: object
+      properties:
+        rule:
+          $ref: "#/components/schemas/SkipRule"
+        version:
+          type: integer
+          format: int32
+      required:
+      - rule
+      - version
     SurveyProgress:
       type: object
       properties:
@@ -1475,6 +2097,45 @@ components:
         version:
           type: integer
           format: int32
+    TestCase:
+      type: object
+      properties:
+        esperado:
+          $ref: "#/components/schemas/ExpectedOutcome"
+        id:
+          type: string
+        nombre:
+          type: string
+        pagina:
+          type: string
+        porRevisar:
+          type: boolean
+        respuestas:
+          type: object
+          additionalProperties:
+            type: string
+    TestCaseRequest:
+      type: object
+      properties:
+        testCase:
+          $ref: "#/components/schemas/TestCase"
+        version:
+          type: integer
+          format: int32
+      required:
+      - testCase
+      - version
+    ValidationRequest:
+      type: object
+      properties:
+        validation:
+          $ref: "#/components/schemas/FieldValidation"
+        version:
+          type: integer
+          format: int32
+      required:
+      - validation
+      - version
     YearSummary:
       type: object
       properties:

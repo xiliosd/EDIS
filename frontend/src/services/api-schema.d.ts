@@ -143,6 +143,129 @@ export interface paths {
         patch: operations["reorderPage"];
         trace?: never;
     };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar las reglas, validaciones y casos de un año
+         * @description Incluye las reglas efectivas (archivo más heredadas), el análisis de lógica, el resultado de cada caso y las preguntas del año. También responde para años publicados, en modo de solo lectura.
+         */
+        get: operations["view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/cases/{caseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Guardar un caso de prueba
+         * @description Crea el caso o reemplaza el que tiene el mismo id y lo da por revisado.
+         */
+        put: operations["saveCase"];
+        post?: never;
+        /** Borrar un caso de prueba */
+        delete: operations["deleteCase"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar el archivo de reglas del año
+         * @description El archivo guardado, con saltos, validaciones y casos, como adjunto JSON.
+         */
+        get: operations["export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Importar reglas, validaciones y casos
+         * @description Reemplaza solo los saltos, las validaciones y los casos del año en borrador. El estado, las tablas y las columnas nuevas del archivo importado se ignoran. Se rechaza con 422 si el análisis encuentra errores nuevos, por ejemplo un ciclo entre reglas.
+         */
+        put: operations["importRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/skips/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Guardar una regla de salto
+         * @description Crea la regla o reemplaza la que tiene el mismo id. Se rechaza con 422 si agrega errores que el archivo vigente no tenía; los avisos nunca bloquean.
+         */
+        put: operations["saveSkip"];
+        post?: never;
+        /** Borrar una regla de salto del archivo del año */
+        delete: operations["deleteSkip"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/validations/{column}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Guardar la validación de una columna
+         * @description Crea la validación o reemplaza la de la columna indicada.
+         */
+        put: operations["saveValidation"];
+        post?: never;
+        /** Borrar la validación de una columna */
+        delete: operations["deleteValidation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questionnaire/{encuesta}/{anio}/tables": {
         parameters: {
             query?: never;
@@ -459,6 +582,10 @@ export interface components {
             /** Format: int32 */
             year?: number;
         };
+        AnalysisReport: {
+            errors?: components["schemas"]["Finding"][];
+            warnings?: components["schemas"]["Finding"][];
+        };
         AnswerOption: {
             label?: string;
             value?: string;
@@ -470,6 +597,16 @@ export interface components {
             /** @enum {string} */
             inputType?: "SINGLE_CHOICE" | "CHECKBOX" | "TEXT" | "UNKNOWN";
             options?: components["schemas"]["AnswerOption"][];
+        };
+        CaseResult: {
+            actualErrors?: {
+                [key: string]: string;
+            };
+            actualHidden?: string[];
+            differences?: string[];
+            id?: string;
+            /** @enum {string} */
+            status?: "pasa" | "falla" | "por_revisar";
         };
         ChapterDetail: {
             code?: string;
@@ -506,6 +643,12 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
+        ExpectedOutcome: {
+            errores?: {
+                [key: string]: string;
+            };
+            ocultas?: string[];
+        };
         FieldValidation: {
             /** Format: int32 */
             longitudMax?: number;
@@ -514,11 +657,22 @@ export interface components {
             obligatoria?: boolean;
             tipo?: string;
         };
+        Finding: {
+            code?: string;
+            element?: string;
+            message?: string;
+            questions?: string[];
+        };
         FinishRequest: {
             observations?: string;
         };
         FinishResult: {
             receipt?: string;
+        };
+        ImportRulesRequest: {
+            rules: components["schemas"]["RuleSet"];
+            /** Format: int32 */
+            version: number;
         };
         LegacySkip: {
             /** Format: int32 */
@@ -530,6 +684,11 @@ export interface components {
             accountType: "RESPONDENT" | "ADMINISTRATOR";
             password: string;
             username: string;
+        };
+        NewColumn: {
+            /** Format: int32 */
+            longitud?: number;
+            tipo?: string;
         };
         NewQuestionRequest: {
             /** Format: int64 */
@@ -618,6 +777,60 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
+        RuleQuestion: {
+            column?: string;
+            /** @enum {string} */
+            columnStatus?: "ACTIVE" | "PENDING_COLUMN";
+            inputType?: string;
+            numeral?: string;
+            options?: components["schemas"]["AnswerOption"][];
+            pageCode?: string;
+            text?: string;
+        };
+        RuleSet: {
+            /** Format: int32 */
+            anio?: number;
+            casos?: components["schemas"]["TestCase"][];
+            columnasNuevas?: {
+                [key: string]: components["schemas"]["NewColumn"];
+            };
+            encuesta?: string;
+            /** @enum {string} */
+            estado?: "borrador" | "publicado";
+            saltos?: components["schemas"]["SkipRule"][];
+            tablas?: {
+                [key: string]: string;
+            };
+            validaciones?: {
+                [key: string]: components["schemas"]["FieldValidation"];
+            };
+            /** Format: int32 */
+            version?: number;
+        };
+        RulesEditResult: {
+            caseResults?: components["schemas"]["CaseResult"][];
+            report?: components["schemas"]["AnalysisReport"];
+            /** Format: int32 */
+            version?: number;
+        };
+        RulesEditorView: {
+            caseResults?: components["schemas"]["CaseResult"][];
+            cases?: components["schemas"]["TestCase"][];
+            legacySkipIds?: string[];
+            questions?: components["schemas"]["RuleQuestion"][];
+            report?: components["schemas"]["AnalysisReport"];
+            skips?: components["schemas"]["SkipRule"][];
+            /** @enum {string} */
+            state?: "borrador" | "publicado";
+            survey?: string;
+            validations?: {
+                [key: string]: components["schemas"]["FieldValidation"];
+            };
+            /** Format: int32 */
+            version?: number;
+            /** Format: int32 */
+            year?: number;
+        };
         SectionHeader: {
             /** @enum {string} */
             kind?: "HEADING" | "SUBTITLE";
@@ -642,6 +855,11 @@ export interface components {
             id?: string;
             si?: components["schemas"]["Condition"];
         };
+        SkipRuleRequest: {
+            rule: components["schemas"]["SkipRule"];
+            /** Format: int32 */
+            version: number;
+        };
         SurveyProgress: {
             finished?: boolean;
             observationsSaved?: boolean;
@@ -662,6 +880,26 @@ export interface components {
             };
             /** Format: int32 */
             version?: number;
+        };
+        TestCase: {
+            esperado?: components["schemas"]["ExpectedOutcome"];
+            id?: string;
+            nombre?: string;
+            pagina?: string;
+            porRevisar?: boolean;
+            respuestas?: {
+                [key: string]: string;
+            };
+        };
+        TestCaseRequest: {
+            testCase: components["schemas"]["TestCase"];
+            /** Format: int32 */
+            version: number;
+        };
+        ValidationRequest: {
+            validation: components["schemas"]["FieldValidation"];
+            /** Format: int32 */
+            version: number;
         };
         YearSummary: {
             active?: boolean;
@@ -1113,6 +1351,403 @@ export interface operations {
             };
             /** @description La lista no coincide con las preguntas de la página o mueve una pregunta de grupo */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reglas del año con su análisis */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditorView"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    saveCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestCaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Versión nueva, análisis y resultado de casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El id no coincide o no es válido, o el caso no es válido */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deleteCase: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versión nueva, análisis y resultado de casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description El caso no existe en el archivo del año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archivo EDIN-AAAA.json */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    importRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRulesRequest"];
+            };
+        };
+        responses: {
+            /** @description Versión nueva, análisis y resultado de casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El archivo es de otra encuesta o año, o agrega errores (propiedad report) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    saveSkip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkipRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Versión nueva, análisis y resultado de casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El id no coincide, no es válido o la regla agrega errores (propiedad report) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deleteSkip: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versión nueva, análisis y resultado de casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description La regla no existe en el archivo del año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Al borrarla quedan errores nuevos (propiedad report) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    saveValidation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                column: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidationRequest"];
+            };
+        };
+        responses: {
+            /** @description Versión nueva, análisis y resultado de casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La columna no es válida o la validación agrega errores (propiedad report) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deleteValidation: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                column: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versión nueva, análisis y resultado de casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description La columna no tiene validación en el archivo del año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado o la versión cambió */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
