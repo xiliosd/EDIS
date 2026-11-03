@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button } from '../../components/Button';
+import { ConflictNotice } from '../../components/ConflictNotice';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
 import { ErrorState } from '../../components/ErrorState';
 import { useDocumentTitle } from '../../hooks/use-document-title';
@@ -190,14 +190,7 @@ export function QuestionnaireTreePage() {
         {statusMessage}
       </p>
 
-      {conflict && (
-        <div role="alert" className="mt-6 rounded-xl border border-danger/40 bg-surface p-4">
-          <p className="text-danger">{conflict}</p>
-          <Button variant="secondary" className="mt-3" onClick={reload}>
-            Recargar
-          </Button>
-        </div>
-      )}
+      {conflict && <ConflictNotice message={conflict} onReload={reload} />}
 
       {view && (
         <div key={reloads}>

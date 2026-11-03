@@ -193,8 +193,12 @@ describe('RulesPage', () => {
       await user.click(screen.getByRole('button', { name: 'Editar regla c01a-no' }));
       await user.click(screen.getByRole('button', { name: 'Guardar' }));
 
-      const alert = await screen.findByRole('alert');
-      expect(alert).toHaveFocus();
+      await screen.findAllByRole('alert');
+      const alert = document.activeElement as HTMLElement;
+      expect(alert).toHaveAttribute('role', 'alert');
+      // El diálogo sigue abierto, con el borrador intacto, y la alerta está dentro de él.
+      expect(within(screen.getByRole('dialog')).getByRole('alert')).toBe(alert);
+      expect(screen.getByLabelText('Pregunta de la condición 1')).toHaveValue('C01A');
       expect(alert).toHaveTextContent('Ciclo de saltos');
       expect(alert).toHaveTextContent('Hay un ciclo entre C01A y C01B.');
       // El error que ya existía no es nuevo y no se repite en la alerta.
@@ -225,6 +229,7 @@ describe('RulesPage', () => {
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent('Otro usuario modificó el cuestionario. Recargue la página.');
+      expect(alert).toHaveFocus();
       expect(within(alert).getByRole('button', { name: 'Recargar' })).toBeVisible();
     },
     LONG_FLOW_TIMEOUT,
@@ -304,4 +309,89 @@ describe('RulesPage', () => {
     },
     LONG_FLOW_TIMEOUT,
   );
+
+  it('al cancelar la eliminación el foco vuelve al botón Eliminar de la regla', async () => {
+    await openRules();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar regla c01a-no' }));
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.getByRole('button', { name: 'Eliminar regla c01a-no' })).toHaveFocus();
+  });
+
+  it('al cancelar la importación el foco vuelve al campo de archivo', async () => {
+    await openRules();
+    const user = userEvent.setup();
+
+    await user.upload(
+      screen.getByLabelText('Importar JSON'),
+      new File(['{"encuesta":"EDIN"}'], 'reglas.json', { type: 'application/json' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.getByLabelText('Importar JSON')).toHaveFocus();
+  });
+
+  it('un enlace a una regla de otra página cambia de página y enfoca la fila', async () => {
+    const view = rulesView();
+    view.report = {
+      errors: [],
+      warnings: [
+        { code: 'NUNCA_SE_CUMPLE', element: 'regla:anidada', questions: [], message: 'Nunca.' },
+      ],
+    };
+    await openRules(view);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('link', { name: 'Ir a la regla anidada' }));
+
+    expect(screen.getByLabelText('Página')).toHaveValue('C2');
+    expect(rowOf('anidada')).toHaveFocus();
+  });
+
+  it('un enlace a una pregunta de otra página cambia de página y enfoca la pregunta', async () => {
+    await openRules();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('link', { name: 'Ir a la pregunta C11' }));
+
+    expect(screen.getByLabelText('Página')).toHaveValue('C2');
+    expect(document.getElementById('pregunta-C11')).toHaveFocus();
+  });
+
+  it('las reglas sin ninguna columna conocida están en "Reglas sin página" y se editan', async () => {
+    const view = rulesView();
+    view.skips = [
+      ...view.skips!,
+      {
+        id: 'huerfana',
+        si: { pregunta: 'ZZ98', op: 'eq', valor: '1' },
+        entonces: { accion: 'deshabilitar', preguntas: ['ZZ99'] },
+      },
+    ];
+    view.report = {
+      errors: [],
+      warnings: [
+        {
+          code: 'PREGUNTA_INEXISTENTE',
+          element: 'regla:huerfana',
+          questions: [],
+          message: 'No existe.',
+        },
+      ],
+    };
+    await openRules(view);
+    const user = userEvent.setup();
+    expect(document.getElementById('regla-huerfana')).toBeNull();
+
+    await user.click(screen.getByRole('link', { name: 'Ir a la regla huerfana' }));
+
+    expect(screen.getByRole('option', { name: 'Reglas sin página' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Página')).toHaveValue('__sin-pagina__');
+    const row = rowOf('huerfana');
+    expect(row).toHaveFocus();
+    expect(within(row).getByRole('button', { name: 'Editar regla huerfana' })).toBeEnabled();
+    expect(within(row).getByRole('button', { name: 'Eliminar regla huerfana' })).toBeEnabled();
+  });
 });

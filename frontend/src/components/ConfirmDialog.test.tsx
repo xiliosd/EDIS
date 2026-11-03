@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -94,5 +95,47 @@ describe('ConfirmDialog', () => {
 
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
+  });
+
+  describe('foco al cerrar', () => {
+    function Harness({ unmountOnClose }: { unmountOnClose: boolean }) {
+      const [open, setOpen] = useState(false);
+      const dialog = (
+        <ConfirmDialog
+          open={open}
+          title="¿Seguro?"
+          confirmLabel="Aceptar"
+          cancelLabel="Cancelar"
+          onConfirm={() => setOpen(false)}
+          onCancel={() => setOpen(false)}
+        >
+          Texto
+        </ConfirmDialog>
+      );
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Abrir</button>
+          {unmountOnClose ? open && dialog : dialog}
+        </>
+      );
+    }
+
+    it.each([
+      ['cancelar', 'Cancelar', true],
+      ['confirmar', 'Aceptar', true],
+      ['cancelar', 'Cancelar', false],
+      ['confirmar', 'Aceptar', false],
+    ])(
+      'devuelve el foco al botón que lo abrió al %s (desmontado: %s)',
+      async (_n, label, unmount) => {
+        render(<Harness unmountOnClose={unmount as boolean} />);
+        const user = userEvent.setup();
+
+        await user.click(screen.getByRole('button', { name: 'Abrir' }));
+        await user.click(screen.getByRole('button', { name: label as string }));
+
+        expect(screen.getByRole('button', { name: 'Abrir' })).toHaveFocus();
+      },
+    );
   });
 });

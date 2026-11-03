@@ -14,12 +14,14 @@ interface SkipRuleBuilderProps {
   busy?: boolean;
   /** Error del servidor que no corresponde a un campo. */
   error?: string | null;
+  /** Resumen de errores nuevos del servidor, mostrado dentro del diálogo. */
+  rejected?: ReactNode;
   onSave: (rule: SkipRule) => void;
   onCancel: () => void;
 }
 
 type Mode = 'una' | 'todas' | 'alguna';
-type Kind = 'TEXT' | 'CHECKBOX' | 'CHOICE';
+type Kind = 'TEXT' | 'CHECKBOX' | 'CHOICE' | 'NONE';
 
 interface ConditionDraft {
   key: number;
@@ -57,6 +59,8 @@ const OPERATORS_BY_KIND: Record<Kind, string[]> = {
   TEXT: ['eq', 'ne', 'gt', 'lt', 'empty', 'notEmpty'],
   CHECKBOX: ['eq', 'ne', 'empty', 'notEmpty'],
   CHOICE: ['eq', 'ne', 'in', 'notIn', 'empty', 'notEmpty'],
+  // Tipo desconocido sin opciones: no hay valores que comparar.
+  NONE: ['empty', 'notEmpty'],
 };
 
 const CHECKBOX_OPTIONS = [
@@ -88,10 +92,17 @@ function kindOf(question: RuleQuestion | undefined): Kind {
   if (question?.inputType === 'CHECKBOX') {
     return 'CHECKBOX';
   }
-  // Un tipo desconocido sin opciones solo se puede comparar como texto.
-  return question && question.inputType !== 'SINGLE_CHOICE' && !question.options?.length
-    ? 'TEXT'
-    : 'CHOICE';
+  if (!question || question.inputType === 'SINGLE_CHOICE' || question.options?.length) {
+    return 'CHOICE';
+  }
+  // El texto libre es solo para TEXT, igual que en el editor de validaciones.
+  return 'NONE';
+}
+
+/** Dos preguntas se combinan en todas/alguna solo si tienen el mismo tipo y las mismas opciones. */
+function signatureOf(question: RuleQuestion | undefined): string {
+  const options = kindOf(question) === 'CHOICE' ? (question?.options ?? []) : [];
+  return JSON.stringify([kindOf(question), options.map((item) => [item.value, item.label])]);
 }
 
 function valueOptionsOf(question: RuleQuestion | undefined) {
@@ -111,7 +122,7 @@ export function isFlatCondition(condition: Condition | undefined): boolean {
   if (condition.y && condition.o) {
     return false;
   }
-  return children ? children.every(isLeaf) : true;
+  return children ? children.length > 0 && children.every(isLeaf) : true;
 }
 
 let nextConditionKey = 1;
@@ -278,6 +289,10 @@ function ConditionFields({
   const valueOptions = valueOptionsOf(first);
   const operators = OPERATORS_BY_KIND[kind];
   const columnsId = `${prefix}-columns`;
+  const hintId = `${prefix}-hint`;
+  const multiple = draft.mode !== 'una';
+  const compatible = (question: RuleQuestion) =>
+    !multiple || !first || signatureOf(question) === signatureOf(first);
 
   function changeColumns(columns: string[]) {
     const nextKind = kindOf(lookup.get(columns[0] ?? ''));
@@ -285,7 +300,9 @@ function ConditionFields({
     onChange({
       ...draft,
       columns,
-      op: OPERATORS_BY_KIND[nextKind].includes(draft.op) ? draft.op : 'eq',
+      op: OPERATORS_BY_KIND[nextKind].includes(draft.op)
+        ? draft.op
+        : OPERATORS_BY_KIND[nextKind][0],
       value: sameQuestion ? draft.value : '',
       values: sameQuestion ? draft.values : [],
     });
@@ -306,7 +323,13 @@ function ConditionFields({
   let valueControl: ReactNode = null;
   const valorId = `${prefix}-valor`;
   const valoresId = `${prefix}-valores`;
-  if (SINGLE_VALUE_OPS.has(draft.op)) {
+  if (kind === 'NONE' && first) {
+    valueControl = (
+      <p className="text-sm text-ink-muted sm:self-end">
+        Esta pregunta no admite condiciones por valor; use está vacía o tiene respuesta.
+      </p>
+    );
+  } else if (SINGLE_VALUE_OPS.has(draft.op)) {
     valueControl =
       kind === 'TEXT' ? (
         <div>
@@ -425,17 +448,36 @@ function ConditionFields({
               multiple
               size={5}
               value={draft.columns}
-              onChange={(event) => changeColumns(selectedValues(event.target))}
+              onChange={(event) => {
+                // Se conserva el orden de elección: la primera pregunta fija el tipo.
+                const chosen = selectedValues(event.target);
+                changeColumns([
+                  ...draft.columns.filter((column) => chosen.includes(column)),
+                  ...chosen.filter((column) => !draft.columns.includes(column)),
+                ]);
+              }}
               aria-invalid={errors.has(columnsId) ? true : undefined}
-              aria-describedby={describedBy(columnsId)}
+              aria-describedby={[hintId, errors.has(columnsId) ? `${columnsId}-error` : null]
+                .filter(Boolean)
+                .join(' ')}
               className={SELECT_CLASS}
             >
               {questions.map((question) => (
-                <option key={question.column} value={question.column}>
+                <option
+                  key={question.column}
+                  value={question.column}
+                  disabled={!compatible(question)}
+                >
                   {questionLabel(question)}
                 </option>
               ))}
             </select>
+          )}
+          {multiple && (
+            <p id={hintId} className="mt-1 text-sm text-ink-muted">
+              Solo se pueden combinar preguntas del mismo tipo y con las mismas opciones que la
+              primera elegida.
+            </p>
           )}
           <FieldMessage id={columnsId} message={errors.get(columnsId)} />
         </div>
@@ -481,6 +523,7 @@ export function SkipRuleBuilder({
   existingIds,
   busy = false,
   error = null,
+  rejected = null,
   onSave,
   onCancel,
 }: SkipRuleBuilderProps) {
@@ -542,6 +585,7 @@ export function SkipRuleBuilder({
           {error}
         </p>
       )}
+      {rejected}
       <div className="mt-3 grid gap-4 text-ink">
         {isNew && (
           <TextField

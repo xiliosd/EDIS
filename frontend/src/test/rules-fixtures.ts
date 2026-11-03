@@ -29,6 +29,7 @@ export const RULE_QUESTIONS: RuleQuestion[] = [
   question({ column: 'C09B', pageCode: 'C2' }),
   question({ column: 'C10', pageCode: 'C2' }),
   question({ column: 'C11', pageCode: 'C2', inputType: 'TEXT', options: [] }),
+  question({ column: 'Z01', pageCode: 'C2', inputType: 'UNKNOWN', options: [] }),
 ];
 
 export function rulesView(overrides: Partial<RulesEditorView> = {}): RulesEditorView {

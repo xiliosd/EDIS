@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { RULE_QUESTIONS, rulesView } from '../../test/rules-fixtures';
@@ -20,16 +20,51 @@ function renderBuilder(rule?: SkipRule) {
   return { onSave, onCancel, user: userEvent.setup() };
 }
 
+type User = ReturnType<typeof userEvent.setup>;
+
+/** Recorre el documento con Tab hasta que el foco llega al control. */
+async function tabTo(user: User, control: HTMLElement) {
+  for (let step = 0; step < 80 && document.activeElement !== control; step += 1) {
+    await user.tab();
+  }
+  expect(control).toHaveFocus();
+}
+
+/**
+ * jsdom no cambia la opción de un select con las flechas. Con el select enfocado por Tab se
+ * pulsa la flecha y se aplica el cambio que haría el navegador.
+ */
+async function chooseFocused(user: User, select: HTMLSelectElement, ...values: string[]) {
+  expect(select).toHaveFocus();
+  await user.keyboard('{ArrowDown}');
+  for (const option of Array.from(select.options)) {
+    option.selected = values.includes(option.value);
+  }
+  fireEvent.change(select);
+}
+
+async function fillSelect(user: User, label: string, ...values: string[]) {
+  const select = screen.getByLabelText(label) as HTMLSelectElement;
+  await tabTo(user, select);
+  await chooseFocused(user, select, ...values);
+}
+
+async function saveWithEnter(user: User) {
+  await tabTo(user, screen.getByRole('button', { name: 'Guardar' }));
+  await user.keyboard('{Enter}');
+}
+
 describe('SkipRuleBuilder', () => {
   it('arma C01A = 2 → C01B solo con el teclado', async () => {
     const { onSave, user } = renderBuilder();
 
-    await user.type(screen.getByLabelText('Identificador'), 'c01a-dos');
-    await user.selectOptions(screen.getByLabelText('Pregunta de la condición 1'), 'C01A');
-    await user.selectOptions(screen.getByLabelText('Operador de la condición 1'), 'eq');
-    await user.selectOptions(screen.getByLabelText('Valor de la condición 1'), '2');
-    await user.selectOptions(screen.getByLabelText('Preguntas que no se muestran'), 'C01B');
-    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await tabTo(user, screen.getByLabelText('Identificador'));
+    await user.keyboard('c01a-dos');
+    await fillSelect(user, 'Pregunta de la condición 1', 'C01A');
+    await fillSelect(user, 'Operador de la condición 1', 'eq');
+    await fillSelect(user, 'Valor de la condición 1', '2');
+    await fillSelect(user, 'Preguntas que no se muestran', 'C01B');
+    await saveWithEnter(user);
 
     expect(onSave).toHaveBeenCalledWith({
       id: 'c01a-dos',
@@ -38,19 +73,18 @@ describe('SkipRuleBuilder', () => {
     });
   });
 
-  it('arma todas de C09A,C09B = 2 → C10', async () => {
+  it('arma todas de C09A,C09B = 2 → C10 solo con el teclado', async () => {
     const { onSave, user } = renderBuilder();
 
-    await user.type(screen.getByLabelText('Identificador'), 'c09-todas');
-    await user.type(screen.getByLabelText('Descripción'), 'Ninguna aplica');
-    await user.selectOptions(screen.getByLabelText('Modo de la condición 1'), 'todas');
-    await user.selectOptions(screen.getByLabelText('Preguntas de la condición 1'), [
-      'C09A',
-      'C09B',
-    ]);
-    await user.selectOptions(screen.getByLabelText('Valor de la condición 1'), '2');
-    await user.selectOptions(screen.getByLabelText('Preguntas que no se muestran'), 'C10');
-    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await tabTo(user, screen.getByLabelText('Identificador'));
+    await user.keyboard('c09-todas');
+    await tabTo(user, screen.getByLabelText('Descripción'));
+    await user.keyboard('Ninguna aplica');
+    await fillSelect(user, 'Modo de la condición 1', 'todas');
+    await fillSelect(user, 'Preguntas de la condición 1', 'C09A', 'C09B');
+    await fillSelect(user, 'Valor de la condición 1', '2');
+    await fillSelect(user, 'Preguntas que no se muestran', 'C10');
+    await saveWithEnter(user);
 
     expect(onSave).toHaveBeenCalledWith({
       id: 'c09-todas',
@@ -170,5 +204,48 @@ describe('SkipRuleBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Quitar condición 2' }));
 
     expect(screen.queryByLabelText('Pregunta de la condición 2')).not.toBeInTheDocument();
+  });
+
+  it('en todas/alguna deshabilita las preguntas de otro tipo u otras opciones', async () => {
+    const { user } = renderBuilder();
+
+    await user.selectOptions(screen.getByLabelText('Modo de la condición 1'), 'todas');
+    await user.selectOptions(screen.getByLabelText('Preguntas de la condición 1'), 'C09A');
+
+    const picker = within(screen.getByLabelText('Preguntas de la condición 1'));
+    expect(picker.getByRole('option', { name: /^C09B/ })).toBeEnabled();
+    expect(picker.getByRole('option', { name: /^C11/ })).toBeDisabled();
+    expect(picker.getByRole('option', { name: /^C03/ })).toBeDisabled();
+    expect(
+      screen.getByText(/mismo tipo y con las mismas opciones que la primera elegida/),
+    ).toBeVisible();
+  });
+
+  it('un tipo desconocido sin opciones solo admite está vacía o tiene respuesta', async () => {
+    const { user } = renderBuilder();
+
+    await user.selectOptions(screen.getByLabelText('Pregunta de la condición 1'), 'Z01');
+
+    expect(
+      screen.getByText(
+        'Esta pregunta no admite condiciones por valor; use está vacía o tiene respuesta.',
+      ),
+    ).toBeVisible();
+    const operators = screen.getByLabelText('Operador de la condición 1') as HTMLSelectElement;
+    expect(Array.from(operators.options).map((option) => option.value)).toEqual([
+      'empty',
+      'notEmpty',
+    ]);
+    expect(screen.queryByLabelText('Valor de la condición 1')).not.toBeInTheDocument();
+  });
+
+  it.each(['y', 'o'])('abre en solo lectura una regla con %s vacío', (join) => {
+    renderBuilder({
+      id: 'vacia',
+      si: { [join]: [] },
+      entonces: { accion: 'deshabilitar', preguntas: ['C10'] },
+    });
+
+    expect(screen.getByText('Esta regla solo se edita importando el archivo.')).toBeVisible();
   });
 });

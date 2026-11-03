@@ -3,10 +3,12 @@ import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { ConflictNotice } from '../../components/ConflictNotice';
 import { ErrorState } from '../../components/ErrorState';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
+import { errorMessage } from '../admin-questions/tree-editing';
 import { AnalysisSummary, FindingNotes, findingsOfElements } from './AnalysisSummary';
 import { describeRule } from './rule-description';
 import {
@@ -31,10 +33,14 @@ import { SkipRuleBuilder } from './SkipRuleBuilder';
 import { ValidationEditor } from './ValidationEditor';
 
 const STATE_LABELS: Record<string, string> = { borrador: 'Borrador', publicado: 'Publicado' };
-const GENERIC_ERROR = 'No fue posible completar la solicitud.';
+/** Valor del selector para las reglas que no tienen ninguna columna conocida. */
+const NO_PAGE = '__sin-pagina__';
 
-/** Resultado de una edición: `ok` y `handled` cierran el diálogo; `error` lo deja abierto. */
-type EditOutcome = { status: 'ok' | 'handled' } | { status: 'error'; message: string };
+/**
+ * Resultado de una edición: `ok` y `handled` (409) cierran el diálogo; `rejected` (422) y `error`
+ * lo dejan abierto con el borrador intacto.
+ */
+type EditOutcome = { status: 'ok' | 'handled' | 'rejected' } | { status: 'error'; message: string };
 
 function columnsOfCondition(condition: Condition | undefined): string[] {
   if (!condition) {
@@ -77,10 +83,6 @@ function newErrorsOf(
     errors: (rejected.errors ?? []).filter((item) => !known.some((old) => sameFinding(old, item))),
     warnings: [],
   };
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof ApiError ? error.detail : GENERIC_ERROR;
 }
 
 /** Reglas y validaciones de un año: constructor de saltos, análisis y vista JSON. */
@@ -159,10 +161,30 @@ export function RulesPage() {
         const added = newErrorsOf(caught.report, view.report);
         if (added.errors?.length) {
           setRejected(added);
-          return { status: 'handled' };
+          return { status: 'rejected' };
         }
       }
-      return { status: 'error', message: messageOf(caught) };
+      return { status: 'error', message: errorMessage(caught) };
+    }
+  }
+
+  /** Un enlace del análisis cambia a la página del elemento y enfoca su fila. */
+  function locate(element: string) {
+    const separator = element.indexOf(':');
+    const kind = element.slice(0, separator);
+    const id = element.slice(separator + 1);
+    if (kind === 'regla') {
+      const rule = skips.find((item) => item.id === id);
+      if (rule) {
+        setChosenPage(pageOfRule(rule));
+        setFocusTargetId(`regla-${id}`);
+      }
+    } else if (kind === 'pregunta' || kind === 'validacion') {
+      const pageCode = lookup.get(id)?.pageCode;
+      if (pageCode) {
+        setChosenPage(pageCode);
+        setFocusTargetId(`pregunta-${id}`);
+      }
     }
   }
 
@@ -191,6 +213,9 @@ export function RulesPage() {
       setBuilderError(outcome.message);
       return;
     }
+    if (outcome.status === 'rejected') {
+      return;
+    }
     setBuilder(null);
     if (outcome.status === 'ok') {
       setFocusTargetId(`regla-${rule.id}`);
@@ -210,8 +235,10 @@ export function RulesPage() {
       if (outcome.status === 'error') {
         setGeneralError(outcome.message);
       }
-      // La fila desaparece con el botón enfocado: el foco pasa al título de la lista.
-      setFocusTargetId('saltos-titulo');
+      if (outcome.status === 'ok') {
+        // La fila desaparece con el botón enfocado: el foco pasa al título de la lista.
+        setFocusTargetId('saltos-titulo');
+      }
       setToDelete(null);
     } finally {
       setDeleting(false);
@@ -251,13 +278,19 @@ export function RulesPage() {
   const questions: RuleQuestion[] = view?.questions ?? [];
   const lookup = new Map(questions.map((question) => [question.column ?? '', question]));
   const pages = [...new Set(questions.map((question) => question.pageCode ?? ''))].filter(Boolean);
-  const selectedPage = chosenPage && pages.includes(chosenPage) ? chosenPage : (pages[0] ?? '');
+  const pageChoices = [...pages, NO_PAGE];
+  const selectedPage =
+    chosenPage && pageChoices.includes(chosenPage) ? chosenPage : (pages[0] ?? NO_PAGE);
+  const withoutPage = selectedPage === NO_PAGE;
   const pageQuestions = questions.filter((question) => question.pageCode === selectedPage);
-  const pageColumns = new Set(pageQuestions.map((question) => question.column));
   const skips = view?.skips ?? [];
-  const pageRules = skips.filter((rule) =>
-    [...columnsOfCondition(rule.si), ...targetsOf(rule)].some((column) => pageColumns.has(column)),
-  );
+  // Una regla es de la página de su primer disparador conocido o, si no hay, de su primer destino.
+  const pageOfRule = (rule: SkipRule): string => {
+    const known = (columns: string[]) => columns.find((column) => lookup.has(column));
+    const column = known(columnsOfCondition(rule.si)) ?? known(targetsOf(rule));
+    return (column && lookup.get(column)?.pageCode) || NO_PAGE;
+  };
+  const pageRules = skips.filter((rule) => pageOfRule(rule) === selectedPage);
   const hiddenOnPage = pageQuestions
     .map((question) => ({
       question,
@@ -287,7 +320,7 @@ export function RulesPage() {
       )}
       {rulesQuery.isError && (
         <ErrorState
-          message={messageOf(rulesQuery.error)}
+          message={errorMessage(rulesQuery.error)}
           onRetry={() => void rulesQuery.refetch()}
         />
       )}
@@ -297,14 +330,23 @@ export function RulesPage() {
       </p>
 
       {conflict && (
-        <div role="alert" className="mt-6 rounded-xl border border-danger/40 bg-surface p-4">
-          <p className="text-danger">{conflict}</p>
-          <Button variant="secondary" className="mt-3" onClick={reload}>
-            Recargar
-          </Button>
-        </div>
+        <ConflictNotice
+          message={conflict}
+          onReload={reload}
+          // Con un diálogo abierto el foco espera: al cerrarse, el aviso lo recibe.
+          focusOnShow={!builder && !toDelete}
+        />
       )}
-      {rejected && <AnalysisSummary report={rejected} survey={encuesta} year={year} rejected />}
+      {rejected && (
+        <AnalysisSummary
+          report={rejected}
+          survey={encuesta}
+          year={year}
+          rejected
+          focusAlert={!builder}
+          onLocate={locate}
+        />
+      )}
       {generalError && (
         <p
           role="alert"
@@ -341,32 +383,35 @@ export function RulesPage() {
                   {pageCode}
                 </option>
               ))}
+              <option value={NO_PAGE}>Reglas sin página</option>
             </select>
           </div>
 
-          <section aria-labelledby="titulo-efecto" className="mt-8">
-            <h2 id="titulo-efecto" className="text-xl font-semibold">
-              Efecto en la página
-            </h2>
-            {hiddenOnPage.length === 0 ? (
-              <p className="mt-2">Ninguna regla oculta preguntas de esta página.</p>
-            ) : (
-              <ul className="mt-2 grid gap-2">
-                {hiddenOnPage.map(({ question, rules }) => (
-                  <li key={question.column}>
-                    <strong>{question.column}</strong> se oculta con:
-                    <ul className="ml-6 list-disc">
-                      {rules.map((rule) => (
-                        <li key={rule.id}>
-                          <code>{rule.id}</code>: {describeRule(rule, lookup)}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          {!withoutPage && (
+            <section aria-labelledby="titulo-efecto" className="mt-8">
+              <h2 id="titulo-efecto" className="text-xl font-semibold">
+                Efecto en la página
+              </h2>
+              {hiddenOnPage.length === 0 ? (
+                <p className="mt-2">Ninguna regla oculta preguntas de esta página.</p>
+              ) : (
+                <ul className="mt-2 grid gap-2">
+                  {hiddenOnPage.map(({ question, rules }) => (
+                    <li key={question.column}>
+                      <strong>{question.column}</strong> se oculta con:
+                      <ul className="ml-6 list-disc">
+                        {rules.map((rule) => (
+                          <li key={rule.id}>
+                            <code>{rule.id}</code>: {describeRule(rule, lookup)}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
           <section aria-labelledby="saltos-titulo" className="mt-8">
             <h2 id="saltos-titulo" tabIndex={-1} className="text-xl font-semibold">
@@ -436,25 +481,32 @@ export function RulesPage() {
             )}
           </section>
 
-          <section aria-labelledby="validaciones-titulo" className="mt-8">
-            <h2 id="validaciones-titulo" className="text-xl font-semibold">
-              Validaciones de la página
-            </h2>
-            <ValidationEditor
-              questions={pageQuestions}
-              validations={view.validations ?? {}}
-              report={view.report}
-              disabled={!editable}
-              onSave={submitValidation}
-              onDelete={removeValidation}
-            />
-          </section>
+          {!withoutPage && (
+            <section aria-labelledby="validaciones-titulo" className="mt-8">
+              <h2 id="validaciones-titulo" className="text-xl font-semibold">
+                Validaciones de la página
+              </h2>
+              <ValidationEditor
+                questions={pageQuestions}
+                validations={view.validations ?? {}}
+                report={view.report}
+                disabled={!editable}
+                onSave={submitValidation}
+                onDelete={removeValidation}
+              />
+            </section>
+          )}
 
           <section aria-labelledby="analisis-titulo" className="mt-8">
             <h2 id="analisis-titulo" className="text-xl font-semibold">
               Análisis del cuestionario
             </h2>
-            <AnalysisSummary report={view.report ?? {}} survey={encuesta} year={year} />
+            <AnalysisSummary
+              report={view.report ?? {}}
+              survey={encuesta}
+              year={year}
+              onLocate={locate}
+            />
           </section>
 
           <RulesJsonPanel
@@ -471,10 +523,22 @@ export function RulesPage() {
               existingIds={skips.map((rule) => rule.id ?? '')}
               busy={saving}
               error={builderError}
+              rejected={
+                rejected && (
+                  <AnalysisSummary
+                    report={rejected}
+                    survey={encuesta}
+                    year={year}
+                    rejected
+                    withLinks={false}
+                  />
+                )
+              }
               onSave={(rule) => void submitRule(rule)}
               onCancel={() => {
+                // El diálogo devuelve el foco al botón que lo abrió.
                 setBuilder(null);
-                setFocusTargetId(builder.rule ? `regla-${builder.rule.id}` : 'saltos-titulo');
+                setRejected(null);
               }}
             />
           )}

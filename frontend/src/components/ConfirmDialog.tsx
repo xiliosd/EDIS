@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
 import { Button } from './Button';
 
 interface ConfirmDialogProps {
@@ -30,6 +30,19 @@ export function ConfirmDialog({
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
+  // Quien abrió el diálogo recupera el foco al cerrarlo (WCAG 2.4.3). Si el llamador fija
+  // otro destino, su efecto corre después y prevalece.
+  const opener = useRef<HTMLElement | null>(null);
+
+  const restoreFocus = useCallback(() => {
+    const target = opener.current;
+    opener.current = null;
+    if (target && target !== document.body && document.contains(target)) {
+      target.focus();
+    }
+  }, []);
+
+  useEffect(() => restoreFocus, [restoreFocus]);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -37,6 +50,8 @@ export function ConfirmDialog({
       return;
     }
     if (open && !dialog.open) {
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       // jsdom no implementa showModal; en el navegador sí existe.
       if (typeof dialog.showModal === 'function') {
         dialog.showModal();
@@ -49,8 +64,9 @@ export function ConfirmDialog({
       } else {
         dialog.removeAttribute('open');
       }
+      restoreFocus();
     }
-  }, [open]);
+  }, [open, restoreFocus]);
 
   return (
     <dialog

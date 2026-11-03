@@ -41,7 +41,6 @@ export function RulesJsonPanel({ survey, year, readOnly, onImport }: RulesJsonPa
   });
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingImport | null>(null);
-  const [busy, setBusy] = useState(false);
 
   async function download() {
     setMessage(null);
@@ -83,14 +82,11 @@ export function RulesJsonPanel({ survey, year, readOnly, onImport }: RulesJsonPa
     if (!pending) {
       return;
     }
-    setBusy(true);
-    try {
-      const error = await onImport(pending.rules);
-      setMessage(error);
-      setPending(null);
-    } finally {
-      setBusy(false);
-    }
+    // El diálogo se cierra antes de enviar: si el servidor responde con un aviso que debe
+    // recibir el foco, el diálogo ya no se lo quita al devolverlo al campo de archivo.
+    const { rules } = pending;
+    setPending(null);
+    setMessage(await onImport(rules));
   }
 
   return (
@@ -151,7 +147,6 @@ export function RulesJsonPanel({ survey, year, readOnly, onImport }: RulesJsonPa
           title="Importar reglas"
           confirmLabel="Importar"
           cancelLabel="Cancelar"
-          busy={busy}
           onCancel={() => setPending(null)}
           onConfirm={() => void confirmImport()}
         >

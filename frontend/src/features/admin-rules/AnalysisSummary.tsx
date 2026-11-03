@@ -106,16 +106,16 @@ function focusAnchor(event: MouseEvent<HTMLAnchorElement>) {
   }
 }
 
-function FindingItem({
-  finding,
-  survey,
-  year,
-}: {
+interface FindingItemProps {
   finding: Finding;
   survey: string;
   year: number;
-}) {
-  const target = targetOf(finding.element, survey, year);
+  withLinks: boolean;
+  onLocate?: (element: string) => void;
+}
+
+function FindingItem({ finding, survey, year, withLinks, onLocate }: FindingItemProps) {
+  const target = withLinks ? targetOf(finding.element, survey, year) : null;
   const linkClass = 'inline-flex min-h-11 items-center text-primary underline';
   return (
     <li className="rounded-lg border border-ink-muted/30 bg-surface p-3">
@@ -123,7 +123,18 @@ function FindingItem({
       <p>{finding.message}</p>
       {target &&
         (target.anchor ? (
-          <a href={target.href} onClick={focusAnchor} className={linkClass}>
+          <a
+            href={target.href}
+            onClick={(event) => {
+              if (onLocate) {
+                event.preventDefault();
+                onLocate(finding.element ?? '');
+              } else {
+                focusAnchor(event);
+              }
+            }}
+            className={linkClass}
+          >
             {target.label}
           </a>
         ) : (
@@ -141,20 +152,45 @@ interface AnalysisSummaryProps {
   year: number;
   /** El servidor rechazó el guardado: solo errores, en una alerta que recibe el foco. */
   rejected?: boolean;
+  /** Con `rejected`, lleva el foco a la alerta; se apaga si otra alerta ya lo tiene. */
+  focusAlert?: boolean;
+  /** Sin enlaces a los elementos (p. ej. dentro de un diálogo modal). */
+  withLinks?: boolean;
+  /** Quien muestra los elementos los ubica (cambia de página y enfoca); sin él, solo un ancla. */
+  onLocate?: (element: string) => void;
 }
 
 /** Hallazgos del análisis: errores primero, luego advertencias, con enlace a cada elemento. */
-export function AnalysisSummary({ report, survey, year, rejected = false }: AnalysisSummaryProps) {
+export function AnalysisSummary({
+  report,
+  survey,
+  year,
+  rejected = false,
+  focusAlert = true,
+  withLinks = true,
+  onLocate,
+}: AnalysisSummaryProps) {
   const alertRef = useRef<HTMLDivElement>(null);
   const idBase = useId();
   const errors = report.errors ?? [];
   const warnings = rejected ? [] : (report.warnings ?? []);
 
   useEffect(() => {
-    if (rejected) {
+    if (rejected && focusAlert) {
       alertRef.current?.focus();
     }
-  }, [rejected, report]);
+  }, [rejected, focusAlert, report]);
+
+  const renderItem = (item: Finding, index: number) => (
+    <FindingItem
+      key={`${item.code}-${item.element}-${index}`}
+      finding={item}
+      survey={survey}
+      year={year}
+      withLinks={withLinks}
+      onLocate={onLocate}
+    />
+  );
 
   const lists = (
     <>
@@ -163,16 +199,7 @@ export function AnalysisSummary({ report, survey, year, rejected = false }: Anal
           <h3 id={`${idBase}-errores`} className="font-semibold text-danger">
             {rejected ? `Errores nuevos (${errors.length})` : `Errores (${errors.length})`}
           </h3>
-          <ul className="mt-2 grid gap-2">
-            {errors.map((item, index) => (
-              <FindingItem
-                key={`${item.code}-${item.element}-${index}`}
-                finding={item}
-                survey={survey}
-                year={year}
-              />
-            ))}
-          </ul>
+          <ul className="mt-2 grid gap-2">{errors.map(renderItem)}</ul>
         </section>
       )}
       {warnings.length > 0 && (
@@ -180,16 +207,7 @@ export function AnalysisSummary({ report, survey, year, rejected = false }: Anal
           <h3 id={`${idBase}-advertencias`} className="font-semibold">
             {`Advertencias (${warnings.length})`}
           </h3>
-          <ul className="mt-2 grid gap-2">
-            {warnings.map((item, index) => (
-              <FindingItem
-                key={`${item.code}-${item.element}-${index}`}
-                finding={item}
-                survey={survey}
-                year={year}
-              />
-            ))}
-          </ul>
+          <ul className="mt-2 grid gap-2">{warnings.map(renderItem)}</ul>
         </section>
       )}
     </>
