@@ -51,6 +51,7 @@ public class RulesAdminController {
   }
 
   @Operation(
+      operationId = "rulesView",
       summary = "Consultar las reglas, validaciones y casos de un año",
       description =
           "Incluye las reglas efectivas (archivo más heredadas), el análisis de lógica, el"
@@ -69,6 +70,7 @@ public class RulesAdminController {
   }
 
   @Operation(
+      operationId = "rulesSaveSkip",
       summary = "Guardar una regla de salto",
       description =
           "Crea la regla o reemplaza la que tiene el mismo id. Se rechaza con 422 si agrega"
@@ -99,7 +101,9 @@ public class RulesAdminController {
     return rules.saveSkip(survey, year, ruleId, request.rule(), request.version(), user(jwt));
   }
 
-  @Operation(summary = "Borrar una regla de salto del archivo del año")
+  @Operation(
+      operationId = "rulesDeleteSkip",
+      summary = "Borrar una regla de salto del archivo del año")
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
   @ApiResponse(
       responseCode = "404",
@@ -127,6 +131,7 @@ public class RulesAdminController {
   }
 
   @Operation(
+      operationId = "rulesSaveValidation",
       summary = "Guardar la validación de una columna",
       description = "Crea la validación o reemplaza la de la columna indicada.")
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
@@ -151,7 +156,7 @@ public class RulesAdminController {
         survey, year, column, request.validation(), request.version(), user(jwt));
   }
 
-  @Operation(summary = "Borrar la validación de una columna")
+  @Operation(operationId = "rulesDeleteValidation", summary = "Borrar la validación de una columna")
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
   @ApiResponse(
       responseCode = "404",
@@ -174,6 +179,7 @@ public class RulesAdminController {
   }
 
   @Operation(
+      operationId = "rulesSaveCase",
       summary = "Guardar un caso de prueba",
       description = "Crea el caso o reemplaza el que tiene el mismo id y lo da por revisado.")
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
@@ -197,7 +203,7 @@ public class RulesAdminController {
     return rules.saveCase(survey, year, caseId, request.testCase(), request.version(), user(jwt));
   }
 
-  @Operation(summary = "Borrar un caso de prueba")
+  @Operation(operationId = "rulesDeleteCase", summary = "Borrar un caso de prueba")
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
   @ApiResponse(
       responseCode = "404",
@@ -220,6 +226,7 @@ public class RulesAdminController {
   }
 
   @Operation(
+      operationId = "rulesExport",
       summary = "Descargar el archivo de reglas del año",
       description = "El archivo guardado, con saltos, validaciones y casos, como adjunto JSON.")
   @ApiResponse(
@@ -250,6 +257,7 @@ public class RulesAdminController {
   }
 
   @Operation(
+      operationId = "rulesImport",
       summary = "Importar reglas, validaciones y casos",
       description =
           "Reemplaza solo los saltos, las validaciones y los casos del año en borrador. El estado,"

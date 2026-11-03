@@ -481,7 +481,7 @@ paths:
       description: "Incluye las reglas efectivas (archivo más heredadas), el análisis\
         \ de lógica, el resultado de cada caso y las preguntas del año. También responde\
         \ para años publicados, en modo de solo lectura."
-      operationId: view_1
+      operationId: rulesView
       parameters:
       - in: path
         name: encuesta
@@ -512,7 +512,7 @@ paths:
       - Administración de reglas
   /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/cases/{caseId}:
     delete:
-      operationId: deleteCase
+      operationId: rulesDeleteCase
       parameters:
       - in: path
         name: encuesta
@@ -560,7 +560,7 @@ paths:
       - Administración de reglas
     put:
       description: Crea el caso o reemplaza el que tiene el mismo id y lo da por revisado.
-      operationId: saveCase
+      operationId: rulesSaveCase
       parameters:
       - in: path
         name: encuesta
@@ -610,7 +610,7 @@ paths:
     get:
       description: "El archivo guardado, con saltos, validaciones y casos, como adjunto\
         \ JSON."
-      operationId: export
+      operationId: rulesExport
       parameters:
       - in: path
         name: encuesta
@@ -645,7 +645,7 @@ paths:
         o en borrador. El estado, las tablas y las columnas nuevas del archivo importado\
         \ se ignoran. Se rechaza con 422 si el análisis encuentra errores nuevos,\
         \ por ejemplo un ciclo entre reglas."
-      operationId: importRules
+      operationId: rulesImport
       parameters:
       - in: path
         name: encuesta
@@ -695,7 +695,7 @@ paths:
       - Administración de reglas
   /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/skips/{ruleId}:
     delete:
-      operationId: deleteSkip
+      operationId: rulesDeleteSkip
       parameters:
       - in: path
         name: encuesta
@@ -751,7 +751,7 @@ paths:
       description: Crea la regla o reemplaza la que tiene el mismo id. Se rechaza
         con 422 si agrega errores que el archivo vigente no tenía; los avisos nunca
         bloquean.
-      operationId: saveSkip
+      operationId: rulesSaveSkip
       parameters:
       - in: path
         name: encuesta
@@ -806,7 +806,7 @@ paths:
       - Administración de reglas
   /api/v1/admin/questionnaire/{encuesta}/{anio}/rules/validations/{column}:
     delete:
-      operationId: deleteValidation
+      operationId: rulesDeleteValidation
       parameters:
       - in: path
         name: encuesta
@@ -854,7 +854,7 @@ paths:
       - Administración de reglas
     put:
       description: Crea la validación o reemplaza la de la columna indicada.
-      operationId: saveValidation
+      operationId: rulesSaveValidation
       parameters:
       - in: path
         name: encuesta
@@ -906,7 +906,7 @@ paths:
       description: "Devuelve las reglas efectivas y las páginas con sus preguntas,\
         \ sin estado ni respuestas: nunca lee ni escribe tablas de respuestas. Tambié\
         n responde para años publicados, en modo de solo lectura."
-      operationId: view
+      operationId: simulatorView
       parameters:
       - in: path
         name: encuesta

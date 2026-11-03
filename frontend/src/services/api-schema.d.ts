@@ -154,7 +154,7 @@ export interface paths {
          * Consultar las reglas, validaciones y casos de un año
          * @description Incluye las reglas efectivas (archivo más heredadas), el análisis de lógica, el resultado de cada caso y las preguntas del año. También responde para años publicados, en modo de solo lectura.
          */
-        get: operations["view_1"];
+        get: operations["rulesView"];
         put?: never;
         post?: never;
         delete?: never;
@@ -175,10 +175,10 @@ export interface paths {
          * Guardar un caso de prueba
          * @description Crea el caso o reemplaza el que tiene el mismo id y lo da por revisado.
          */
-        put: operations["saveCase"];
+        put: operations["rulesSaveCase"];
         post?: never;
         /** Borrar un caso de prueba */
-        delete: operations["deleteCase"];
+        delete: operations["rulesDeleteCase"];
         options?: never;
         head?: never;
         patch?: never;
@@ -195,7 +195,7 @@ export interface paths {
          * Descargar el archivo de reglas del año
          * @description El archivo guardado, con saltos, validaciones y casos, como adjunto JSON.
          */
-        get: operations["export"];
+        get: operations["rulesExport"];
         put?: never;
         post?: never;
         delete?: never;
@@ -216,7 +216,7 @@ export interface paths {
          * Importar reglas, validaciones y casos
          * @description Reemplaza solo los saltos, las validaciones y los casos del año en borrador. El estado, las tablas y las columnas nuevas del archivo importado se ignoran. Se rechaza con 422 si el análisis encuentra errores nuevos, por ejemplo un ciclo entre reglas.
          */
-        put: operations["importRules"];
+        put: operations["rulesImport"];
         post?: never;
         delete?: never;
         options?: never;
@@ -236,10 +236,10 @@ export interface paths {
          * Guardar una regla de salto
          * @description Crea la regla o reemplaza la que tiene el mismo id. Se rechaza con 422 si agrega errores que el archivo vigente no tenía; los avisos nunca bloquean.
          */
-        put: operations["saveSkip"];
+        put: operations["rulesSaveSkip"];
         post?: never;
         /** Borrar una regla de salto del archivo del año */
-        delete: operations["deleteSkip"];
+        delete: operations["rulesDeleteSkip"];
         options?: never;
         head?: never;
         patch?: never;
@@ -257,10 +257,10 @@ export interface paths {
          * Guardar la validación de una columna
          * @description Crea la validación o reemplaza la de la columna indicada.
          */
-        put: operations["saveValidation"];
+        put: operations["rulesSaveValidation"];
         post?: never;
         /** Borrar la validación de una columna */
-        delete: operations["deleteValidation"];
+        delete: operations["rulesDeleteValidation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -277,7 +277,7 @@ export interface paths {
          * Consultar lo que necesita el simulador de un año
          * @description Devuelve las reglas efectivas y las páginas con sus preguntas, sin estado ni respuestas: nunca lee ni escribe tablas de respuestas. También responde para años publicados, en modo de solo lectura.
          */
-        get: operations["view"];
+        get: operations["simulatorView"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1386,7 +1386,7 @@ export interface operations {
             };
         };
     };
-    view_1: {
+    rulesView: {
         parameters: {
             query?: never;
             header?: never;
@@ -1418,7 +1418,7 @@ export interface operations {
             };
         };
     };
-    saveCase: {
+    rulesSaveCase: {
         parameters: {
             query?: never;
             header?: never;
@@ -1464,7 +1464,7 @@ export interface operations {
             };
         };
     };
-    deleteCase: {
+    rulesDeleteCase: {
         parameters: {
             query: {
                 version: number;
@@ -1508,7 +1508,7 @@ export interface operations {
             };
         };
     };
-    export: {
+    rulesExport: {
         parameters: {
             query?: never;
             header?: never;
@@ -1540,7 +1540,7 @@ export interface operations {
             };
         };
     };
-    importRules: {
+    rulesImport: {
         parameters: {
             query?: never;
             header?: never;
@@ -1594,7 +1594,7 @@ export interface operations {
             };
         };
     };
-    saveSkip: {
+    rulesSaveSkip: {
         parameters: {
             query?: never;
             header?: never;
@@ -1649,7 +1649,7 @@ export interface operations {
             };
         };
     };
-    deleteSkip: {
+    rulesDeleteSkip: {
         parameters: {
             query: {
                 version: number;
@@ -1702,7 +1702,7 @@ export interface operations {
             };
         };
     };
-    saveValidation: {
+    rulesSaveValidation: {
         parameters: {
             query?: never;
             header?: never;
@@ -1748,7 +1748,7 @@ export interface operations {
             };
         };
     };
-    deleteValidation: {
+    rulesDeleteValidation: {
         parameters: {
             query: {
                 version: number;
@@ -1792,7 +1792,7 @@ export interface operations {
             };
         };
     };
-    view: {
+    simulatorView: {
         parameters: {
             query?: never;
             header?: never;

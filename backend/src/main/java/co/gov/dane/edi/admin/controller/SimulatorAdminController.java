@@ -30,6 +30,7 @@ public class SimulatorAdminController {
   }
 
   @Operation(
+      operationId = "simulatorView",
       summary = "Consultar lo que necesita el simulador de un año",
       description =
           "Devuelve las reglas efectivas y las páginas con sus preguntas, sin estado ni"
