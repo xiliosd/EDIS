@@ -6,7 +6,10 @@ interface ConfirmDialogProps {
   title: string;
   children: ReactNode;
   confirmLabel: string;
-  cancelLabel: string;
+  /** Sin etiqueta no hay botón de cancelar (diálogos informativos con un solo botón). */
+  cancelLabel?: string;
+  /** Para formularios largos: más ancho y con desplazamiento propio. */
+  wide?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   busy?: boolean;
@@ -19,6 +22,7 @@ export function ConfirmDialog({
   children,
   confirmLabel,
   cancelLabel,
+  wide = false,
   onConfirm,
   onCancel,
   busy = false,
@@ -60,7 +64,7 @@ export function ConfirmDialog({
           onCancel();
         }
       }}
-      className="m-auto max-w-md rounded-xl bg-surface p-6 text-ink backdrop:bg-ink/50"
+      className={`m-auto rounded-xl bg-surface p-6 text-ink backdrop:bg-ink/50 ${wide ? 'max-h-[90vh] w-full max-w-3xl overflow-y-auto' : 'max-w-md'}`}
     >
       <h2 id={titleId} className="text-lg font-semibold">
         {title}
@@ -69,9 +73,11 @@ export function ConfirmDialog({
         {children}
       </div>
       <div className="mt-6 flex flex-wrap justify-end gap-3">
-        <Button variant="secondary" onClick={onCancel} disabled={busy}>
-          {cancelLabel}
-        </Button>
+        {cancelLabel && (
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
+            {cancelLabel}
+          </Button>
+        )}
         <Button onClick={onConfirm} disabled={busy} aria-busy={busy || undefined}>
           {confirmLabel}
         </Button>

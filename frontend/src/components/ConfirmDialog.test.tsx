@@ -78,4 +78,21 @@ describe('ConfirmDialog', () => {
     fireEvent(dialog, new Event('cancel', { cancelable: true }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it('sin etiqueta de cancelar solo muestra el botón de confirmar', () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Aviso"
+        confirmLabel="Cerrar"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      >
+        Texto
+      </ConfirmDialog>,
+    );
+
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
+  });
 });

@@ -5,7 +5,7 @@ import { downloadTextFile } from '../../services/download-file';
 
 export type RulesEditorView = components['schemas']['RulesEditorView'];
 export type RulesEditResult = components['schemas']['RulesEditResult'];
-export type AnalysisReport = components['schemas']['AnalysisReport'];
+export type { AnalysisReport } from '../../services/api-error';
 export type Finding = components['schemas']['Finding'];
 export type CaseResult = components['schemas']['CaseResult'];
 export type RuleQuestion = components['schemas']['RuleQuestion'];
@@ -19,6 +19,11 @@ export type RuleSet = components['schemas']['RuleSet'];
 
 export function rulesQueryKey(survey: string, year: number) {
   return ['admin', 'rules', survey, year] as const;
+}
+
+/** Cuelga de la clave de las reglas: invalidar las reglas también relee el JSON exportado. */
+export function rulesExportQueryKey(survey: string, year: number) {
+  return [...rulesQueryKey(survey, year), 'export'] as const;
 }
 
 export function simulatorQueryKey(survey: string, year: number) {
@@ -38,6 +43,16 @@ export function fetchRules(survey: string, year: number): Promise<RulesEditorVie
       params: { path: { encuesta: survey, anio: year } },
     }),
   );
+}
+
+/** Archivo de reglas del año tal como lo guarda el servidor, para la vista JSON. */
+export async function fetchRulesExport(survey: string, year: number): Promise<string> {
+  return (await unwrap(
+    apiClient.GET('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/export', {
+      params: { path: { encuesta: survey, anio: year } },
+      parseAs: 'text',
+    }),
+  )) as string;
 }
 
 export function fetchSimulator(survey: string, year: number): Promise<SimulatorView> {
@@ -153,11 +168,5 @@ export async function importRules(
 
 /** Descarga el archivo de reglas del año tal como lo guarda el servidor. */
 export async function downloadRules(survey: string, year: number): Promise<void> {
-  const content = (await unwrap(
-    apiClient.GET('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/export', {
-      params: { path: { encuesta: survey, anio: year } },
-      parseAs: 'text',
-    }),
-  )) as string;
-  downloadTextFile(`${survey}-${year}.json`, content);
+  downloadTextFile(`${survey}-${year}.json`, await fetchRulesExport(survey, year));
 }

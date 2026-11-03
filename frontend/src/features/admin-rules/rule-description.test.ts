@@ -93,4 +93,22 @@ describe('describeRule', () => {
       ),
     ).toBe('Si E03 está vacía → no se muestra E04, C09A');
   });
+
+  it('marca como incompleta la regla sin condición o sin destinos', () => {
+    const then = { accion: 'deshabilitar', preguntas: ['E04'] };
+    expect(describeRule({ id: 'r', entonces: then }, QUESTIONS)).toBe('Regla incompleta');
+    expect(describeRule({ id: 'r', si: { pregunta: 'E03', op: 'empty' } }, QUESTIONS)).toBe(
+      'Regla incompleta',
+    );
+    expect(
+      describeRule(
+        {
+          id: 'r',
+          si: { pregunta: 'E03', op: 'empty' },
+          entonces: { accion: 'deshabilitar', preguntas: [] },
+        },
+        QUESTIONS,
+      ),
+    ).toBe('Regla incompleta');
+  });
 });

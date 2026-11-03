@@ -8,8 +8,10 @@ import {
   deleteValidation,
   downloadRules,
   fetchRules,
+  fetchRulesExport,
   fetchSimulator,
   importRules,
+  rulesExportQueryKey,
   rulesQueryKey,
   saveCase,
   saveSkip,
@@ -42,6 +44,7 @@ beforeEach(() => {
 describe('rules-api', () => {
   it('define claves de consulta estables', () => {
     expect(rulesQueryKey('EDIN', 2027)).toEqual(['admin', 'rules', 'EDIN', 2027]);
+    expect(rulesExportQueryKey('EDIN', 2027)).toEqual(['admin', 'rules', 'EDIN', 2027, 'export']);
     expect(simulatorQueryKey('EDIN', 2027)).toEqual(['admin', 'simulator', 'EDIN', 2027]);
   });
 
@@ -142,6 +145,16 @@ describe('rules-api', () => {
       status: 413,
       detail: 'El archivo supera 1 MB.',
     });
+  });
+
+  it('lee el archivo de reglas como texto para la vista JSON', async () => {
+    server.use(
+      http.get(`${BASE}/rules/export`, () => HttpResponse.json({ encuesta: 'EDIN', anio: 2027 })),
+    );
+
+    const text = await fetchRulesExport('EDIN', 2027);
+
+    expect(JSON.parse(text)).toEqual({ encuesta: 'EDIN', anio: 2027 });
   });
 
   it('descarga el archivo de reglas con el nombre ENCUESTA-AAAA.json', async () => {

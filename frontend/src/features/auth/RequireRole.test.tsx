@@ -30,6 +30,26 @@ describe('RequireRole', () => {
     expect(await screen.findByRole('heading', { name: 'Acceso denegado' })).toBeInTheDocument();
   });
 
+  it.each(['reglas', 'simulador'])(
+    'niega las secciones de reglas y simulador a quien no tiene ADMIN_CUESTIONARIO (%s)',
+    async (section) => {
+      server.use(http.get('*/api/v1/auth/me', () => sessionResponse(['ADMIN_TERRITORIAL'])));
+      renderApp(`/admin/cuestionario/EDIN/2027/${section}`);
+      expect(await screen.findByRole('heading', { name: 'Acceso denegado' })).toBeInTheDocument();
+    },
+  );
+
+  it.each(['reglas', 'simulador'])(
+    'envía a ingresar a quien no tiene sesión al abrir %s',
+    async (section) => {
+      server.use(http.get('*/api/v1/auth/me', () => HttpResponse.json({}, { status: 401 })));
+      renderApp(`/admin/cuestionario/EDIN/2027/${section}`);
+      expect(
+        await screen.findByRole('heading', { name: 'Ingreso a la encuesta' }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it('la raíz lleva al administrador a su módulo', async () => {
     server.use(http.get('*/api/v1/auth/me', () => sessionResponse(['ADMIN_TERRITORIAL'])));
     renderApp('/');

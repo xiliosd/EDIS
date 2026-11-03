@@ -57,7 +57,9 @@ export function describeCondition(condition: Condition, questions: Questions): s
 
 /** Lee una regla de salto, p. ej. `Si E03 = Sí → no se muestra E04`. */
 export function describeRule(rule: SkipRule, questions: Questions): string {
-  const condition = rule.si ? describeCondition(rule.si, questions) : '';
-  const targets = (rule.entonces?.preguntas ?? []).join(', ');
-  return `Si ${condition} → no se muestra ${targets}`;
+  const targets = rule.entonces?.preguntas ?? [];
+  if (!rule.si || targets.length === 0) {
+    return 'Regla incompleta';
+  }
+  return `Si ${describeCondition(rule.si, questions)} → no se muestra ${targets.join(', ')}`;
 }
