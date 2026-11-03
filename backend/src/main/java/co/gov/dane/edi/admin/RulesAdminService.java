@@ -3,6 +3,10 @@ package co.gov.dane.edi.admin;
 import co.gov.dane.edi.admin.QuestionFactsService.Snapshot;
 import co.gov.dane.edi.admin.dto.RulesEditResult;
 import co.gov.dane.edi.admin.dto.RulesEditorView;
+import co.gov.dane.edi.admin.dto.SimulatorView;
+import co.gov.dane.edi.model.PageDetail;
+import co.gov.dane.edi.model.RespondentRules;
+import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.rules.AnalysisCodes;
 import co.gov.dane.edi.rules.AnalysisReport;
 import co.gov.dane.edi.rules.CaseRunner;
@@ -16,6 +20,7 @@ import co.gov.dane.edi.rules.RuleSetValidator;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipRule;
 import co.gov.dane.edi.rules.TestCase;
+import co.gov.dane.edi.service.QuestionnaireService;
 import co.gov.dane.edi.service.SaveLocks;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidEditException;
@@ -55,6 +60,7 @@ public class RulesAdminService {
   private final RulesFileRepository rulesFiles;
   private final EffectiveRulesService effectiveRules;
   private final QuestionFactsService factsService;
+  private final QuestionnaireService questionnaire;
   private final SaveLocks locks;
   private final JsonMapper jsonMapper;
 
@@ -63,12 +69,14 @@ public class RulesAdminService {
       RulesFileRepository rulesFiles,
       EffectiveRulesService effectiveRules,
       QuestionFactsService factsService,
+      QuestionnaireService questionnaire,
       SaveLocks locks,
       JsonMapper jsonMapper) {
     this.years = years;
     this.rulesFiles = rulesFiles;
     this.effectiveRules = effectiveRules;
     this.factsService = factsService;
+    this.questionnaire = questionnaire;
     this.locks = locks;
     this.jsonMapper = jsonMapper;
   }
@@ -91,6 +99,29 @@ public class RulesAdminService {
         RuleSetAnalyzer.analyze(effective, snapshot.facts()),
         CaseRunner.runAll(effective, snapshot.facts()),
         snapshot.questions());
+  }
+
+  /**
+   * Reglas efectivas y páginas del año para el simulador; también para años publicados. Las páginas
+   * se arman como las ve el encuestado, pero sin estado ni respuestas.
+   */
+  public SimulatorView simulator(String survey, int year) {
+    RuleSet file = years.requireYear(survey, year);
+    RuleSet effective = EffectiveRulesService.merge(file, effectiveRules.legacySkips(survey, year));
+    List<PageDetail> pages =
+        SurveyPage.ordered().stream()
+            .map(
+                page ->
+                    new PageDetail(
+                        page.code(),
+                        page.chapter().code(),
+                        page.chapter().title(),
+                        page.chapter().module(),
+                        null,
+                        questionnaire.pageEntries(page, survey, year),
+                        Map.of()))
+            .toList();
+    return new SimulatorView(file.version(), RespondentRules.from(effective), pages);
   }
 
   /** El archivo del año tal como está guardado, listo para descargar. */

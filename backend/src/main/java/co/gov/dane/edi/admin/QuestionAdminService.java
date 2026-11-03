@@ -17,6 +17,7 @@ import co.gov.dane.edi.rules.NewColumn;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipRule;
+import co.gov.dane.edi.rules.TestCase;
 import co.gov.dane.edi.service.QuestionnaireService;
 import co.gov.dane.edi.service.QuestionnaireService.PageRow;
 import co.gov.dane.edi.service.SaveLocks;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
@@ -121,7 +123,11 @@ public class QuestionAdminService {
           writes.updateQuestionText(codPre, plain);
           return List.of(codeOf(ref));
         },
-        false);
+        false,
+        rules ->
+            ColumnCodeResolver.fromNumeral(ref.numeral())
+                .map(column -> markCases(rules, testCase -> testCase.mentions(column)))
+                .orElse(rules));
   }
 
   public AdminEditResult editHeader(
@@ -215,7 +221,19 @@ public class QuestionAdminService {
           rows.forEach(row -> codes.add(codeOf(row.row().entryId(), row.row().numeral())));
           return List.copyOf(codes);
         },
-        true);
+        true,
+        rules -> {
+          // Cambiar la posición altera el recorrido de la página: sus casos hay que revisarlos.
+          Set<String> columns = new HashSet<>();
+          for (PageRow row : questionnaire.pageRows(page, survey, year)) {
+            ColumnCodeResolver.fromNumeral(row.row().numeral()).ifPresent(columns::add);
+          }
+          return markCases(
+              rules,
+              testCase ->
+                  SurveyPage.find(testCase.pageCode()).filter(page::equals).isPresent()
+                      || columns.stream().anyMatch(testCase::mentions));
+        });
   }
 
   /**
@@ -264,8 +282,13 @@ public class QuestionAdminService {
             List<String> rules =
                 QuestionnaireAdminService.rulesReferencing(
                     effectiveRules.effectiveRules(survey, year), column.get());
-            if (!rules.isEmpty()) {
-              throw new ReferencedByRulesException(rules);
+            List<String> cases =
+                years.requireYear(survey, year).cases().stream()
+                    .filter(testCase -> testCase.mentions(column.get()))
+                    .map(TestCase::id)
+                    .toList();
+            if (!rules.isEmpty() || !cases.isEmpty()) {
+              throw new ReferencedByRulesException(rules, cases);
             }
           }
           writes.deletePeriod(capProyId, survey, year);
@@ -277,6 +300,24 @@ public class QuestionAdminService {
           ColumnCodeResolver.fromNumeral(ref.numeral()).ifPresent(columns::remove);
           return rules.withNewColumns(columns);
         });
+  }
+
+  /**
+   * Marca {@code porRevisar} en los casos que cumplen el criterio; si ninguno cambia devuelve las
+   * mismas reglas, de modo que el archivo no se modifica más de lo que ya cambiaba.
+   */
+  private static RuleSet markCases(RuleSet rules, Predicate<TestCase> affected) {
+    boolean changed = false;
+    List<TestCase> marked = new ArrayList<>();
+    for (TestCase testCase : rules.cases()) {
+      if (affected.test(testCase) && !testCase.isNeedsReview()) {
+        marked.add(testCase.withNeedsReview(true));
+        changed = true;
+      } else {
+        marked.add(testCase);
+      }
+    }
+    return changed ? rules.withCases(marked) : rules;
   }
 
   /**

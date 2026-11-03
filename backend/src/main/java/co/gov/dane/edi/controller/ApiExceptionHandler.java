@@ -49,7 +49,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(ReferencedByRulesException.class)
   ProblemDetail handleReferencedByRules(ReferencedByRulesException exception) {
     ProblemDetail body = problem(HttpStatus.CONFLICT, "Conflicto", exception.getMessage());
-    body.setProperty("errors", Map.of("rules", exception.ruleIds()));
+    body.setProperty("errors", Map.of("rules", exception.ruleIds(), "cases", exception.caseIds()));
     return body;
   }
 

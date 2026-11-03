@@ -31,6 +31,13 @@ public record TestCase(
     return needsReview != null;
   }
 
+  /** El caso usa la columna en sus respuestas, en las ocultas esperadas o en los errores. */
+  public boolean mentions(String column) {
+    return answers.containsKey(column)
+        || expected.hidden().contains(column)
+        || (expected.errors() != null && expected.errors().containsKey(column));
+  }
+
   public TestCase withNeedsReview(boolean value) {
     return new TestCase(id, name, pageCode, answers, expected, value);
   }

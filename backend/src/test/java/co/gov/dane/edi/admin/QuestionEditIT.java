@@ -12,10 +12,12 @@ import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.rules.Condition;
+import co.gov.dane.edi.rules.ExpectedOutcome;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipAction;
 import co.gov.dane.edi.rules.SkipRule;
+import co.gov.dane.edi.rules.TestCase;
 import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
@@ -23,7 +25,9 @@ import co.gov.dane.edi.service.QuestionnaireService;
 import co.gov.dane.edi.support.DraftYearFixture;
 import co.gov.dane.edi.support.OracleIntegrationTest;
 import jakarta.servlet.http.Cookie;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -184,6 +188,88 @@ class QuestionEditIT extends OracleIntegrationTest {
             3)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.skipsTargetingEarlierQuestions.length()").value(0));
+  }
+
+  @Test
+  void editingReferencedQuestionMarksCaseForReview() throws Exception {
+    int version =
+        saveCases(
+            caseOf("caso-ocultas-c01b", "C1", Map.of(), List.of("C01B"), null),
+            caseOf("caso-errores-c01b", "C1", Map.of(), List.of(), Map.of("C01B", "Mensaje")));
+
+    // Solo el caso sembrado usa C01A en sus respuestas.
+    edit(
+            DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text",
+            "{\"text\":\"Texto nuevo de C01A\",\"version\":" + version + "}")
+        .andExpect(status().isOk());
+    assertThat(reviewFlags())
+        .containsEntry("c01a-no-oculta-c01b", true)
+        .containsEntry("caso-ocultas-c01b", false)
+        .containsEntry("caso-errores-c01b", false);
+
+    // C01B aparece en las ocultas esperadas y en los errores esperados.
+    edit(
+            DRAFT + "/entries/" + fixture.draftCapProy(C01B) + "/text",
+            "{\"text\":\"Texto nuevo de C01B\",\"version\":" + (version + 1) + "}")
+        .andExpect(status().isOk());
+    assertThat(reviewFlags())
+        .containsEntry("caso-ocultas-c01b", true)
+        .containsEntry("caso-errores-c01b", true);
+  }
+
+  @Test
+  void reorderMarksCasesOfThatPage() throws Exception {
+    String h1Column = firstColumnOf("H1");
+    int version =
+        saveCases(
+            caseOf("caso-pagina-h1", " h1 ", Map.of(), List.of(), null),
+            caseOf("caso-columna-h1", "C1", Map.of(h1Column, "1"), List.of(), null),
+            caseOf("caso-pagina-c1", "C1", Map.of("C01B", "1"), List.of(), null));
+    long first = fixture.draftCapProy(309);
+    long second = DraftYearFixture.H1_GROUP_1_SECOND;
+    long third = DraftYearFixture.H1_GROUP_2_FIRST;
+    long fourth = DraftYearFixture.H1_GROUP_2_SECOND;
+
+    reorder(
+            DRAFT + "/pages/H1/order",
+            "[" + second + "," + first + "," + fourth + "," + third + "]",
+            version)
+        .andExpect(status().isOk());
+
+    assertThat(reviewFlags())
+        .containsEntry("caso-pagina-h1", true)
+        .containsEntry("caso-columna-h1", true)
+        .containsEntry("caso-pagina-c1", false)
+        .containsEntry("c01a-no-oculta-c01b", false);
+  }
+
+  @Test
+  void headerEditDoesNotMarkCases() throws Exception {
+    int version = saveCases(caseOf("caso-ocultas-c01b", "C1", Map.of(), List.of("C01B"), null));
+    List<TestCase> before = rulesFiles.load("EDIN", 2027).cases();
+
+    edit(
+            DRAFT + "/headers/" + fixture.draftHeader(1),
+            "{\"text\":\"Encabezado nuevo\",\"version\":" + version + "}")
+        .andExpect(status().isOk());
+    edit(
+            DRAFT + "/help/" + fixture.draftHelp(1),
+            "{\"text\":\"Ayuda nueva\",\"version\":" + (version + 1) + "}")
+        .andExpect(status().isOk());
+
+    assertThat(rulesFiles.load("EDIN", 2027).cases()).isEqualTo(before);
+  }
+
+  @Test
+  void textEditOfQuestionNobodyReferencesLeavesCasesUntouched() throws Exception {
+    List<TestCase> before = rulesFiles.load("EDIN", 2027).cases();
+
+    edit(
+            DRAFT + "/entries/" + fixture.draftCapProy(309) + "/text",
+            "{\"text\":\"Texto de H01\",\"version\":1}")
+        .andExpect(status().isOk());
+
+    assertThat(rulesFiles.load("EDIN", 2027).cases()).isEqualTo(before);
   }
 
   @Test
@@ -411,6 +497,38 @@ class QuestionEditIT extends OracleIntegrationTest {
                   .content("{\"text\":\"Intento\",\"version\":1}"))
           .andExpect(status().isForbidden());
     }
+  }
+
+  private int saveCases(TestCase... added) {
+    RuleSet draft = rulesFiles.load("EDIN", 2027);
+    List<TestCase> all = new ArrayList<>(draft.cases());
+    all.addAll(List.of(added));
+    return rulesFiles
+        .save(draft.withCases(all), draft.version(), "fixture", "editar-caso", List.of())
+        .version();
+  }
+
+  private static TestCase caseOf(
+      String id,
+      String page,
+      Map<String, String> answers,
+      List<String> hidden,
+      Map<String, String> errors) {
+    return new TestCase(id, "Caso " + id, page, answers, new ExpectedOutcome(hidden, errors), null);
+  }
+
+  private Map<String, Boolean> reviewFlags() {
+    Map<String, Boolean> flags = new HashMap<>();
+    rulesFiles.load("EDIN", 2027).cases().forEach(c -> flags.put(c.id(), c.isNeedsReview()));
+    return flags;
+  }
+
+  private String firstColumnOf(String pageCode) {
+    return questionnaire.pageEntries(SurveyPage.find(pageCode).orElseThrow(), "EDIN", 2027).stream()
+        .filter(entry -> entry.answer() != null && entry.answer().columnCode() != null)
+        .map(entry -> entry.answer().columnCode())
+        .findFirst()
+        .orElseThrow();
   }
 
   private ResultActions edit(String path, String body) throws Exception {

@@ -39,6 +39,10 @@ class RulesAdminIT extends OracleIntegrationTest {
   private static final String DRAFT = "/api/v1/admin/questionnaire/EDIN/2027/rules";
   private static final String PUBLISHED = "/api/v1/admin/questionnaire/EDIN/2026/rules";
 
+  private static final String SIMULATOR_DRAFT = "/api/v1/admin/questionnaire/EDIN/2027/simulator";
+  private static final String SIMULATOR_PUBLISHED =
+      "/api/v1/admin/questionnaire/EDIN/2026/simulator";
+
   private static final String SKIP_C01A_YES =
       """
       {"rule":{"id":"c01a-si-oculta-c01b","descripcion":"C01A en Sí oculta C01B",
@@ -101,6 +105,35 @@ class RulesAdminIT extends OracleIntegrationTest {
         .andExpect(jsonPath(c01a + ".options[0].value").value("1"))
         .andExpect(
             jsonPath("$.questions[?(@.column == 'B99')].columnStatus").value("PENDING_COLUMN"));
+  }
+
+  @Test
+  void simulatorViewHasPagesAndEffectiveRulesWithoutAnswers() throws Exception {
+    long before = answerRows();
+
+    mockMvc
+        .perform(get(SIMULATOR_DRAFT).cookie(admin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version").value(1))
+        .andExpect(jsonPath("$.rules.encuesta").value("EDIN"))
+        .andExpect(jsonPath("$.rules.anio").value(2027))
+        .andExpect(jsonPath("$.rules.saltos[?(@.id == 'legacy-C01A')]").exists())
+        .andExpect(jsonPath("$.rules.casos").doesNotExist())
+        .andExpect(jsonPath("$.pages[0].pageCode").value("B1"))
+        .andExpect(jsonPath("$.pages[?(@.pageCode == 'C1')].chapterCode").value("C"))
+        .andExpect(jsonPath("$.pages[?(@.pageCode == 'C1')].chapterTitle").exists())
+        .andExpect(jsonPath("$.pages[?(@.pageCode == 'C1')].module").exists())
+        .andExpect(jsonPath("$.pages[0].state").doesNotExist())
+        .andExpect(jsonPath("$.pages[0].answers").isEmpty())
+        .andExpect(
+            jsonPath("$.pages[?(@.pageCode == 'C1')].entries[0].answer.columnCode").value("C01A"));
+
+    mockMvc.perform(get(SIMULATOR_PUBLISHED).cookie(admin())).andExpect(status().isOk());
+    mockMvc.perform(get(SIMULATOR_DRAFT)).andExpect(status().isUnauthorized());
+    mockMvc
+        .perform(get(SIMULATOR_DRAFT).cookie(session(SessionPrincipal.respondent("1000000001"))))
+        .andExpect(status().isForbidden());
+    assertThat(answerRows()).isEqualTo(before);
   }
 
   @Test
@@ -505,6 +538,19 @@ class RulesAdminIT extends OracleIntegrationTest {
                 .content(importOf("regla-ok", "caso-ok")))
         .andExpect(status().isForbidden());
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);
+  }
+
+  /** Filas de todas las tablas de respuestas de EDIN: el simulador nunca debe tocarlas. */
+  private long answerRows() {
+    long total = 0;
+    for (String table :
+        jdbc.queryForList(
+            "SELECT TABLE_NAME FROM USER_TABLES WHERE TABLE_NAME LIKE 'EDIN#_20#_CAP#_%'"
+                + " ESCAPE '#'",
+            String.class)) {
+      total += jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class);
+    }
+    return total;
   }
 
   private ResultActions send(MockHttpServletRequestBuilder builder, String body) throws Exception {

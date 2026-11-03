@@ -16,11 +16,13 @@ import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.rules.Condition;
+import co.gov.dane.edi.rules.ExpectedOutcome;
 import co.gov.dane.edi.rules.NewColumn;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipAction;
 import co.gov.dane.edi.rules.SkipRule;
+import co.gov.dane.edi.rules.TestCase;
 import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
@@ -323,6 +325,47 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
     assertThat(periodRows(fixture.draftCapProy(C01A), 2027)).isEqualTo(1);
     assertThat(periodRows(fixture.draftCapProy(C13), 2027)).isEqualTo(1);
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(2);
+  }
+
+  @Test
+  void deactivatingQuestionUsedOnlyByCaseIsRejected() throws Exception {
+    RuleSet draft = rulesFiles.load("EDIN", 2027);
+    TestCase onlyCase =
+        new TestCase(
+            "caso-solo-c13",
+            "Caso que solo usa C13",
+            "C2",
+            Map.of(),
+            new ExpectedOutcome(List.of("C13"), null),
+            null);
+    int version =
+        rulesFiles
+            .save(
+                draft.withCases(List.of(onlyCase)),
+                draft.version(),
+                "fixture",
+                "editar-caso",
+                List.of())
+            .version();
+
+    mockMvc
+        .perform(deactivate(fixture.draftCapProy(C13), version))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.errors.rules.length()").value(0))
+        .andExpect(jsonPath("$.errors.cases[0]").value("caso-solo-c13"));
+
+    assertThat(periodRows(fixture.draftCapProy(C13), 2027)).isEqualTo(1);
+    assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(version);
+  }
+
+  @Test
+  void deactivateRejectionListsRulesAndCasesTogether() throws Exception {
+    // C01A la usan el salto heredado legacy-C01A y el caso sembrado c01a-no-oculta-c01b.
+    mockMvc
+        .perform(deactivate(fixture.draftCapProy(C01A), 1))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.errors.rules[0]").value("legacy-C01A"))
+        .andExpect(jsonPath("$.errors.cases[0]").value("c01a-no-oculta-c01b"));
   }
 
   @Test
