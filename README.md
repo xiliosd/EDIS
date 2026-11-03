@@ -18,6 +18,8 @@ dos aplicaciones independientes: `backend/` (Spring Boot) y `frontend/` (React).
  - [Diseño de la Fase 3 (administración del cuestionario)](docs/superpowers/specs/2026-10-26-fase-3-administracion-design.md)
  - [Diagrama de secuencia de crear un año](docs/diagramas/secuencia-crear-anio.md)
  - [Diagrama de secuencia de editar con copia al escribir](docs/diagramas/secuencia-editar-copia-al-escribir.md)
+- [Plan de la Fase 3b (reglas, simulador y casos)](docs/superpowers/plans/2026-11-03-fase-3b-reglas-simulador-casos.md)
+- [Diagrama de secuencia de guardar una regla](docs/diagramas/secuencia-guardar-regla.md)
  - [Reglas de EDIN 2026](docs/reglas/edin-2026.md)
  - [MER de las tablas usadas](docs/diagramas/mer-tablas-usadas.md)
  - [Contrato OpenAPI](docs/api/openapi.yaml)
@@ -61,6 +63,30 @@ ediciones, y cada edición lleva la `version` que el cliente leyó (409 si cambi
 | `POST` | `.../pages/{pagina}/entries` | Agrega una pregunta propia del año (columna pendiente si no existe) |
 | `GET` | `.../entries/{capProyId}/column-script` | Script `ALTER TABLE` de la columna pendiente (solo texto) |
 | `DELETE` | `.../entries/{capProyId}` | Desactiva la pregunta solo en ese año |
+
+**Reglas, simulador y casos de prueba (Fase 3b).** Mismas condiciones que la 3a: rol
+`ADMIN_CUESTIONARIO`, CSRF en lo que cambia estado y la `version` leída en el cuerpo (en el
+`?version=` de los `DELETE`). Solo un año en `borrador` se edita (409 si está publicado); los
+`GET` responden también para años publicados. Prefijo `/api/v1/admin/questionnaire/{encuesta}/{anio}`.
+
+| Verbo | Ruta | Descripción |
+| :-- | :-- | :-- |
+| `GET` | `.../rules` | Reglas efectivas (archivo más heredadas), validaciones, casos con su resultado, análisis y preguntas del año |
+| `PUT` | `.../rules/skips/{ruleId}` | Crea o reemplaza una regla de salto |
+| `DELETE` | `.../rules/skips/{ruleId}` | Borra una regla del archivo (las heredadas no se borran) |
+| `PUT` | `.../rules/validations/{column}` | Crea o reemplaza la validación de una columna |
+| `DELETE` | `.../rules/validations/{column}` | Borra la validación de una columna |
+| `PUT` | `.../rules/cases/{caseId}` | Crea o reemplaza un caso de prueba |
+| `DELETE` | `.../rules/cases/{caseId}` | Borra un caso de prueba |
+| `GET` | `.../rules/export` | Descarga `EDIN-AAAA.json` |
+| `PUT` | `.../rules/import` | Reemplaza saltos, validaciones y casos (tope de 1 MB: 413) |
+| `GET` | `.../simulator` | Reglas efectivas y páginas con sus preguntas, sin respuestas de nadie |
+
+Una edición responde `200` con la nueva `version`, el informe de análisis y el resultado de cada
+caso; `422` con el informe cuando el cambio agrega errores que el archivo vigente no tenía (las
+advertencias nunca bloquean); `409` si el año está publicado o la versión cambió. Los ids de regla y
+de caso admiten hasta 40 caracteres. El respondiente sigue leyendo `GET /api/v1/survey/rules`, que
+nunca incluye los casos.
 
 Límites de `PUT .../answers`: como máximo 200 respuestas por página (400 «Envíe como máximo 200
 respuestas por página») y 4000 caracteres por valor (422 con «La respuesta es demasiado larga.» en
@@ -147,6 +173,12 @@ móvil con `npm run e2e:admin-movil`. Si cambió `db/dev/schema.sql` (la Fase 3a
 `FRM_*`), recree el contenedor de Oracle de desarrollo: `CREATE TABLE IF NOT EXISTS` no modifica las
 tablas viejas. El administrador ficticio es `adm.nacional` (variables `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD`).
 
+La prueba `admin-reglas` (solo Chromium; el móvil la omite con la anotación «omitida») reutiliza el
+borrador abierto por `admin-cuestionario` en la misma corrida o, si no hay, crea 2027. Tampoco se
+puede repetir sin reiniciar el backend con un `RULES_DIR` limpio (`docker compose down -v` y
+`docker compose up -d --build --wait`). Es el único chequeo de accesibilidad (axe, WCAG 2.1 AA) de
+las pantallas de reglas y del simulador.
+
 Pruebas automatizadas:
 
 ```bash
@@ -208,8 +240,8 @@ cd ../frontend && npm ci && npx vite
 backend); en ese caso debe ser el origen del frontend.
 
 **Actualizar las reglas.** Si `RULES_DIR/EDIN-2026.json` ya existe con `"version": 1`, hay que
-respaldarlo y borrarlo para que se siembre la versión 2 de la imagen. Hasta la Fase 3 (editor de
-reglas) es la única forma de actualizarlo. En la primera carga, el backend registra un WARN si la
+respaldarlo y borrarlo para que se siembre la versión 2 de la imagen. El editor de reglas
+de la Fase 3b solo cambia el archivo de un año en borrador; el de 2026 se actualiza así. En la primera carga, el backend registra un WARN si la
 semilla trae una `version` mayor que la del archivo vigente.
 
 **Cambios en las tablas `FRM_*`.** Las preguntas de cada página y las reglas efectivas se guardan en
@@ -376,6 +408,33 @@ Cada cambio escribe una línea de auditoría (usuario, encuesta, año, operació
 nunca el texto de las preguntas). Los textos se guardan como texto plano, con `&`, `<` y `>`
 escapados en la base, y se muestran escapados.
 
+**Reglas, simulador y casos (Fase 3b).** Con un año en borrador, las pestañas **Reglas** y
+**Simulador** del año están junto a **Preguntas**. Un año publicado se puede consultar, no editar.
+
+1. **Reglas.** Elija la página: "Efecto en la página" dice qué preguntas se ocultan y por qué regla,
+   y "Saltos de la página" lista las reglas como "Si C01A = Sí → no se muestra C01B". "Reglas sin
+   página" reúne las que no tienen ninguna pregunta conocida. Las reglas *Heredadas* (ya existían en
+   las tablas `FRM_SALTO`) son de solo lectura.
+2. **Nueva regla o editar.** El constructor arma una condición (una pregunta, o todas/alguna de
+   varias que tengan las mismas opciones), un operador y un valor, con la opción de unir varias
+   condiciones con Y/O (un solo nivel). Elija las preguntas que no se muestran; la vista previa
+   lee la regla en lenguaje claro. Todo se puede hacer con el teclado.
+3. **Análisis.** Cada guardado se analiza: ciclos, preguntas inexistentes, valores que no son
+   opciones, rangos inválidos, reglas que nunca se cumplen o solapadas y preguntas que nunca se
+   muestran. Un cambio que **agrega errores** se rechaza (422): el diálogo sigue abierto con lo
+   escrito y la alerta lo explica. Los errores que el archivo ya tenía se muestran pero no bloquean
+   cambios que no los agravan; las advertencias nunca bloquean. Si un análisis supera 4096
+   combinaciones o 200 000 evaluaciones, el elemento sale como "No se pudo analizar".
+4. **Validaciones.** Cada pregunta de la página admite obligatoriedad, tipo y rango.
+5. **Archivo JSON.** Se puede ver, descargar e importar (hasta 1 MB); la importación reemplaza
+   saltos, validaciones y casos y pasa por el mismo análisis.
+6. **Simulador.** Elija la página y responda: las preguntas ocultas se ven atenuadas con la regla
+   que las oculta, y los errores salen como en la encuesta. Nada se guarda del respondiente.
+7. **Casos de prueba.** "Guardar como caso de prueba" guarda las respuestas y lo que el simulador
+   muestra (id en minúsculas y guiones, nombre de 1 a 100 caracteres). Cada caso muestra **Pasa**,
+   **Falla** (con la diferencia) o **Por revisar** (si una pregunta que usa cambió o se desactivó).
+   "Abrir en el simulador" lo recarga; no se puede desactivar una pregunta que solo usa un caso.
+
 **Regenerar el contrato y los tipos.** El contrato lo genera el backend durante `./mvnw verify`
 (CI falla si `docs/api/openapi.yaml` no coincide). Los tipos del frontend:
 
@@ -456,6 +515,18 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
   nombres o crear sinónimos antes de desplegar.
 - **Filas huérfanas.** Desactivar una pregunta creada en el borrador deja sus filas de `FRM_*`
   (anotado para la Fase 3c).
+- **Reglas, simulador y casos (3b): seguimiento.**
+  - Los 12 casos reales de 2026 solo viajan en la semilla del recurso; el entorno de desarrollo
+    lleva únicamente `c01a-no-oculta-c01b`, porque el cuestionario ficticio no tiene esas columnas.
+  - El tope de 1 MB de la importación no cubre cuerpos *chunked* sin `Content-Length`.
+  - El análisis de ciclos recorre el grafo de forma recursiva: una cadena enorme de reglas podría
+    agotar la pila.
+  - `RulesPage` no invalida la caché del simulador: tras editar una regla, la vista vieja puede
+    mostrar un instante un caso como "Falla".
+  - Un caso guarda también las respuestas de preguntas ocultas.
+  - `SkipRuleBuilder` (~690 líneas) y `SimulatorPage` (~440) son candidatos a dividirse.
+  - La accesibilidad de las pantallas de reglas solo se verifica con axe en el E2E
+    (`admin-reglas.spec.ts`), no en las pruebas unitarias.
 - **Credenciales del PHP heredado:** se recomienda rotar las que aparecen en ese sistema. Este
   repositorio no incluye nada de su carpeta `Conexion/`.
 - **Etapas de despliegue pendientes:** *staging* y producción del pipeline.

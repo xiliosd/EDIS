@@ -36,6 +36,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 - Prueba E2E del administrador (`frontend/e2e/admin-cuestionario.spec.ts`) con verificación de
   accesibilidad; el administrador se configura con `E2E_ADMIN_USER` y `E2E_ADMIN_PASSWORD`.
 - Diagramas de secuencia de crear un año y de editar con copia al escribir.
+- Reglas, simulador y casos de prueba (Fase 3b) para `ADMIN_CUESTIONARIO`: editor de saltos con
+  constructor accesible (una condición o un nivel de Y/O), edición de validaciones, vista, descarga e
+  importación del JSON de reglas (hasta 1 MB) y análisis de lógica en cada guardado (ciclos,
+  preguntas inexistentes, valores que no son opciones, rangos, reglas que nunca se cumplen o
+  solapadas). Solo bloquean (422) los errores que el archivo vigente no tenía; las advertencias
+  nunca. Simulador con los mismos campos de la encuesta que muestra qué regla oculta cada pregunta, y
+  casos de prueba guardados en el archivo de reglas que pasan, fallan o quedan por revisar. Los 12
+  casos reales de 2026 viajan en la semilla; el contrato `/api/v1/admin/questionnaire/**` suma
+  `rules` y `simulator`.
+- Prueba E2E del editor de reglas (`frontend/e2e/admin-reglas.spec.ts`) con axe (WCAG 2.1 AA) sobre
+  Reglas, el constructor, la alerta de un 422, el simulador y la lista de casos.
+- Diagrama de secuencia de guardar una regla y sección «Desviaciones de implementación (3b)» en el
+  diseño de la Fase 3.
 
 ### Cambiado
 - El inicio del encuestado muestra el avance por página.

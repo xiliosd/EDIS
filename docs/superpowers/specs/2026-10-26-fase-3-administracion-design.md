@@ -275,3 +275,72 @@ Cambios respecto a lo escrito arriba, decididos durante la Fase 3a (plan
 
 Pendiente de la 3a: DDL real de `FRM_*`, `orderGroup`, calificación del esquema o sinónimos de
 `DANE_DIRPEN` en producción y filas huérfanas al desactivar (ver README, «Deuda técnica y riesgos»).
+
+## Desviaciones de implementación (3b)
+
+Cambios respecto a lo escrito arriba, decididos durante la Fase 3b (plan
+`docs/superpowers/plans/2026-11-03-fase-3b-reglas-simulador-casos.md`). Las de la 3a siguen vigentes.
+
+1. **Versión en el cuerpo, no `If-Match` (§4.2, §10).** Como en la 3a, cada edición lleva la
+   `version` leída en el cuerpo (`?version=` en los `DELETE`); una versión distinta responde 409
+   «Otro usuario modificó el cuestionario. Recargue la página.».
+2. **Solo bloquean los errores nuevos (§5).** Un guardado se rechaza (422) cuando el informe del
+   candidato tiene un error que el del archivo vigente no tenía; la igualdad es por `code`,
+   `element` y `questions`. Los errores que ya existían (por ejemplo, un archivo copiado de 2026 que
+   referencia columnas ausentes del cuestionario de desarrollo) se muestran pero no bloquean. La
+   publicación (3c) exigirá cero errores.
+3. **Constructor de un solo nivel.** El constructor de saltos arma una lista de condiciones unidas
+   por Y u O, sin anidar grupos; una regla importada con más niveles se muestra en solo lectura
+   (el JSON sí la admite).
+4. **Dominios de la enumeración (§5, §12).** Para las preguntas de opciones, el dominio es sus
+   valores más «sin responder»; para una casilla, `0` y `1`; para texto, vacío, cada literal usado
+   en una condición (con ±1 si es numérico) y un valor centinela. Si el producto supera 4096
+   combinaciones por pregunta o regla, el elemento sale con la advertencia `NO_ANALIZABLE`.
+5. **Presupuesto de 200 000 evaluaciones por análisis.** Además del tope por elemento, cada
+   `analyze` tiene un presupuesto total, en orden determinista de elementos; al agotarse, los
+   restantes emiten `NO_ANALIZABLE`. Acota el tiempo de un guardado a costa de algunos avisos.
+6. **Identidad estable de los hallazgos.** `CICLO` se emite por componente fuertemente conexo (una
+   vez por regla con una arista dentro del componente, con `questions` = columnas del componente
+   ordenadas) y `PREGUNTA_INEXISTENTE` y `VALOR_NO_ES_OPCION` uno por columna. Así corregir una parte
+   del problema nunca crea un hallazgo «nuevo» que bloquee el arreglo.
+7. **Ids de hasta 40 caracteres.** El patrón de id de regla y de caso es `^[a-z0-9][a-z0-9-]{0,39}$`
+   (el patrón del brief admitía 41), porque la auditoría limita cada código a 40; los de columna siguen el patrón de
+   la 3a.
+8. **Importación.** Valida los ids de salto y de caso con el patrón de la auditoría (si no, una edición
+   posterior daría 500; los ids heredados como `legacy-C09G` siguen válidos), exige que el archivo sea
+   de la misma encuesta y año, y tiene un tope de 1 MB (413). Reemplaza saltos, validaciones y
+   casos; no el estado ni las tablas del año.
+9. **Alcance de un caso (§6).** Un caso pertenece a una sola página: sus errores esperados se
+   comparan solo con los ítems de esa página, y `ocultas` se calcula con las reglas del año completo
+   (puede nombrar preguntas de otras páginas).
+10. **Cuándo un caso queda «por revisar» (§6).** Editar el texto de una pregunta que usa un caso
+    lo marca `porRevisar`; reordenar las preguntas de una página marca los casos de esa página o que
+    nombran las columnas movidas; guardar el caso desde el simulador lo limpia. Crear un año **copia**
+    los casos con la marca limpia (no los marca): un caso que nombra una pregunta que el año nuevo no
+    tiene sale `POR_REVISAR` por inactiva. Un caso `porRevisar`, o que nombra una pregunta ya no
+    activa, no se evalúa y no cuenta como aprobado. Desactivar una pregunta que solo usa un caso (sin
+    regla) responde 409 con el id del caso.
+11. **Casos reales de 2026.** Los 12 casos (uno por regla especial) van solo en la semilla del
+    recurso (`EDIN-2026.json` de la imagen). La semilla de desarrollo
+    (`db/dev/rules-seed/EDIN-2026.json`) lleva solo `c01a-no-oculta-c01b`: el cuestionario ficticio no
+    tiene esas columnas y los demás saldrían `POR_REVISAR` como ruido. Sus ids son `<regla>-caso` en
+    minúsculas (`legacy-c09g-caso`).
+12. **Un 422 en el constructor deja el diálogo abierto.** El borrador no se pierde: la alerta se
+    muestra dentro del diálogo (y el resumen en la página); solo el 409 lo cierra.
+13. **«Reglas sin página».** El selector de página del editor añade esa opción para las reglas sin
+    ninguna columna conocida (p. ej. de preguntas desactivadas); si no, no se podrían ver ni editar.
+    Un enlace del análisis a un elemento de otra página cambia primero la página elegida.
+14. **«Todas» y «alguna» solo con opciones iguales.** El modo de varias preguntas solo admite
+    preguntas del mismo tipo y con las mismas opciones que la primera elegida, para que el valor de
+    la condición signifique lo mismo en todas.
+15. **Accesibilidad solo en el E2E.** No hay `vitest-axe` y no se agregó la dependencia: el chequeo
+    axe (WCAG 2.1 AA) de Reglas con datos, el diálogo del constructor, la alerta de un 422, el
+    simulador con una pregunta oculta y la lista de casos está únicamente en
+    `frontend/e2e/admin-reglas.spec.ts`.
+16. **El E2E evita el salto heredado.** La prueba usa la regla `c01a-uno` (C01A = Sí → C01B) y no
+    `C01A = 2`: el salto heredado de las tablas `FRM_SALTO` (C01A = 2 → C01B) seguiría ocultando C01B
+    y el caso nunca fallaría al cambiar el destino.
+17. **Casos de 2026 en desarrollo.** Si se importan los 12 casos reales contra el cuestionario
+    ficticio, salen `POR_REVISAR`; con el cuestionario real de QA se evalúan.
+
+Seguimiento de la 3b en el README, «Deuda técnica y riesgos».
