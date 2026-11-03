@@ -34,15 +34,21 @@ export function ConfirmDialog({
   // otro destino, su efecto corre después y prevalece.
   const opener = useRef<HTMLElement | null>(null);
 
-  const restoreFocus = useCallback(() => {
+  const focusOpener = useCallback(() => {
     const target = opener.current;
-    opener.current = null;
     if (target && target !== document.body && document.contains(target)) {
       target.focus();
     }
   }, []);
 
-  useEffect(() => restoreFocus, [restoreFocus]);
+  const restoreFocus = useCallback(() => {
+    focusOpener();
+    opener.current = null;
+  }, [focusOpener]);
+
+  // Al desmontar se devuelve el foco, pero sin gastar el opener: bajo StrictMode el montaje
+  // simulado ejecuta esta limpieza con el diálogo ya abierto y el cierre real lo necesita.
+  useEffect(() => focusOpener, [focusOpener]);
 
   useEffect(() => {
     const dialog = ref.current;

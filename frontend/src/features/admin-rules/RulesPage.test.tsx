@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -203,6 +203,45 @@ describe('RulesPage', () => {
       expect(alert).toHaveTextContent('Hay un ciclo entre C01A y C01B.');
       // El error que ya existía no es nuevo y no se repite en la alerta.
       expect(alert).not.toHaveTextContent('Rango inválido');
+    },
+    LONG_FLOW_TIMEOUT,
+  );
+
+  it(
+    'un 422 al eliminar deja el foco en la alerta de la página, no en el botón de la regla',
+    async () => {
+      server.use(
+        http.delete(`${RULES_API}/skips/c01a-no`, () =>
+          HttpResponse.json(
+            {
+              title: 'Reglas inválidas',
+              detail: 'Las reglas agregan errores.',
+              report: {
+                errors: [
+                  {
+                    code: 'CICLO',
+                    element: 'regla:c01a-no',
+                    questions: ['C01A', 'C01B'],
+                    message: 'Hay un ciclo entre C01A y C01B.',
+                  },
+                ],
+                warnings: [],
+              },
+            },
+            { status: 422, headers: PROBLEM },
+          ),
+        ),
+      );
+      await openRules();
+      const user = userEvent.setup();
+
+      await user.click(screen.getByRole('button', { name: 'Eliminar regla c01a-no' }));
+      await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Hay un ciclo entre C01A y C01B.');
+      await waitFor(() => expect(alert).toHaveFocus());
     },
     LONG_FLOW_TIMEOUT,
   );

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -137,5 +137,23 @@ describe('ConfirmDialog', () => {
         expect(screen.getByRole('button', { name: 'Abrir' })).toHaveFocus();
       },
     );
+
+    // main.tsx monta bajo StrictMode: el montaje simulado no puede gastar el opener guardado.
+    it.each([
+      ['cancelar', 'Cancelar'],
+      ['confirmar', 'Aceptar'],
+    ])('bajo StrictMode devuelve el foco al botón que lo abrió al %s', async (_n, label) => {
+      render(
+        <StrictMode>
+          <Harness unmountOnClose />
+        </StrictMode>,
+      );
+      const user = userEvent.setup();
+
+      await user.click(screen.getByRole('button', { name: 'Abrir' }));
+      await user.click(screen.getByRole('button', { name: label }));
+
+      expect(screen.getByRole('button', { name: 'Abrir' })).toHaveFocus();
+    });
   });
 });

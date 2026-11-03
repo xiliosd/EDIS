@@ -343,7 +343,7 @@ export function RulesPage() {
           survey={encuesta}
           year={year}
           rejected
-          focusAlert={!builder}
+          focusAlert={!builder && !toDelete}
           onLocate={locate}
         />
       )}

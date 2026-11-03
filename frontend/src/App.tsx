@@ -21,7 +21,7 @@ const RulesPage = lazy(() =>
   import('./features/admin-rules/RulesPage').then((module) => ({ default: module.RulesPage })),
 );
 const SimulatorPage = lazy(() =>
-  import('./features/admin-rules/SimulatorPage').then((module) => ({
+  import('./features/admin-simulator/SimulatorPage').then((module) => ({
     default: module.SimulatorPage,
   })),
 );
