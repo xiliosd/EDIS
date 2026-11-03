@@ -31,13 +31,27 @@ export function fieldErrorsOf(error: unknown): Record<string, string> {
   return error instanceof ApiError ? error.fieldErrors : {};
 }
 
-/** Ids de las reglas que impiden desactivar: el 409 los trae como lista en errors.rules. */
-export function referencingRuleIds(error: unknown): string[] {
+/** Reglas y casos de prueba que impiden desactivar una pregunta. */
+export interface DeactivationBlockers {
+  rules: string[];
+  cases: string[];
+}
+
+function idsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+/**
+ * Lo que impide desactivar: el 409 trae las listas en errors.rules y errors.cases. Devuelve null si
+ * el error es otro (por ejemplo, otro usuario cambió el año) o si ambas listas vienen vacías.
+ */
+export function deactivationBlockers(error: unknown): DeactivationBlockers | null {
   if (!(error instanceof ApiError) || error.status !== 409) {
-    return [];
+    return null;
   }
-  const rules: unknown = (error.fieldErrors as Record<string, unknown>).rules;
-  return Array.isArray(rules) ? rules.map(String) : [];
+  const errors = error.fieldErrors as Record<string, unknown>;
+  const blockers = { rules: idsOf(errors.rules), cases: idsOf(errors.cases) };
+  return blockers.rules.length > 0 || blockers.cases.length > 0 ? blockers : null;
 }
 
 /**

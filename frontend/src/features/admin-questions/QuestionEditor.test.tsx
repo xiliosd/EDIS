@@ -140,13 +140,15 @@ describe('QuestionEditor', () => {
     ]);
   });
 
-  it('deactivateShowsReferencingRules', async () => {
+  async function deactivateC05RejectedWith(references: { rules: string[]; cases: string[] }) {
     serveTree();
     server.use(
       http.delete(`${API_BASE}/entries/101`, () =>
-        problem(409, 'La pregunta la usan reglas de salto.', {
-          rules: ['salto-c05', 'salto-c09'],
-        }),
+        problem(
+          409,
+          'Hay reglas o casos de prueba que usan esta pregunta. Quítela primero de ellos.',
+          references,
+        ),
       ),
     );
     renderApp(TREE_URL);
@@ -155,12 +157,53 @@ describe('QuestionEditor', () => {
     await user.click(await screen.findByRole('button', { name: 'Desactivar C05' }));
     const dialog = screen.getByRole('dialog', { name: 'Desactivar C05' });
     await user.click(within(dialog).getByRole('button', { name: 'Desactivar' }));
-
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('La pregunta la usan reglas de salto.');
+    // Es un bloqueo explicado junto a la pregunta, no el aviso general de conflicto.
+    expect(within(alert).queryByRole('button', { name: 'Recargar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Recargar' })).toBeNull();
+    return alert;
+  }
+
+  it('deactivateShowsReferencingRules', async () => {
+    const alert = await deactivateC05RejectedWith({
+      rules: ['salto-c05', 'salto-c09'],
+      cases: [],
+    });
+
+    expect(alert).toHaveTextContent(
+      'No se puede desactivar: la usan las reglas salto-c05, salto-c09.',
+    );
+    expect(alert).not.toHaveTextContent('casos de prueba');
     expect(within(alert).getByText('salto-c05')).toBeInTheDocument();
     expect(within(alert).getByText('salto-c09')).toBeInTheDocument();
-    expect(within(alert).queryByRole('button', { name: 'Recargar' })).toBeNull();
+  });
+
+  it('deactivateShowsReferencingCasesWithSimulatorLinks', async () => {
+    const alert = await deactivateC05RejectedWith({ rules: [], cases: ['caso-c05'] });
+
+    expect(alert).toHaveTextContent(
+      'No se puede desactivar: la usan los casos de prueba caso-c05.',
+    );
+    expect(alert).not.toHaveTextContent('las reglas');
+    expect(within(alert).getByRole('link', { name: 'caso-c05' })).toHaveAttribute(
+      'href',
+      '/admin/cuestionario/EDIN/2027/simulador#caso-caso-c05',
+    );
+  });
+
+  it('deactivateShowsReferencingRulesAndCases', async () => {
+    const alert = await deactivateC05RejectedWith({
+      rules: ['salto-c05'],
+      cases: ['caso-c05', 'caso-c09'],
+    });
+
+    expect(alert).toHaveTextContent(
+      'No se puede desactivar: la usan las reglas salto-c05 y los casos de prueba caso-c05, caso-c09.',
+    );
+    expect(within(alert).getByRole('link', { name: 'caso-c09' })).toHaveAttribute(
+      'href',
+      '/admin/cuestionario/EDIN/2027/simulador#caso-caso-c09',
+    );
   });
 
   it('deactivatesAfterConfirmation', async () => {

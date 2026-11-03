@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { downloadTextFile } from '../../services/download-file';
@@ -17,7 +18,8 @@ import {
   fieldErrorsOf,
   handleEditError,
   INPUT_TYPE_LABELS,
-  referencingRuleIds,
+  deactivationBlockers,
+  type DeactivationBlockers,
   type TreeEditing,
 } from './tree-editing';
 
@@ -148,6 +150,55 @@ function rulesText(rules: string[]): string {
   return `Usada por ${rules.length} ${rules.length === 1 ? 'regla' : 'reglas'}: ${rules.join(', ')}`;
 }
 
+/** Ids separados por coma; cada uno en su propio elemento para poder enlazarlo o leerlo aparte. */
+function idList(ids: string[], render: (id: string) => ReactNode) {
+  return ids.map((id, index) => (
+    <Fragment key={id}>
+      {index > 0 && ', '}
+      {render(id)}
+    </Fragment>
+  ));
+}
+
+interface BlockersNoticeProps {
+  blockers: DeactivationBlockers;
+  survey: string;
+  year: number;
+}
+
+/** Por qué no se pudo desactivar, nombrando solo las listas que traen algo. */
+function BlockersNotice({ blockers, survey, year }: BlockersNoticeProps) {
+  const { rules, cases } = blockers;
+  return (
+    <p className="text-danger">
+      No se puede desactivar: la usan{' '}
+      {rules.length > 0 && (
+        <>
+          las reglas{' '}
+          {idList(rules, (id) => (
+            <span>{id}</span>
+          ))}
+        </>
+      )}
+      {rules.length > 0 && cases.length > 0 && ' y '}
+      {cases.length > 0 && (
+        <>
+          los casos de prueba{' '}
+          {idList(cases, (id) => (
+            <Link
+              to={`/admin/cuestionario/${survey}/${year}/simulador#caso-${id}`}
+              className="text-primary underline"
+            >
+              {id}
+            </Link>
+          ))}
+        </>
+      )}
+      .
+    </p>
+  );
+}
+
 interface QuestionEditorProps {
   entry: AdminEntry;
   pageCode: string;
@@ -162,7 +213,8 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
   const idBase = `pregunta-${pageCode}-${capProyId}`;
   const [confirming, setConfirming] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
-  const [actionError, setActionError] = useState<{ message: string; rules: string[] } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [blockers, setBlockers] = useState<DeactivationBlockers | null>(null);
   const isItem = entry.kind === 'ITEM';
   const pending = entry.columnStatus === 'PENDING_COLUMN';
 
@@ -172,18 +224,18 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
     }
     setDeactivating(true);
     setActionError(null);
+    setBlockers(null);
     try {
       const result = await deactivate(editing.survey, editing.year, capProyId, editing.version);
       setConfirming(false);
       editing.onDeactivated(result, capProyId, entry.columnCode || label);
     } catch (caught) {
       setConfirming(false);
-      const rules = referencingRuleIds(caught);
-      if (rules.length > 0) {
-        setActionError({ message: errorMessage(caught), rules });
+      const found = deactivationBlockers(caught);
+      if (found) {
+        setBlockers(found);
       } else {
-        const message = handleEditError(caught, editing);
-        setActionError(message === null ? null : { message, rules: [] });
+        setActionError(handleEditError(caught, editing));
       }
     } finally {
       setDeactivating(false);
@@ -195,11 +247,12 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
       return;
     }
     setActionError(null);
+    setBlockers(null);
     try {
       const script = await fetchColumnScript(editing.survey, editing.year, capProyId);
       downloadTextFile(`columna-${entry.columnCode ?? capProyId}.sql`, script);
     } catch (caught) {
-      setActionError({ message: errorMessage(caught), rules: [] });
+      setActionError(errorMessage(caught));
     }
   }
 
@@ -320,15 +373,12 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
         </div>
       )}
 
-      {actionError && (
+      {(actionError || blockers) && editing && (
         <div role="alert" className="rounded-xl border border-danger/40 bg-surface p-3">
-          <p className="text-danger">{actionError.message}</p>
-          {actionError.rules.length > 0 && (
-            <ul className="mt-2 list-disc pl-6 text-danger">
-              {actionError.rules.map((rule) => (
-                <li key={rule}>{rule}</li>
-              ))}
-            </ul>
+          {blockers ? (
+            <BlockersNotice blockers={blockers} survey={editing.survey} year={editing.year} />
+          ) : (
+            <p className="text-danger">{actionError}</p>
           )}
         </div>
       )}
