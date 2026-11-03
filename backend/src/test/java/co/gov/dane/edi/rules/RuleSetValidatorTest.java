@@ -1,5 +1,6 @@
 package co.gov.dane.edi.rules;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -108,5 +109,47 @@ class RuleSetValidatorTest {
     assertThatThrownBy(() -> RuleSetValidator.validate(base.withTables(Map.of("B", "tabla_b"))))
         .hasMessageContaining("tabla");
     RuleSetValidator.validate(base.withTables(Map.of("B", "EDIN_21_CAP_B")));
+  }
+
+  private static TestCase testCase(String id, String name, String page) {
+    return new TestCase(
+        id, name, page, Map.of("C01A", "2"), new ExpectedOutcome(List.of("C01B"), Map.of()), null);
+  }
+
+  private static RuleSet withCases(TestCase... cases) {
+    return RuleSet.empty("EDIN", 2026).withCases(List.of(cases));
+  }
+
+  @Test
+  void caseProblems() {
+    assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "Caso válido", "C1"))))
+        .isEmpty();
+    assertThat(
+            RuleSetValidator.problems(
+                withCases(testCase("c01a-no", "Uno", "C1"), testCase("c01a-no", "Dos", "C1"))))
+        .hasSize(1)
+        .first()
+        .asString()
+        .contains("repetido");
+    assertThat(RuleSetValidator.problems(withCases(testCase("C 1", "Nombre", "C1")))).hasSize(1);
+    assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "", "C1")))).hasSize(1);
+    assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "x".repeat(100), "C1"))))
+        .isEmpty();
+    assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "x".repeat(101), "C1"))))
+        .hasSize(1);
+    assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "Nombre", "Z9"))))
+        .hasSize(1);
+  }
+
+  @Test
+  void problemsDoesNotThrow() {
+    SkipRule withoutTargets =
+        new SkipRule("x", null, eq("C01A", "2"), new SkipAction("deshabilitar", List.of()));
+    RuleSet rules = withSkip(withoutTargets);
+
+    assertThat(RuleSetValidator.problems(rules)).hasSize(1);
+    assertThatThrownBy(() -> RuleSetValidator.validate(rules))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Reglas inválidas: ");
   }
 }

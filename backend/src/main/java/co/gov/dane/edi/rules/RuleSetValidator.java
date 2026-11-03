@@ -1,6 +1,7 @@
 package co.gov.dane.edi.rules;
 
 import co.gov.dane.edi.model.Chapter;
+import co.gov.dane.edi.model.SurveyPage;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -20,9 +21,20 @@ public final class RuleSetValidator {
   private static final Pattern COLUMN = Pattern.compile("[A-Z][0-9A-Z_]{1,29}");
   private static final Pattern TABLE = Pattern.compile("[A-Z][A-Z0-9_]{1,29}");
 
+  private static final Pattern CASE_ID = Pattern.compile("[a-z0-9][a-z0-9-]{0,40}");
+  private static final int MAX_CASE_NAME = 100;
+
   private RuleSetValidator() {}
 
   public static void validate(RuleSet rules) {
+    List<String> problems = problems(rules);
+    if (!problems.isEmpty()) {
+      throw new IllegalStateException("Reglas inválidas: " + String.join("; ", problems));
+    }
+  }
+
+  /** Los problemas estructurales de las reglas, sin lanzar; vacío si son válidas. */
+  public static List<String> problems(RuleSet rules) {
     List<String> problems = new ArrayList<>();
     Set<String> ids = new HashSet<>();
     for (SkipRule rule : rules.skips()) {
@@ -84,8 +96,27 @@ public final class RuleSetValidator {
         problems.add("Columnas nuevas: " + entry.getKey() + ": " + problem);
       }
     }
-    if (!problems.isEmpty()) {
-      throw new IllegalStateException("Reglas inválidas: " + String.join("; ", problems));
+    checkCases(rules.cases(), problems);
+    return problems;
+  }
+
+  private static void checkCases(List<TestCase> cases, List<String> problems) {
+    Set<String> caseIds = new HashSet<>();
+    for (TestCase testCase : cases) {
+      String id = testCase.id() == null ? "(sin id)" : testCase.id();
+      if (testCase.id() == null || !CASE_ID.matcher(testCase.id()).matches()) {
+        problems.add("Caso con id inválido: " + id);
+      } else if (!caseIds.add(testCase.id())) {
+        problems.add("Caso con id repetido: " + id);
+      }
+      if (testCase.name() == null
+          || testCase.name().isBlank()
+          || testCase.name().length() > MAX_CASE_NAME) {
+        problems.add("Caso " + id + ": el nombre debe tener entre 1 y 100 caracteres");
+      }
+      if (SurveyPage.find(testCase.pageCode()).isEmpty()) {
+        problems.add("Caso " + id + ": página desconocida " + testCase.pageCode());
+      }
     }
   }
 

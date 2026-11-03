@@ -41,4 +41,19 @@ class EffectiveRulesMergeTest {
     assertThat(merged.state()).isEqualTo(YearState.BORRADOR);
     assertThat(merged.tables()).containsEntry("B", "TABLA_B");
   }
+
+  @Test
+  void mergeKeepsCases() {
+    TestCase testCase =
+        new TestCase(
+            "c01a-no",
+            "C01A no",
+            "C1",
+            Map.of("C01A", "2"),
+            new ExpectedOutcome(List.of("C01B"), null),
+            true);
+    RuleSet fromFile = RuleSet.empty("EDIN", 2026).withCases(List.of(testCase));
+
+    assertThat(EffectiveRulesService.merge(fromFile, List.of()).cases()).containsExactly(testCase);
+  }
 }

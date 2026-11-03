@@ -20,7 +20,21 @@ public record RuleSet(
     @JsonProperty("estado") @JsonInclude(JsonInclude.Include.NON_NULL) YearState state,
     @JsonProperty("tablas") @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, String> tables,
     @JsonProperty("columnasNuevas") @JsonInclude(JsonInclude.Include.NON_EMPTY)
-        Map<String, NewColumn> newColumns) {
+        Map<String, NewColumn> newColumns,
+    @JsonProperty("casos") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<TestCase> cases) {
+
+  /** Sin casos de prueba: el caso de los archivos y llamadores anteriores. */
+  public RuleSet(
+      String survey,
+      int year,
+      int version,
+      List<SkipRule> skips,
+      Map<String, FieldValidation> validations,
+      YearState state,
+      Map<String, String> tables,
+      Map<String, NewColumn> newColumns) {
+    this(survey, year, version, skips, validations, state, tables, newColumns, List.of());
+  }
 
   /** Sin columnas nuevas: el caso de los archivos y llamadores anteriores. */
   public RuleSet(
@@ -39,6 +53,7 @@ public record RuleSet(
     validations = validations == null ? Map.of() : Map.copyOf(validations);
     tables = tables == null ? Map.of() : Map.copyOf(tables);
     newColumns = newColumns == null ? Map.of() : Map.copyOf(newColumns);
+    cases = cases == null ? List.of() : List.copyOf(cases);
   }
 
   public static RuleSet empty(String survey, int year) {
@@ -51,7 +66,8 @@ public record RuleSet(
   }
 
   public RuleSet withState(YearState newState) {
-    return new RuleSet(survey, year, version, skips, validations, newState, tables, newColumns);
+    return new RuleSet(
+        survey, year, version, skips, validations, newState, tables, newColumns, cases);
   }
 
   public RuleSet withTables(Map<String, String> newTables) {
@@ -59,10 +75,26 @@ public record RuleSet(
   }
 
   public RuleSet withVersion(int newVersion) {
-    return new RuleSet(survey, year, newVersion, skips, validations, state, tables, newColumns);
+    return new RuleSet(
+        survey, year, newVersion, skips, validations, state, tables, newColumns, cases);
   }
 
   public RuleSet withNewColumns(Map<String, NewColumn> columns) {
-    return new RuleSet(survey, year, version, skips, validations, state, tables, columns);
+    return new RuleSet(survey, year, version, skips, validations, state, tables, columns, cases);
+  }
+
+  public RuleSet withSkips(List<SkipRule> newSkips) {
+    return new RuleSet(
+        survey, year, version, newSkips, validations, state, tables, newColumns, cases);
+  }
+
+  public RuleSet withValidations(Map<String, FieldValidation> newValidations) {
+    return new RuleSet(
+        survey, year, version, skips, newValidations, state, tables, newColumns, cases);
+  }
+
+  public RuleSet withCases(List<TestCase> newCases) {
+    return new RuleSet(
+        survey, year, version, skips, validations, state, tables, newColumns, newCases);
   }
 }

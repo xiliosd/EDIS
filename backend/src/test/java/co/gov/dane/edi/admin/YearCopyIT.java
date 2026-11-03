@@ -8,6 +8,8 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -27,9 +29,11 @@ import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.rules.EffectiveRulesService;
+import co.gov.dane.edi.rules.ExpectedOutcome;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipRule;
+import co.gov.dane.edi.rules.TestCase;
 import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
@@ -172,6 +176,38 @@ class YearCopyIT extends OracleIntegrationTest {
     assertThat(output.getAll())
         .contains(
             "operacion=crear-anio", "encuesta=EDIN", "anio=2027", "codigos=[2027, desde-2026]");
+  }
+
+  @Test
+  void copiesCasesClearingReview() {
+    TestCase flagged =
+        new TestCase(
+            "c01a-no",
+            "C01A en No oculta C01B",
+            "C1",
+            Map.of("C01A", "2"),
+            new ExpectedOutcome(List.of("C01B"), Map.of()),
+            true);
+    EffectiveRulesService sourceWithCase = spy(effectiveRules);
+    doReturn(effectiveRules.effectiveRules("EDIN", 2026).withCases(List.of(flagged)))
+        .when(sourceWithCase)
+        .effectiveRules("EDIN", 2026);
+    YearCopyService service =
+        new YearCopyService(
+            years,
+            rulesFiles,
+            copies,
+            sourceWithCase,
+            questionnaire,
+            tables,
+            locks,
+            transactionManager);
+
+    service.createYear("EDIN", 2027, 2026, "t");
+
+    List<TestCase> copied = rulesFiles.find("EDIN", 2027).orElseThrow().cases();
+    assertThat(copied).containsExactly(flagged.withNeedsReview(false));
+    assertThat(copied.get(0).needsReview()).isNull();
   }
 
   @Test
