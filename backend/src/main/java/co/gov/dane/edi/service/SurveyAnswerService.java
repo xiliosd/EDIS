@@ -225,7 +225,7 @@ public class SurveyAnswerService {
   }
 
   /** Rechaza lo que Oracle no aceptaría o redondearía (ORA-12899, ORA-01438). */
-  static Optional<String> checkColumn(String value, AnswerColumn column) {
+  public static Optional<String> checkColumn(String value, AnswerColumn column) {
     if (!"NUMBER".equals(column.dataType())) {
       // Sin CHAR_USED = 'C' la longitud es en bytes: "ññ" ocupa 4 en AL32UTF8.
       boolean tooLong =
