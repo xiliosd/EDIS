@@ -30,8 +30,13 @@ public final class RuleSetAnalyzer {
   /** Tope de combinaciones que se enumeran por pregunta o regla; más allá, NO_ANALIZABLE. */
   public static final int MAX_COMBINATIONS = 4096;
 
-  /** Evaluaciones totales por llamada a analyze; al agotarse, el resto es NO_ANALIZABLE. */
-  public static final int MAX_TOTAL_EVALUATIONS = 200_000;
+  /**
+   * Trabajo total por llamada a analyze, en reglas evaluadas (evaluaciones por número de reglas);
+   * al agotarse, lo que falta sale en un solo NO_ANALIZABLE del archivo. Cada guardado analiza dos
+   * veces dentro del candado de administración: 15 millones dejan cada análisis por debajo de 1,5 s
+   * en el equipo de desarrollo (unos 40 a 80 ns por regla evaluada).
+   */
+  public static final long MAX_TOTAL_WORK = 15_000_000L;
 
   private static final Set<String> VALUE_OPERATORS = Set.of("eq", "ne", "in", "notIn");
 

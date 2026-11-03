@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RuleSetAnalyzerWarningsTest {
@@ -301,7 +302,7 @@ class RuleSetAnalyzerWarningsTest {
   }
 
   @Test
-  void totalBudgetMakesRemainingElementsNotAnalyzable() {
+  void exhaustedBudgetIsOneFileWarningInsteadOfOnePerElement() {
     Map<String, QuestionFacts> facts =
         facts(single("C01A", 0, "1", "2"), text("C01B", 1), text("C01C", 2));
     RuleSet set =
@@ -310,16 +311,167 @@ class RuleSetAnalyzerWarningsTest {
             rule("r-ne", leaf("C01A", "ne", "1"), "C01B", "C01C"),
             rule("r-empty", leaf("C01A", "empty", null), "C01B", "C01C"));
 
-    List<Finding> found = new LogicWarnings(set, facts, java.util.Set.of(), 4).enumerated();
+    // Planear cuesta 8 (una por columna de cada análisis) y cada evaluación 3 (3 reglas):
+    // C01B gasta 3 × 3 = 9 y a lo demás le quedan 3 de las 20.
+    List<Finding> found = new LogicWarnings(set, facts, Set.of(), 20).enumerated();
     List<String> codes = found.stream().map(f -> f.code() + "@" + f.element()).toList();
 
-    // C01B gasta 3 de las 4 evaluaciones; a C01C y a las reglas solo les queda 1.
+    assertThat(codes).contains("NUNCA_SE_MUESTRA@pregunta:C01B", "NO_ANALIZABLE@archivo");
     assertThat(codes)
-        .contains(
-            "NUNCA_SE_MUESTRA@pregunta:C01B",
+        .doesNotContain(
+            "NUNCA_SE_MUESTRA@pregunta:C01C",
             "NO_ANALIZABLE@pregunta:C01C",
             "NO_ANALIZABLE@regla:r-eq");
-    assertThat(codes).doesNotContain("NUNCA_SE_MUESTRA@pregunta:C01C");
+    Finding stopped =
+        found.stream().filter(f -> f.element().equals("archivo")).findFirst().orElseThrow();
+    assertThat(stopped.questions()).isEmpty();
+    // Quedan C01C y las tres reglas (sus pares de solape caen en r-empty y r-eq).
+    assertThat(stopped.message())
+        .isEqualTo(
+            "El análisis de lógica se detuvo por tamaño; 4 elementos quedaron sin analizar.");
+  }
+
+  @Test
+  void cheapElementsAreAnalyzedBeforeExpensiveOnes() {
+    List<QuestionFacts> questions = new ArrayList<>();
+    List<String> columns = new ArrayList<>();
+    for (int index = 0; index < 10; index++) {
+      String column = String.format("A%02d", index);
+      columns.add(column);
+      questions.add(checkbox(column, index));
+    }
+    questions.add(text("A99", 10));
+    questions.add(single("Z01", 11, "1", "2"));
+    questions.add(text("Z02", 12));
+    // a-cara (1024 combinaciones) va antes por id, pero z-barata (3) cabe en el presupuesto.
+    Condition anyOf = new Condition(null, "eq", "1", null, null, columns, null, null);
+    RuleSet set =
+        rules(
+            rule("a-cara", anyOf, "A99"),
+            rule("z-barata", and(eq("Z01", "1"), eq("Z01", "2")), "Z02"));
+
+    List<Finding> found =
+        new LogicWarnings(set, facts(questions.toArray(QuestionFacts[]::new)), Set.of(), 40)
+            .enumerated();
+    List<String> codes = found.stream().map(f -> f.code() + "@" + f.element()).toList();
+
+    assertThat(codes).contains("NUNCA_SE_CUMPLE@regla:z-barata", "NO_ANALIZABLE@archivo");
+  }
+
+  @Test
+  void answersTheRulesCannotTellApartAreEnumeratedOnce() {
+    List<QuestionFacts> questions = new ArrayList<>();
+    List<String> columns = new ArrayList<>();
+    for (int index = 0; index < 7; index++) {
+      String column = String.format("M%02d", index);
+      columns.add(column);
+      questions.add(single(column, index, "1", "2", "3", "9"));
+    }
+    questions.add(text("M99", 7));
+    // 5^7 combinaciones en bruto, pero las reglas solo distinguen "2" del resto: 2^7.
+    Condition allNo = new Condition(null, "eq", "2", null, columns, null, null, null);
+
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(rule("r-imposible", and(allNo, eq("M00", "1")), "M99")),
+            facts(questions.toArray(QuestionFacts[]::new)));
+
+    assertThat(warnings(report))
+        .contains("NUNCA_SE_CUMPLE@regla:r-imposible")
+        .doesNotContain("NO_ANALIZABLE@regla:r-imposible");
+  }
+
+  @Test
+  void fiveHundredDisjointRulesAnalyzeQuickly() {
+    Map<String, QuestionFacts> facts =
+        facts(
+            text("T01", 0),
+            single("Q01", 1, "1", "2"),
+            single("Q02", 2, "1", "2"),
+            single("Q03", 3, "1", "2"),
+            text("Z01", 9));
+    List<SkipRule> skips = new ArrayList<>();
+    for (int index = 0; index < 500; index++) {
+      Condition allNo =
+          new Condition(null, "eq", "2", null, List.of("Q01", "Q02", "Q03"), null, null, null);
+      skips.add(rule(String.format("r-%03d", index), and(eq("T01", "a" + index), allNo), "Z01"));
+    }
+    RuleSet set = rules(skips.toArray(SkipRule[]::new));
+
+    AnalysisReport report =
+        assertTimeoutPreemptively(
+            Duration.ofMillis(3000), () -> RuleSetAnalyzer.analyze(set, facts));
+
+    assertThat(report.hasErrors()).isFalse();
+  }
+
+  @Test
+  void realisticSizedQuestionnaireIsNotAllNoise() {
+    List<QuestionFacts> questions = new ArrayList<>();
+    for (int index = 0; index < 150; index++) {
+      boolean isText = index % 10 == 9;
+      List<String> options = index % 4 == 0 ? List.of("1", "2", "9") : List.of("1", "2");
+      questions.add(
+          new QuestionFacts(
+              question(index),
+              "P" + (index / 17),
+              index,
+              isText ? InputType.TEXT : InputType.SINGLE_CHOICE,
+              isText ? List.of() : options,
+              ColumnStatus.ACTIVE,
+              null));
+    }
+    List<SkipRule> skips = new ArrayList<>();
+    // Preguntas filtro cada 5: saltan su bloque según la respuesta, con una cascada de un nivel.
+    for (int filter = 0; filter < 150; filter += 5) {
+      String id = question(filter);
+      skips.add(
+          rule(
+              id + "-no",
+              eq(id, "2"),
+              question(filter + 1),
+              question(filter + 2),
+              question(filter + 3),
+              question(filter + 4)));
+      skips.add(rule(id + "-si", eq(id, "1"), question(filter + 4)));
+      skips.add(rule(id + "-vacia", leaf(id, "empty", null), question(filter + 1)));
+      skips.add(rule(id + "-otra", leaf(id, "ne", "2"), question(filter + 2)));
+      skips.add(rule(id + "-sub", eq(question(filter + 1), "1"), question(filter + 2)));
+    }
+    // Reglas especiales: todas de 7 preguntas = 2 deshabilitan una posterior.
+    for (int special = 0; special < 12; special++) {
+      int base = 5 + special * 11;
+      List<String> all = new ArrayList<>();
+      for (int step = 0; step < 7; step++) {
+        int column = base + step;
+        all.add(question(column % 10 == 9 ? column + 1 : column));
+      }
+      skips.add(
+          rule(
+              "especial-" + special,
+              new Condition(null, "eq", "2", null, all, null, null, null),
+              question(base + 8)));
+    }
+    RuleSet set = rules(skips.toArray(SkipRule[]::new));
+    Map<String, QuestionFacts> facts = facts(questions.toArray(QuestionFacts[]::new));
+
+    AnalysisReport report =
+        assertTimeoutPreemptively(
+            Duration.ofMillis(2000), () -> RuleSetAnalyzer.analyze(set, facts));
+
+    long notAnalyzable =
+        report.warnings().stream().filter(f -> f.code().equals("NO_ANALIZABLE")).count();
+    assertThat(set.skips()).hasSizeGreaterThanOrEqualTo(160);
+    assertThat(notAnalyzable).isLessThan(report.warnings().size() / 2);
+    assertThat(warnings(report)).contains("REGLAS_SOLAPADAS@regla:Q000-otra");
+    // Lo que no cabe en el presupuesto sale en un solo aviso de archivo, nunca uno por elemento.
+    assertThat(report.warnings())
+        .filteredOn(f -> f.code().equals("NO_ANALIZABLE") && !f.element().equals("archivo"))
+        .allSatisfy(f -> assertThat(f.message()).contains("más de 4096 por elemento)"));
+  }
+
+  private static String question(int index) {
+    return String.format("Q%03d", index);
   }
 
   @Test
