@@ -154,7 +154,7 @@ export interface paths {
          * Consultar las reglas, validaciones y casos de un año
          * @description Incluye las reglas efectivas (archivo más heredadas), el análisis de lógica, el resultado de cada caso y las preguntas del año. También responde para años publicados, en modo de solo lectura.
          */
-        get: operations["view"];
+        get: operations["view_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -261,6 +261,26 @@ export interface paths {
         post?: never;
         /** Borrar la validación de una columna */
         delete: operations["deleteValidation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/simulator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar lo que necesita el simulador de un año
+         * @description Devuelve las reglas efectivas y las páginas con sus preguntas, sin estado ni respuestas: nunca lee ni escribe tablas de respuestas. También responde para años publicados, en modo de solo lectura.
+         */
+        get: operations["view"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -845,6 +865,12 @@ export interface components {
             /** Format: int32 */
             surveyYear?: number;
         };
+        SimulatorView: {
+            pages?: components["schemas"]["PageDetail"][];
+            rules?: components["schemas"]["RespondentRules"];
+            /** Format: int32 */
+            version?: number;
+        };
         SkipAction: {
             accion?: string;
             preguntas?: string[];
@@ -1360,7 +1386,7 @@ export interface operations {
             };
         };
     };
-    view: {
+    view_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -1757,6 +1783,38 @@ export interface operations {
             };
             /** @description El año está publicado o la versión cambió */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reglas efectivas y páginas del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulatorView"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
