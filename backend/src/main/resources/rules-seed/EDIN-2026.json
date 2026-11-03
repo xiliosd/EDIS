@@ -1,7 +1,7 @@
 {
   "encuesta": "EDIN",
   "anio": 2026,
-  "version": 2,
+  "version": 3,
   "saltos": [
     { "id": "c07a-no", "descripcion": "C07A = No: se omiten C08A a C08H (FrmValida.js, salto C07A)",
       "si": { "pregunta": "C07A", "op": "eq", "valor": "2" },
@@ -49,5 +49,43 @@
       "si": { "pregunta": "G05", "op": "gt", "valor": "1" },
       "entonces": { "accion": "deshabilitar", "preguntas": ["G06"] } }
   ],
-  "validaciones": {}
+  "validaciones": {},
+  "casos": [
+    { "id": "c07a-no-caso", "nombre": "C07A en No omite C08A a C08H", "pagina": "C1",
+      "respuestas": { "C07A": "2" },
+      "esperado": { "ocultas": ["C08A", "C08B", "C08C", "C08D", "C08E", "C08F", "C08G", "C08H"] } },
+    { "id": "legacy-c09g-caso", "nombre": "C09A a C09G todas en No omiten C10", "pagina": "C1",
+      "respuestas": { "C09A": "2", "C09B": "2", "C09C": "2", "C09D": "2", "C09E": "2", "C09F": "2", "C09G": "2" },
+      "esperado": { "ocultas": ["C10"] } },
+    { "id": "c13-teletrabajo-caso", "nombre": "C13 en 6 omite C14, C15 y C16A a C16F", "pagina": "C2",
+      "respuestas": { "C13": "6" },
+      "esperado": { "ocultas": ["C14", "C15", "C16A", "C16B", "C16C", "C16D", "C16E", "C16F"] } },
+    { "id": "e01-todas-no-caso", "nombre": "E01A a E01F todas en No omiten E02", "pagina": "E1",
+      "respuestas": { "E01A": "2", "E01B": "2", "E01C": "2", "E01D": "2", "E01E": "2", "E01F": "2" },
+      "esperado": { "ocultas": ["E02"] } },
+    { "id": "d09-1-2-caso", "nombre": "D09 en 1 omite D11", "pagina": "D2",
+      "respuestas": { "D09": "1" },
+      "esperado": { "ocultas": ["D11"] } },
+    { "id": "d09-3-4-caso", "nombre": "D09 en 3 omite D10", "pagina": "D2",
+      "respuestas": { "D09": "3" },
+      "esperado": { "ocultas": ["D10"] } },
+    { "id": "d09-otra-caso", "nombre": "D09 con otro valor omite D10 y D11", "pagina": "D2",
+      "respuestas": { "D09": "9" },
+      "esperado": { "ocultas": ["D10", "D11"] } },
+    { "id": "f03a-no-caso", "nombre": "F03A en No omite F04A a F04I", "pagina": "F1",
+      "respuestas": { "F03A": "2" },
+      "esperado": { "ocultas": ["F04A", "F04B", "F04C", "F04D", "F04E", "F04F", "F04G", "F04H", "F04I"] } },
+    { "id": "f04-todas-no-caso", "nombre": "F04A a F04H todas en No omiten F04I", "pagina": "F1",
+      "respuestas": { "F04A": "2", "F04B": "2", "F04C": "2", "F04D": "2", "F04E": "2", "F04F": "2", "F04G": "2", "F04H": "2" },
+      "esperado": { "ocultas": ["F04I"] } },
+    { "id": "f04-alguna-si-caso", "nombre": "Alguna de F04A a F04H en Sí omite F04I", "pagina": "F1",
+      "respuestas": { "F04A": "1" },
+      "esperado": { "ocultas": ["F04I"] } },
+    { "id": "f03j-mayor-1-caso", "nombre": "F03J mayor que 1 omite F05A a F05D", "pagina": "F1",
+      "respuestas": { "F03J": "2" },
+      "esperado": { "ocultas": ["F05A", "F05B", "F05C", "F05D"] } },
+    { "id": "g05-mayor-1-caso", "nombre": "G05 mayor que 1 omite G06", "pagina": "G1",
+      "respuestas": { "G05": "2" },
+      "esperado": { "ocultas": ["G06"] } }
+  ]
 }

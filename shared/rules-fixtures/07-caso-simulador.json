@@ -1,0 +1,24 @@
+{
+  "descripcion": "Caso del simulador: C01A=2 oculta C01B, C01B vacía oculta C02 y C03 queda REQUERIDA",
+  "reglas": {
+    "encuesta": "EDIN", "anio": 2026, "version": 1,
+    "saltos": [
+      { "id": "c01a-no", "si": { "pregunta": "C01A", "op": "eq", "valor": "2" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["C01B"] } },
+      { "id": "c01b-vacia", "si": { "pregunta": "C01B", "op": "empty" },
+        "entonces": { "accion": "deshabilitar", "preguntas": ["C02"] } }
+    ],
+    "validaciones": {}
+  },
+  "columnas": ["C01A", "C01B", "C02", "C03"],
+  "respuestas": { "C01A": "2" },
+  "deshabilitadas": ["C01B", "C02"],
+  "errores": { "C03": "REQUERIDA" },
+  "caso": {
+    "id": "cascada-c01a",
+    "nombre": "C01A en No oculta C01B y C02",
+    "pagina": "C1",
+    "respuestas": { "C01A": "2" },
+    "esperado": { "ocultas": ["C01B", "C02"], "errores": { "C03": "REQUERIDA" } }
+  }
+}

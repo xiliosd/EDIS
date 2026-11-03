@@ -1,9 +1,14 @@
 {
   "encuesta": "EDIN",
   "anio": 2026,
-  "version": 1,
+  "version": 2,
   "saltos": [],
   "validaciones": {
     "B06": { "obligatoria": true, "tipo": "entero", "min": 15, "max": 99 }
-  }
+  },
+  "casos": [
+    { "id": "c01a-no-oculta-c01b", "nombre": "C01A en No oculta C01B", "pagina": "C1",
+      "respuestas": { "C01A": "2" },
+      "esperado": { "ocultas": ["C01B"] } }
+  ]
 }

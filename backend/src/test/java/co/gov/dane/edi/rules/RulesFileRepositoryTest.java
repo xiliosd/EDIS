@@ -97,10 +97,10 @@ class RulesFileRepositoryTest {
         "{\"encuesta\":\"EDIN\",\"anio\":2026,\"version\":1,\"saltos\":[],\"validaciones\":{}}",
         StandardCharsets.UTF_8);
 
-    // La semilla de producción (classpath) es la versión 2; el archivo vigente sigue mandando.
+    // La semilla de producción (classpath) es la versión 3; el archivo vigente sigue mandando.
     assertThat(repository(tempDir, "EDIN", "").load("EDIN", 2026).version()).isEqualTo(1);
     assertThat(output)
-        .contains("La semilla de EDIN-2026.json tiene la versión 2 y el archivo vigente la 1");
+        .contains("La semilla de EDIN-2026.json tiene la versión 3 y el archivo vigente la 1");
   }
 
   @Test
