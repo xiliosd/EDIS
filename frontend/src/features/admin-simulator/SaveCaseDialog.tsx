@@ -12,6 +12,8 @@ interface SaveCaseDialogProps {
   busy?: boolean;
   /** Error del servidor al guardar; el diálogo sigue abierto con lo escrito. */
   error?: string | null;
+  /** Lo escrito en un intento que no se guardó; el diálogo empieza con eso. */
+  initialDraft?: { id: string; name: string } | null;
   onSave: (draft: { id: string; name: string }) => void;
   onCancel: () => void;
 }
@@ -21,11 +23,12 @@ export function SaveCaseDialog({
   existingIds,
   busy = false,
   error = null,
+  initialDraft = null,
   onSave,
   onCancel,
 }: SaveCaseDialogProps) {
-  const [id, setId] = useState('');
-  const [name, setName] = useState('');
+  const [id, setId] = useState(initialDraft?.id ?? '');
+  const [name, setName] = useState(initialDraft?.name ?? '');
   const [submitted, setSubmitted] = useState(false);
 
   const trimmedId = id.trim();

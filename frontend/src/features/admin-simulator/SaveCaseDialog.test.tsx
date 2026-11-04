@@ -21,6 +21,18 @@ describe('SaveCaseDialog', () => {
     expect(onSave).toHaveBeenCalledWith({ id: 'sin-trabajo', name: 'No trabaja' });
   });
 
+  it('empieza con el id y el nombre de un intento anterior', async () => {
+    const { onSave, user } = renderDialog({
+      initialDraft: { id: 'previo', name: 'Intento previo' },
+    });
+
+    expect(screen.getByLabelText('Identificador del caso')).toHaveValue('previo');
+    expect(screen.getByLabelText('Nombre del caso')).toHaveValue('Intento previo');
+    await user.click(screen.getByRole('button', { name: 'Guardar caso' }));
+
+    expect(onSave).toHaveBeenCalledWith({ id: 'previo', name: 'Intento previo' });
+  });
+
   it('rechaza un id inválido y un nombre vacío o de más de 100 caracteres', async () => {
     const { onSave, user } = renderDialog();
 

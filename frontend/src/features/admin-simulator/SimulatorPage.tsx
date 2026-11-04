@@ -169,6 +169,8 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [rulesChanged, setRulesChanged] = useState(false);
+  // Si el guardado se bloquea porque cambiaron las reglas, el id y el nombre esperan al reintento.
+  const [pendingDraft, setPendingDraft] = useState<{ id: string; name: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
 
   const pageCode =
@@ -243,6 +245,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
     setRulesChanged(false);
     // El resultado esperado sale del simulador: si sus reglas no son las vigentes, no se guarda.
     if ((simulatorVersion ?? view.version) !== rulesVersion) {
+      setPendingDraft(draft);
       setSaveOpen(false);
       setRulesChanged(true);
       void queryClient.invalidateQueries({ queryKey: simulatorKey });
@@ -261,6 +264,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
           : [...current, testCase],
       );
       setSaveOpen(false);
+      setPendingDraft(null);
       setStatusMessage(`Caso ${draft.id} guardado.`);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
@@ -406,8 +410,12 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
           existingIds={cases.map((item) => item.id ?? '')}
           busy={saveBusy}
           error={saveError}
+          initialDraft={pendingDraft}
           onSave={(draft) => void saveCurrentCase(draft)}
-          onCancel={() => setSaveOpen(false)}
+          onCancel={() => {
+            setPendingDraft(null);
+            setSaveOpen(false);
+          }}
         />
       )}
     </>

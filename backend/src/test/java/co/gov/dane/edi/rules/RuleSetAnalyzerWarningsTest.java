@@ -406,6 +406,51 @@ class RuleSetAnalyzerWarningsTest {
   }
 
   @Test
+  void threeThousandCheckboxRulesStayWithinMemory() {
+    List<QuestionFacts> questions = new ArrayList<>();
+    List<SkipRule> skips = new ArrayList<>();
+    for (int index = 0; index < 3000; index++) {
+      String column = String.format("K%04d", index);
+      questions.add(checkbox(column, index));
+      skips.add(rule(String.format("r-%04d", index), eq(column, "1"), "Z01"));
+    }
+    questions.add(text("Z01", 3000));
+    Map<String, QuestionFacts> facts = facts(questions.toArray(QuestionFacts[]::new));
+    RuleSet set = rules(skips.toArray(SkipRule[]::new));
+
+    AnalysisReport report =
+        assertTimeoutPreemptively(
+            Duration.ofMillis(3000), () -> RuleSetAnalyzer.analyze(set, facts));
+    // Los ~4,5 millones de pares comparten Z01: solo se guardan los que el presupuesto paga.
+    LogicWarnings logic = new LogicWarnings(set, facts, Set.of());
+    logic.enumerated();
+
+    assertThat(warnings(report)).contains("NO_ANALIZABLE@archivo");
+    assertThat(logic.plannedPairs()).isPositive();
+    assertThat(logic.plannedPairs()).isLessThanOrEqualTo(RuleSetAnalyzer.MAX_TOTAL_WORK / 3000);
+  }
+
+  @Test
+  void manyOverlappingPairsDoNotStarveCheaperRuleChecks() {
+    List<QuestionFacts> questions = new ArrayList<>();
+    List<SkipRule> skips = new ArrayList<>();
+    for (int index = 0; index < 500; index++) {
+      String column = String.format("K%04d", index);
+      questions.add(checkbox(column, index));
+      skips.add(rule(String.format("r-%04d", index), eq(column, "1"), "Z01"));
+    }
+    questions.add(text("Z01", 500));
+    skips.add(rule("r-imposible", and(eq("K0000", "1"), eq("K0000", "0")), "Z01"));
+
+    // Planear los ~125 000 pares no puede gastar el presupuesto de las reglas, más baratas.
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(skips.toArray(SkipRule[]::new)), facts(questions.toArray(QuestionFacts[]::new)));
+
+    assertThat(warnings(report)).contains("NUNCA_SE_CUMPLE@regla:r-imposible");
+  }
+
+  @Test
   void realisticSizedQuestionnaireIsNotAllNoise() {
     List<QuestionFacts> questions = new ArrayList<>();
     for (int index = 0; index < 150; index++) {

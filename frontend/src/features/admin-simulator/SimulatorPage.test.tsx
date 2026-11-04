@@ -307,6 +307,10 @@ describe('SimulatorPage', () => {
     ).toBeInTheDocument();
     expect(puts).toBe(0);
     await waitFor(() => expect(simulatorReads).toBeGreaterThanOrEqual(2));
+    // Lo escrito en el diálogo no se pierde: al volver a abrirlo sigue ahí.
+    await user.click(screen.getByRole('button', { name: 'Guardar como caso de prueba' }));
+    expect(screen.getByLabelText('Identificador del caso')).toHaveValue('nuevo');
+    expect(screen.getByLabelText('Nombre del caso')).toHaveValue('Nuevo');
   });
 
   it(

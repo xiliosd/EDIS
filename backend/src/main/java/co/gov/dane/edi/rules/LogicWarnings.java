@@ -5,6 +5,7 @@ import co.gov.dane.edi.model.InputType;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -57,7 +58,10 @@ final class LogicWarnings {
   private final Map<String, Set<String>> overlapShared = new HashMap<>();
   private final Map<String, Set<String>> overlapColumns = new HashMap<>();
   private final long workPerEvaluation;
+  private final boolean reduceDomains;
   private long remainingWork;
+  private long reservedWork;
+  private long plannedPairs;
 
   /** Qué se analiza de un elemento: una pregunta, una regla o un par de reglas. */
   private enum Kind {
@@ -88,6 +92,20 @@ final class LogicWarnings {
   /** Con presupuesto de trabajo propio: lo usan las pruebas. */
   LogicWarnings(
       RuleSet rules, Map<String, QuestionFacts> facts, Set<String> cyclicRuleIds, long totalWork) {
+    this(rules, facts, cyclicRuleIds, totalWork, true);
+  }
+
+  /**
+   * Con {@code reduceDomains} falso enumera cada respuesta candidata sin agruparlas: la prueba
+   * diferencial lo usa para comprobar que la reducción de dominios no cambia ningún aviso.
+   */
+  LogicWarnings(
+      RuleSet rules,
+      Map<String, QuestionFacts> facts,
+      Set<String> cyclicRuleIds,
+      long totalWork,
+      boolean reduceDomains) {
+    this.reduceDomains = reduceDomains;
     this.remainingWork = totalWork;
     this.rules = rules;
     this.facts = facts;
@@ -163,7 +181,7 @@ final class LogicWarnings {
     checks.sort(Comparator.comparingLong(Check::product));
     boolean stopped = false;
     for (Check check : checks) {
-      if (check.product() > RuleSetAnalyzer.MAX_COMBINATIONS) {
+      if (exceedsLimit(check)) {
         markNotAnalyzable(check.element(), involvedColumns(check));
       } else if (stopped || check.product() * workPerEvaluation > remainingWork) {
         stopped = true;
@@ -198,9 +216,12 @@ final class LogicWarnings {
 
   /**
    * Planea los análisis en el orden de desempate. Planear también gasta presupuesto (una unidad por
-   * columna): si se agota aquí, los pares que faltan quedan sin analizar sin calcular nada más.
+   * columna) y cada par reserva además una evaluación: si se agota aquí, los pares que faltan
+   * quedan sin analizar sin calcular ni guardar nada más.
    */
   private List<Check> plan() {
+    reservedWork = 0;
+    plannedPairs = 0;
     List<Check> checks = new ArrayList<>();
     Set<String> targets = new TreeSet<>();
     Set<String> cyclicTargets = new TreeSet<>();
@@ -218,33 +239,86 @@ final class LogicWarnings {
             .filter(rule -> !cyclicRuleIds.contains(rule.id()))
             .sorted(Comparator.comparing(SkipRule::id))
             .toList();
+    Map<SkipRule, Check> ownChecks = new IdentityHashMap<>();
     for (SkipRule rule : analyzable) {
-      checks.add(
+      Check own =
           planCheck(
-              Kind.NEVER_MATCHES,
-              "regla:" + rule.id(),
-              null,
-              rule,
-              null,
-              triggersByRule.get(rule)));
+              Kind.NEVER_MATCHES, "regla:" + rule.id(), null, rule, null, triggersByRule.get(rule));
+      ownChecks.put(rule, own);
+      checks.add(own);
     }
-    for (int first = 0; first < analyzable.size(); first++) {
-      SkipRule one = analyzable.get(first);
-      for (int second = first + 1; second < analyzable.size(); second++) {
-        SkipRule other = analyzable.get(second);
-        if (Collections.disjoint(targetsByRule.get(one), targetsByRule.get(other))) {
-          continue;
-        }
-        if (remainingWork <= 0) {
-          unanalyzed.add("regla:" + one.id());
-          break;
-        }
-        Set<String> seeds = new TreeSet<>(triggersByRule.get(one));
-        seeds.addAll(triggersByRule.get(other));
-        checks.add(planCheck(Kind.OVERLAP, "regla:" + one.id(), null, one, other, seeds));
+    planOverlaps(analyzable, ownChecks, checks);
+    return checks;
+  }
+
+  /**
+   * Planea los pares (a, b) con a antes que b que comparten algún destino; los socios salen del
+   * índice por destino, sin recorrer todos los pares. Cada par reserva una evaluación, lo mínimo
+   * que gastará al ejecutarse, de modo que nunca se guardan más pares de los que el presupuesto
+   * puede pagar (unos {@code MAX_TOTAL_WORK / workPerEvaluation}). Es una reserva y no un cobro: si
+   * se descontara, planear muchos pares dejaría sin presupuesto a las preguntas y reglas, más
+   * baratas. Si una de las dos reglas ya supera el tope por sí sola, el par tampoco cabe (sus
+   * columnas incluyen las de ambas): se marca sin calcular sus columnas ni guardarlo.
+   */
+  private void planOverlaps(
+      List<SkipRule> analyzable, Map<SkipRule, Check> ownChecks, List<Check> checks) {
+    Map<String, List<Integer>> positionsByTarget = new HashMap<>();
+    for (int position = 0; position < analyzable.size(); position++) {
+      for (String target : targetsByRule.get(analyzable.get(position))) {
+        positionsByTarget.computeIfAbsent(target, key -> new ArrayList<>()).add(position);
       }
     }
-    return checks;
+    int[] collectedFor = new int[analyzable.size()];
+    Arrays.fill(collectedFor, -1);
+    for (int first = 0; first < analyzable.size(); first++) {
+      SkipRule one = analyzable.get(first);
+      List<Integer> partners = new ArrayList<>();
+      for (String target : targetsByRule.get(one)) {
+        for (int position : positionsByTarget.get(target)) {
+          if (position > first && collectedFor[position] != first) {
+            collectedFor[position] = first;
+            partners.add(position);
+          }
+        }
+      }
+      Collections.sort(partners);
+      String element = "regla:" + one.id();
+      Check ownOne = ownChecks.get(one);
+      // Muchas reglas comparten columnas: cada lista distinta se fusiona una sola vez.
+      Set<List<String>> mergedColumns = new HashSet<>();
+      boolean oneUnanalyzed = false;
+      for (int position : partners) {
+        SkipRule other = analyzable.get(position);
+        Check ownOther = ownChecks.get(other);
+        if (exceedsLimit(ownOne) || exceedsLimit(ownOther)) {
+          for (Check own : List.of(ownOne, ownOther)) {
+            if (mergedColumns.add(own.columns())) {
+              markNotAnalyzable(element, own.columns());
+            }
+          }
+        } else if (remainingWork - reservedWork < workPerEvaluation) {
+          if (!oneUnanalyzed) {
+            unanalyzed.add(element);
+            oneUnanalyzed = true;
+          }
+        } else {
+          Set<String> seeds = new TreeSet<>(triggersByRule.get(one));
+          seeds.addAll(triggersByRule.get(other));
+          checks.add(planCheck(Kind.OVERLAP, element, null, one, other, seeds));
+          reservedWork += workPerEvaluation;
+          plannedPairs++;
+        }
+      }
+    }
+  }
+
+  /** Pares de solape guardados en la última planificación: lo usan las pruebas. */
+  long plannedPairs() {
+    return plannedPairs;
+  }
+
+  private static boolean exceedsLimit(Check check) {
+    return check.product() > RuleSetAnalyzer.MAX_COMBINATIONS;
   }
 
   private Check planCheck(
@@ -437,7 +511,7 @@ final class LogicWarnings {
       }
       domain.add(ARBITRARY_TEXT);
     }
-    return distinguishable(column, domain);
+    return reduceDomains ? distinguishable(column, domain) : List.copyOf(domain);
   }
 
   /**
