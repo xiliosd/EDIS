@@ -15,6 +15,7 @@ import co.gov.dane.edi.rules.QuestionFacts;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RuleSetAnalyzer;
 import co.gov.dane.edi.rules.RulesFileRepository;
+import co.gov.dane.edi.rules.SkipRule;
 import co.gov.dane.edi.service.QuestionnaireService;
 import co.gov.dane.edi.service.SaveLocks;
 import co.gov.dane.edi.service.error.ConflictException;
@@ -116,8 +117,17 @@ public class PublicationService {
   }
 
   private PublicationChecklist checklistOf(String survey, int year, RuleSet file) {
-    RuleSet effective = EffectiveRulesService.merge(file, effectiveRules.legacySkips(survey, year));
-    Map<String, QuestionFacts> facts = factsService.facts(survey, year);
+    return checklistFor(
+        file, factsService.facts(survey, year), effectiveRules.legacySkips(survey, year));
+  }
+
+  /**
+   * La misma lista para unas reglas y unas preguntas dadas: la importación de un paquete la corre
+   * con las reglas que trae y las preguntas de esta base.
+   */
+  PublicationChecklist checklistFor(
+      RuleSet file, Map<String, QuestionFacts> facts, List<SkipRule> legacySkips) {
+    RuleSet effective = EffectiveRulesService.merge(file, legacySkips);
     AnalysisReport report = RuleSetAnalyzer.analyze(effective, facts);
     List<CaseResult> results = CaseRunner.runAll(effective, facts);
     List<ChecklistItem> items =

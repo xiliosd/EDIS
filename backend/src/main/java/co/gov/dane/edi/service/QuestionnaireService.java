@@ -115,6 +115,14 @@ public class QuestionnaireService {
         page.code(), columnsOf(page.chapter(), surveyCode, year), true, surveyCode, year);
   }
 
+  /**
+   * Las mismas filas con las columnas que existen según otro mapeo (el de un paquete que se
+   * importa): {@code columns} decide qué preguntas quedan activas y cuáles pendientes.
+   */
+  public List<PageRow> pageRows(SurveyPage page, String surveyCode, int year, Set<String> columns) {
+    return buildEntries(page.code(), columns, true, surveyCode, year);
+  }
+
   /** Sin columnas si la tabla de un año en borrador aún no existe: todo queda pendiente. */
   private Set<String> columnsOf(Chapter chapter, String surveyCode, int year) {
     ResolvedTable table = tables.resolve(chapter, surveyCode, year);

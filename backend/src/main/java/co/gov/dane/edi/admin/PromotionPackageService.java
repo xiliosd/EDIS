@@ -1,6 +1,7 @@
 package co.gov.dane.edi.admin;
 
 import co.gov.dane.edi.admin.ColumnScriptService.ColumnAddition;
+import co.gov.dane.edi.admin.ColumnScriptService.ManualColumn;
 import co.gov.dane.edi.admin.ColumnScriptService.TableCopy;
 import co.gov.dane.edi.admin.dto.PackageManifest;
 import co.gov.dane.edi.admin.dto.YearSummary;
@@ -144,9 +145,10 @@ public class PromotionPackageService {
   }
 
   /**
-   * Las tablas mapeadas que el año estrena, copiadas vacías de la del año anterior, y sus columnas
-   * nuevas ({@code columnasNuevas}) en la tabla de su capítulo. En QA ya existen; el script solo
-   * las crea donde falten.
+   * Las tablas mapeadas que el año estrena, copiadas vacías de la del año anterior, y todas las
+   * columnas requeridas en la tabla de su capítulo: con la definición de {@code columnasNuevas} o,
+   * si no está ahí, con la del diccionario de QA. En QA ya existen; el script solo las crea donde
+   * falten.
    */
   private String columnScript(
       String survey, int year, RuleSet rules, Map<String, QuestionFacts> facts) {
@@ -167,18 +169,20 @@ public class PromotionPackageService {
       }
     }
     List<ColumnAddition> additions = new ArrayList<>();
+    List<ManualColumn> manual = new ArrayList<>();
     for (QuestionFacts question : facts.values()) {
+      String table = tableOf(rules, question);
       NewColumn definition = rules.newColumns().get(question.column());
-      if (definition != null) {
-        additions.add(
-            new ColumnAddition(
-                tableOf(rules, question),
-                question.column(),
-                definition.type(),
-                definition.length()));
-      }
+      Optional<ColumnAddition> addition =
+          definition != null
+              ? Optional.of(
+                  new ColumnAddition(
+                      table, question.column(), definition.type(), definition.length()))
+              : ColumnScriptService.additionFrom(table, question.capacity());
+      addition.ifPresentOrElse(
+          additions::add, () -> manual.add(new ManualColumn(table, question.column())));
     }
-    return columnScripts.packageScript(survey, year, copies, additions);
+    return columnScripts.packageScript(survey, year, copies, additions, manual);
   }
 
   private static String tableOf(RuleSet rules, QuestionFacts question) {

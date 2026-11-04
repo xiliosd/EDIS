@@ -848,6 +848,7 @@ export interface components {
             alreadyImported?: boolean;
             impact?: components["schemas"]["PageImpact"][];
             kind?: string;
+            overwritesLocalChange?: boolean;
             /** Format: int32 */
             version?: number;
         };

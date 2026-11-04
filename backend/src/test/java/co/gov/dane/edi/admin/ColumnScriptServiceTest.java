@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import co.gov.dane.edi.admin.ColumnScriptService.ColumnAddition;
+import co.gov.dane.edi.admin.ColumnScriptService.ManualColumn;
 import co.gov.dane.edi.admin.ColumnScriptService.TableCopy;
+import co.gov.dane.edi.model.AnswerColumn;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -100,11 +102,71 @@ class ColumnScriptServiceTest {
   }
 
   @Test
-  void packageScriptWithNothingToCreateIsOnlyAComment() {
+  void packageScriptWithNothingToCreateKeepsTheSafetyHeader() {
     String script = scripts.packageScript("EDIN", 2027, List.of(), List.of());
 
-    assertThat(script).isNotBlank();
-    assertThat(script.lines()).allMatch(line -> line.startsWith("--"));
+    assertThat(script)
+        .startsWith(
+            "SET DEFINE OFF\nWHENEVER SQLERROR EXIT FAILURE ROLLBACK\n"
+                + "WHENEVER OSERROR EXIT FAILURE ROLLBACK\n")
+        .contains("no crea tablas ni columnas");
+    assertThat(script.lines().filter("/"::equals)).isEmpty();
+    assertThat(script).doesNotContain("EXECUTE IMMEDIATE");
+  }
+
+  @Test
+  void packageScriptKeepsCharacterSemanticsAndMarksWhatNeedsAHand() {
+    String script =
+        scripts.packageScript(
+            "EDIN",
+            2027,
+            List.of(),
+            List.of(new ColumnAddition("EDIN_20_CAP_B_UBICA", "B30", "VARCHAR2", 10, true)),
+            List.of(new ManualColumn("EDIN_20_CAP_B_UBICA", "B31")));
+
+    assertThat(script)
+        .contains(
+            "EXECUTE IMMEDIATE 'ALTER TABLE EDIN_20_CAP_B_UBICA ADD (B30 VARCHAR2(10 CHAR))';")
+        .contains("-- revisar a mano: EDIN_20_CAP_B_UBICA.B31\n");
+    assertThatThrownBy(
+            () ->
+                scripts.packageScript(
+                    "EDIN",
+                    2027,
+                    List.of(),
+                    List.of(),
+                    List.of(new ManualColumn("EDIN_20_CAP_B_UBICA", "B31\n--"))))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void dictionaryColumnsBecomeAdditionsOnlyWhenTheTypeFits() {
+    String table = "EDIN_20_CAP_B_UBICA";
+    assertThat(
+            ColumnScriptService.additionFrom(
+                table, new AnswerColumn("B30", "VARCHAR2", 50, 50, false, null, null)))
+        .contains(new ColumnAddition(table, "B30", "VARCHAR2", 50, false));
+    assertThat(
+            ColumnScriptService.additionFrom(
+                table, new AnswerColumn("B30", "VARCHAR2", 40, 10, true, null, null)))
+        .contains(new ColumnAddition(table, "B30", "VARCHAR2", 10, true));
+    assertThat(
+            ColumnScriptService.additionFrom(
+                table, new AnswerColumn("B30", "NUMBER", 22, 0, false, 5, 0)))
+        .contains(new ColumnAddition(table, "B30", "NUMBER", 5, false));
+    assertThat(
+            ColumnScriptService.additionFrom(
+                table, new AnswerColumn("B30", "NUMBER", 22, 0, false, null, null)))
+        .isEmpty();
+    assertThat(
+            ColumnScriptService.additionFrom(
+                table, new AnswerColumn("B30", "NUMBER", 22, 0, false, 5, 2)))
+        .isEmpty();
+    assertThat(
+            ColumnScriptService.additionFrom(
+                table, new AnswerColumn("B30", "DATE", 7, 0, false, null, null)))
+        .isEmpty();
+    assertThat(ColumnScriptService.additionFrom(table, null)).isEmpty();
   }
 
   @Test

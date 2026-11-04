@@ -201,6 +201,21 @@ class FrmScriptWriterTest {
     assertThat(ascii.hasNonAsciiText()).isFalse();
   }
 
+  /** Un texto que trae el comentario del bloque no hace pasar el script por verificado. */
+  @Test
+  void characterSetCheckIsDetectedByAWholeLineNotByAText() {
+    String comment = "-- Verificacion del juego de caracteres de destino";
+    FrmSnapshot snapshot =
+        snapshotWith(
+            FrmTable.PRE_AYUDA,
+            row(FrmTable.PRE_AYUDA, 9, 101, "x\n" + comment + "\nRAISE_APPLICATION_ERROR(-20002"));
+
+    String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
+
+    assertThat(script).contains(comment);
+    assertThat(FrmScriptWriter.checksCharacterSet(script)).isFalse();
+  }
+
   @Test
   void rejectsACharacterSetNameThatCouldBreakTheScript() {
     FrmSnapshot snapshot = snapshotWith(FrmTable.PREGUNTA, row(FrmTable.PREGUNTA, 7, "Texto", "L"));

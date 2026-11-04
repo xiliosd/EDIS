@@ -1,8 +1,10 @@
 package co.gov.dane.edi.admin;
 
+import co.gov.dane.edi.model.AnswerColumn;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
@@ -43,17 +45,67 @@ public class ColumnScriptService {
   /** Tabla de respuestas que el año mapea y que se crea vacía a partir de la de otro año. */
   public record TableCopy(String table, String sourceTable) {}
 
-  /** Columna nueva del año ({@code columnasNuevas}) en la tabla de su capítulo. */
-  public record ColumnAddition(String table, String column, String type, Integer length) {}
+  /**
+   * Columna requerida en la tabla de su capítulo: de {@code columnasNuevas} o del diccionario de
+   * QA. {@code characterSemantics}: un VARCHAR2 declarado en caracteres ({@code VARCHAR2(n CHAR)}).
+   */
+  public record ColumnAddition(
+      String table, String column, String type, Integer length, boolean characterSemantics) {
+
+    public ColumnAddition(String table, String column, String type, Integer length) {
+      this(table, column, type, length, false);
+    }
+  }
+
+  /** Columna cuyo tipo no se puede escribir con VARCHAR2(n) o NUMBER(p): va como comentario. */
+  public record ManualColumn(String table, String column) {}
+
+  /**
+   * La columna tal como está en el diccionario de QA, si su tipo se puede volver a declarar:
+   * VARCHAR2 en bytes o en caracteres, o NUMBER con precisión y sin decimales. Cualquier otro tipo
+   * (o una columna que no existe) queda para revisar a mano.
+   */
+  public static Optional<ColumnAddition> additionFrom(String table, AnswerColumn column) {
+    if (column == null) {
+      return Optional.empty();
+    }
+    String type = column.dataType() == null ? "" : column.dataType().toUpperCase(Locale.ROOT);
+    if (VARCHAR2.equals(type)) {
+      int length = column.charSemantics() ? column.charLength() : column.dataLength();
+      return describeProblem(VARCHAR2, length) == null
+          ? Optional.of(
+              new ColumnAddition(table, column.name(), VARCHAR2, length, column.charSemantics()))
+          : Optional.empty();
+    }
+    boolean wholeNumber = column.dataScale() == null || column.dataScale() == 0;
+    if (NUMBER.equals(type)
+        && column.dataPrecision() != null
+        && wholeNumber
+        && describeProblem(NUMBER, column.dataPrecision()) == null) {
+      return Optional.of(
+          new ColumnAddition(table, column.name(), NUMBER, column.dataPrecision(), false));
+    }
+    return Optional.empty();
+  }
+
+  /** Como {@link #packageScript(String, int, List, List, List)} sin columnas a mano. */
+  public String packageScript(
+      String project, int year, List<TableCopy> tables, List<ColumnAddition> columns) {
+    return packageScript(project, year, tables, columns, List.of());
+  }
 
   /**
    * {@code columnas.sql} del paquete de promoción: un bloque PL/SQL por tabla y por columna que
    * solo ejecuta el DDL si el objeto aún no existe en el esquema actual. Así se puede correr otra
-   * vez sin error. Va primero cada tabla y luego las columnas, que pueden ser de esa tabla. Sin
-   * nada que crear queda solo un comentario.
+   * vez sin error. Va primero cada tabla y luego las columnas, que pueden ser de esa tabla. Las
+   * columnas que no se pueden declarar quedan como comentario {@code -- revisar a mano: T.C}.
    */
   public String packageScript(
-      String project, int year, List<TableCopy> tables, List<ColumnAddition> columns) {
+      String project,
+      int year,
+      List<TableCopy> tables,
+      List<ColumnAddition> columns,
+      List<ManualColumn> manual) {
     if (project == null || !PROJECT_CODE.matcher(project).matches()) {
       throw new IllegalArgumentException("Código de encuesta inválido");
     }
@@ -63,9 +115,6 @@ public class ColumnScriptService {
       blocks.add(guardedBlock("ALL_TABLES", "TABLE_NAME = '" + copy.table() + "'", ddl));
     }
     for (ColumnAddition addition : columns) {
-      String ddl =
-          withoutSemicolon(
-              alterTable(addition.table(), addition.column(), addition.type(), addition.length()));
       blocks.add(
           guardedBlock(
               "ALL_TAB_COLUMNS",
@@ -74,21 +123,24 @@ public class ColumnScriptService {
                   + "' AND COLUMN_NAME = '"
                   + addition.column()
                   + "'",
-              ddl));
+              alterTableDdl(addition)));
+    }
+    for (ManualColumn column : manual) {
+      requireTable(column.table());
+      requireColumn(column.column());
+      blocks.add("-- revisar a mano: " + column.table() + "." + column.column() + "\n");
     }
     StringBuilder script = new StringBuilder();
-    if (blocks.isEmpty()) {
-      script.append("-- columnas.sql: este paquete no crea tablas ni columnas de respuesta.\n");
-      script.append("-- Encuesta: ").append(project).append('\n');
-      script.append("-- Anio: ").append(year).append('\n');
-      return script.toString();
-    }
     script.append("SET DEFINE OFF\n");
     script.append("WHENEVER SQLERROR EXIT FAILURE ROLLBACK\n");
     script.append("WHENEVER OSERROR EXIT FAILURE ROLLBACK\n");
     script.append("-- columnas.sql generado por el administrador del cuestionario.\n");
     script.append("-- Encuesta: ").append(project).append('\n');
     script.append("-- Anio: ").append(year).append('\n');
+    if (blocks.isEmpty()) {
+      script.append("-- Este paquete no crea tablas ni columnas de respuesta.\n");
+      return script.toString();
+    }
     script.append(
         """
         -- Ejecutelo ANTES de frm.sql, en SQL*Plus o SQLcl, conectado al esquema duenio de las
@@ -100,6 +152,27 @@ public class ColumnScriptService {
         """);
     blocks.forEach(script::append);
     return script.toString();
+  }
+
+  /** El ALTER de 3a, con {@code CHAR} si la columna se declaró en caracteres. */
+  private String alterTableDdl(ColumnAddition addition) {
+    String ddl =
+        withoutSemicolon(
+            alterTable(addition.table(), addition.column(), addition.type(), addition.length()));
+    if (!addition.characterSemantics()) {
+      return ddl;
+    }
+    if (!VARCHAR2.equalsIgnoreCase(addition.type())) {
+      throw new IllegalArgumentException("Solo un VARCHAR2 se declara en caracteres");
+    }
+    // "... VARCHAR2(n))" pasa a "... VARCHAR2(n CHAR))".
+    return ddl.substring(0, ddl.length() - 2) + " CHAR))";
+  }
+
+  private static void requireColumn(String column) {
+    if (column == null || !COLUMN.matcher(column).matches()) {
+      throw new IllegalArgumentException("Nombre de columna inválido");
+    }
   }
 
   private static String guardedBlock(String dictionaryView, String condition, String ddl) {

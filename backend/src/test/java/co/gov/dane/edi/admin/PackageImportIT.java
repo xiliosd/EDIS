@@ -4,6 +4,7 @@ import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +52,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -279,6 +282,8 @@ class PackageImportIT extends OracleIntegrationTest {
             .andExpect(jsonPath("$.version").value(3))
             .andExpect(jsonPath("$.kind").value("correccion"))
             .andExpect(jsonPath("$.alreadyImported").value(false))
+            // El archivo vigente lo dejó la publicación de este ambiente, no una importación.
+            .andExpect(jsonPath("$.overwritesLocalChange").value(true))
             .andExpect(jsonPath("$.impact.length()").value(1))
             .andExpect(jsonPath("$.impact[0].pageCode").value("C1"))
             .andExpect(jsonPath("$.impact[0].savedCount").value(baseline + 2))
@@ -319,7 +324,11 @@ class PackageImportIT extends OracleIntegrationTest {
     assertThat(imported.lastChange().user()).isEqualTo("admin:adm.cuest");
     assertThat(questionnaire.cacheGeneration()).isGreaterThan(generation);
     assertThat(effectiveRules.effectiveRules("EDIN", 2027).version()).isEqualTo(3);
-    assertThat(output.getAll()).contains("operacion=importar-paquete");
+    String manifestCode =
+        "m" + PackageZips.sha256(PackageZips.read(zip).get("manifiesto.json")).substring(0, 12);
+    assertThat(output.getAll())
+        .contains("operacion=importar-paquete")
+        .contains("codigos=[" + manifestCode + "]");
     // La importación solo lee FRM_*.
     assertThat(snapshots.snapshot("EDIN", 2027)).isEqualTo(frmBefore);
   }
@@ -354,11 +363,19 @@ class PackageImportIT extends OracleIntegrationTest {
     int historyBefore = rulesFiles.history("EDIN", 2027).size();
 
     for (boolean confirm : List.of(false, true)) {
+      long generation = questionnaire.cacheGeneration();
       importPackage(zip, confirm)
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.version").value(2))
           .andExpect(jsonPath("$.alreadyImported").value(true))
+          .andExpect(jsonPath("$.overwritesLocalChange").value(false))
           .andExpect(jsonPath("$.impact.length()").value(0));
+      // Confirmar un paquete ya importado igual descarta las cachés.
+      if (confirm) {
+        assertThat(questionnaire.cacheGeneration()).isGreaterThan(generation);
+      } else {
+        assertThat(questionnaire.cacheGeneration()).isEqualTo(generation);
+      }
     }
 
     assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(before);
@@ -379,6 +396,81 @@ class PackageImportIT extends OracleIntegrationTest {
                 .value("La versión del paquete (2) no es posterior a la de este ambiente (3)."));
 
     assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(corrected);
+  }
+
+  /** Tras una importación, el paquete siguiente no pisa ningún cambio hecho aquí. */
+  @Test
+  void overwritesLocalChangeOnlyWhenTheFileWasEditedHere() throws Exception {
+    fixture.installPublished("fixture");
+    byte[] year = download("anio");
+    correctSkip(2);
+    byte[] correction = download("correccion");
+    Files.delete(rulesFile());
+    rulesFiles.evict();
+    importPackage(year, true).andExpect(status().isOk());
+
+    importPackage(correction, false)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version").value(3))
+        .andExpect(jsonPath("$.overwritesLocalChange").value(false))
+        .andExpect(jsonPath("$.impact[0].pageCode").value("C1"));
+  }
+
+  @Test
+  void manifestListingFewerColumnsThanTheYearIsRejected() throws Exception {
+    fixture.installPublished("fixture");
+    Map<String, byte[]> entries = PackageZips.read(download("anio"));
+    ObjectNode manifest = (ObjectNode) jsonMapper.readTree(entries.get("manifiesto.json"));
+    manifest.putObject("columnasRequeridas");
+    entries.put("manifiesto.json", jsonMapper.writeValueAsBytes(manifest));
+
+    importPackage(PackageZips.write(entries), true)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.detail").value("El manifiesto no coincide con las columnas del año."))
+        .andExpect(jsonPath("$.differences").value(hasItem(H_TABLE + ".H02A")));
+  }
+
+  /** Reglas editadas a mano con el hash al día: la puerta de publicación las rechaza aquí. */
+  @Test
+  void coherentlyEditedRulesMustStillPassThePublicationGate() throws Exception {
+    fixture.installPublished("fixture");
+    RuleSet before = rulesFiles.load("EDIN", 2027);
+    Map<String, byte[]> entries = PackageZips.read(download("anio"));
+
+    Map<String, byte[]> brokenSkip =
+        withRules(
+            entries,
+            rules ->
+                ((ArrayNode) rules.get("saltos"))
+                    .add(
+                        jsonMapper.readTree(
+                            """
+                            {"id":"apunta-a-z99","si":{"pregunta":"Z99","op":"eq","valor":"1"},
+                             "entonces":{"accion":"deshabilitar","preguntas":["C01B"]}}""")));
+    importPackage(PackageZips.write(brokenSkip), false)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.detail").value("reglas.json no pasa la lista de publicación en esta base."))
+        .andExpect(jsonPath("$.differences").value(hasItem(startsWith("SIN_ERRORES"))));
+
+    assertThat(before.cases()).isNotEmpty();
+    Map<String, byte[]> failingCase =
+        withRules(
+            entries,
+            rules ->
+                ((ObjectNode) rules.get("casos").get(0)).putObject("esperado").putArray("ocultas"));
+    importPackage(PackageZips.write(failingCase), false)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.differences").value(hasItem(startsWith("CASOS_EN_VERDE"))));
+
+    Map<String, byte[]> withoutPublication =
+        withRules(entries, rules -> rules.remove("publicacion"));
+    importPackage(PackageZips.write(withoutPublication), false)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.detail").value("reglas.json no trae una publicación válida."));
+
+    assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(before);
   }
 
   @Test
@@ -429,6 +521,19 @@ class PackageImportIT extends OracleIntegrationTest {
     ObjectNode manifest = (ObjectNode) jsonMapper.readTree(entries.get("manifiesto.json"));
     manifest.put("juegoCaracteres", characterSet);
     Map<String, byte[]> changed = new LinkedHashMap<>(entries);
+    changed.put("manifiesto.json", jsonMapper.writeValueAsBytes(manifest));
+    return changed;
+  }
+
+  /** Cambia reglas.json y deja su SHA-256 al día en el manifiesto: una edición coherente. */
+  private Map<String, byte[]> withRules(Map<String, byte[]> entries, Consumer<ObjectNode> change) {
+    ObjectNode rules = (ObjectNode) jsonMapper.readTree(entries.get("reglas.json"));
+    change.accept(rules);
+    byte[] rulesBytes = jsonMapper.writeValueAsBytes(rules);
+    ObjectNode manifest = (ObjectNode) jsonMapper.readTree(entries.get("manifiesto.json"));
+    ((ObjectNode) manifest.get("archivos")).put("reglas.json", PackageZips.sha256(rulesBytes));
+    Map<String, byte[]> changed = new LinkedHashMap<>(entries);
+    changed.put("reglas.json", rulesBytes);
     changed.put("manifiesto.json", jsonMapper.writeValueAsBytes(manifest));
     return changed;
   }

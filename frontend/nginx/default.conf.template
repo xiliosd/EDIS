@@ -18,6 +18,20 @@ server {
         proxy_set_header X-Correlation-Id $request_id;
     }
 
+    # Importación del paquete de promoción: el backend admite 5 MB de ZIP (6 MB de petición) y
+    # responde 413 en español; el resto de /api/ sigue con el tope de 1 MB de nginx. La regex
+    # gana sobre el prefijo /api/. BACKEND_URL no lleva ruta: proxy_pass sin URI es válido aquí.
+    location ~ ^/api/v1/admin/questionnaire/[^/]+/[0-9]+/package/import$ {
+        client_max_body_size 6m;
+        client_body_buffer_size 6m;
+        proxy_pass ${BACKEND_URL};
+        # nosemgrep: generic.nginx.security.request-host-used.request-host-used
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Correlation-Id $request_id;
+    }
+
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable" always;

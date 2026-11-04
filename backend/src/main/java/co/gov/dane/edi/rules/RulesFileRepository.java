@@ -182,6 +182,13 @@ public class RulesFileRepository {
    * importar-paquete}. Un paquete idéntico al vigente (salvo el último cambio) no hace nada.
    */
   public synchronized RuleSet replaceWithPackage(RuleSet incoming, String user) {
+    return replaceWithPackage(incoming, user, List.of());
+  }
+
+  /** Como {@link #replaceWithPackage(RuleSet, String)}, con códigos fijos para la auditoría. */
+  public synchronized RuleSet replaceWithPackage(
+      RuleSet incoming, String user, List<String> codes) {
+    AdminAudit.validate(IMPORT_OPERATION, codes);
     RuleSetValidator.validate(incoming);
     String name = fileName(incoming.survey(), incoming.year());
     PendingSave pending = pendingSaves.get(name);
@@ -196,7 +203,7 @@ public class RulesFileRepository {
     RuleSet toSave =
         incoming.withLastChange(new ChangeNote(user, clock.instant(), IMPORT_OPERATION, null));
     write(name, committed, toSave);
-    recordAudit(toSave, user, IMPORT_OPERATION, List.of());
+    recordAudit(toSave, user, IMPORT_OPERATION, codes);
     return toSave;
   }
 

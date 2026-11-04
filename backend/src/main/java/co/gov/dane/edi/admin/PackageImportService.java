@@ -1,17 +1,21 @@
 package co.gov.dane.edi.admin;
 
 import co.gov.dane.edi.admin.AnswerTableResolver.TableCheck;
+import co.gov.dane.edi.admin.QuestionFactsService.PackageFacts;
 import co.gov.dane.edi.admin.dto.ImportPreview;
 import co.gov.dane.edi.admin.dto.PackageManifest;
 import co.gov.dane.edi.admin.dto.PackageManifest.TableSum;
 import co.gov.dane.edi.admin.dto.PageImpact;
+import co.gov.dane.edi.admin.dto.PublicationChecklist;
 import co.gov.dane.edi.model.Chapter;
+import co.gov.dane.edi.model.ColumnStatus;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.repository.AnswerRepository;
 import co.gov.dane.edi.rules.Condition;
 import co.gov.dane.edi.rules.EffectiveRulesService;
+import co.gov.dane.edi.rules.QuestionFacts;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RuleSetValidator;
 import co.gov.dane.edi.rules.RulesFileRepository;
@@ -65,14 +69,17 @@ public class PackageImportService {
 
   private static final Pattern ENTRY_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
   private static final Pattern CHARACTER_SET = Pattern.compile("[A-Z][A-Z0-9_]{0,29}");
-  private static final Pattern TABLE = ColumnScriptService.TABLE;
-  private static final Pattern COLUMN = ColumnScriptService.COLUMN;
 
   /** Más entradas que estas no puede ser un paquete: se corta antes de recorrer un ZIP enorme. */
   private static final int MAX_ENTRIES = 16;
 
   private static final int MAX_DIFFERENCES = 100;
   private static final int BUFFER_BYTES = 8192;
+
+  private static final String IMPORT_OPERATION = "importar-paquete";
+
+  /** Caracteres del SHA-256 del manifiesto que identifican el paquete en la auditoría. */
+  private static final int MANIFEST_CODE_LENGTH = 12;
 
   private final YearCatalogService years;
   private final RulesFileRepository rulesFiles;
@@ -82,6 +89,8 @@ public class PackageImportService {
   private final AnswerRepository answers;
   private final QuestionnaireService questionnaire;
   private final EffectiveRulesService effectiveRules;
+  private final QuestionFactsService factsService;
+  private final PublicationService publication;
   private final SaveLocks locks;
   private final JsonMapper jsonMapper;
 
@@ -94,6 +103,8 @@ public class PackageImportService {
       AnswerRepository answers,
       QuestionnaireService questionnaire,
       EffectiveRulesService effectiveRules,
+      QuestionFactsService factsService,
+      PublicationService publication,
       SaveLocks locks,
       JsonMapper jsonMapper) {
     this.years = years;
@@ -104,6 +115,8 @@ public class PackageImportService {
     this.answers = answers;
     this.questionnaire = questionnaire;
     this.effectiveRules = effectiveRules;
+    this.factsService = factsService;
+    this.publication = publication;
     this.locks = locks;
     this.jsonMapper = jsonMapper;
   }
@@ -119,17 +132,23 @@ public class PackageImportService {
       throw new PackageTooLargeException();
     }
     Map<String, byte[]> entries = readEntries(zip);
-    PackageManifest manifest = parseManifest(entries.get(PromotionPackageFormat.MANIFEST));
+    byte[] manifestBytes = entries.get(PromotionPackageFormat.MANIFEST);
+    PackageManifest manifest = parseManifest(manifestBytes);
     requireFilesMatchManifest(manifest, entries);
     RuleSet incoming =
         parseRules(entries.get(PromotionPackageFormat.RULES), manifest, survey, year);
     boolean nonAsciiText =
         FrmScriptWriter.checksCharacterSet(
             new String(entries.get(PromotionPackageFormat.FRM), StandardCharsets.US_ASCII));
+    String manifestCode =
+        "m" + PromotionPackageFormat.sha256(manifestBytes).substring(0, MANIFEST_CODE_LENGTH);
     return locks.withAdminLock(
         () -> {
           requireSameCharacterSet(manifest, nonAsciiText);
-          requireDatabaseMatches(manifest, incoming, survey, year);
+          PackageFacts facts = factsService.packageFacts(survey, year, incoming);
+          requireDatabaseMatches(manifest, incoming, facts.facts(), survey, year);
+          requireManifestColumns(manifest, incoming, facts.facts());
+          requirePublicationGate(incoming, facts);
           Optional<RuleSet> current = rulesFiles.find(survey, year);
           boolean alreadyImported =
               RulesFileRepository.isAlreadyImported(incoming, current.orElse(null));
@@ -137,16 +156,31 @@ public class PackageImportService {
               alreadyImported || current.isEmpty()
                   ? List.of()
                   : impact(current.get(), incoming, survey, year);
-          if (confirm && !alreadyImported) {
+          boolean overwritesLocalChange =
+              !alreadyImported && current.map(PackageImportService::isLocalChange).orElse(false);
+          if (confirm) {
             try {
-              rulesFiles.replaceWithPackage(incoming, user);
+              if (!alreadyImported) {
+                rulesFiles.replaceWithPackage(incoming, user, List.of(manifestCode));
+              }
             } finally {
+              // También con un paquete ya importado: deja las cachés al día con FRM_* y el disco.
               evictCaches();
             }
           }
           return new ImportPreview(
-              incoming.version(), manifest.kind().jsonValue(), impact, alreadyImported);
+              incoming.version(),
+              manifest.kind().jsonValue(),
+              impact,
+              alreadyImported,
+              overwritesLocalChange);
         });
+  }
+
+  /** El archivo vigente no lo dejó una importación: es un cambio hecho en este ambiente. */
+  private static boolean isLocalChange(RuleSet current) {
+    return current.lastChange() == null
+        || !IMPORT_OPERATION.equals(current.lastChange().operation());
   }
 
   /** Paso 1: las cuatro entradas, cada una leída con el tope acumulado de 20 MB. */
@@ -258,6 +292,9 @@ public class PackageImportService {
     if (rules.effectiveState() != YearState.PUBLICADO) {
       throw rejected("reglas.json no es de un año publicado.", List.of());
     }
+    if (rules.publication() == null || rules.publication().version() > rules.version()) {
+      throw rejected("reglas.json no trae una publicación válida.", List.of());
+    }
     if (!survey.equals(manifest.survey())
         || !survey.equals(rules.survey())
         || manifest.year() != year
@@ -284,9 +321,17 @@ public class PackageImportService {
     throw rejected(message, List.of(message));
   }
 
-  /** Pasos 4 y 5: filas FRM_* y tablas y columnas de respuesta, con todas las diferencias. */
+  /**
+   * Pasos 4 y 5, con todas las diferencias: las filas FRM_* de esta base y las tablas y columnas de
+   * respuesta que piden las preguntas del año (leídas aquí, no del manifiesto) con el mapeo de
+   * {@code reglas.json}.
+   */
   private void requireDatabaseMatches(
-      PackageManifest manifest, RuleSet incoming, String survey, int year) {
+      PackageManifest manifest,
+      RuleSet incoming,
+      Map<String, QuestionFacts> facts,
+      String survey,
+      int year) {
     List<String> differences = new ArrayList<>();
     Map<String, TableSum> actual =
         PromotionPackageFormat.tableSums(snapshots.snapshot(survey, year));
@@ -320,31 +365,81 @@ public class PackageImportService {
         differences.add(tableProblem(check, table, chapter));
       }
     }
-    manifest
-        .requiredColumns()
+    requiredColumns(incoming, facts)
         .forEach(
             (table, columns) -> {
               if (!validTables.contains(table)) {
-                if (table == null || !TABLE.matcher(table).matches()) {
-                  differences.add("El manifiesto pide columnas de una tabla no válida.");
-                } else if (!isMappedTable(incoming, table)) {
-                  differences.add("La tabla " + table + " no es del mapeo del año.");
-                }
                 return;
               }
-              // Lectura fresca: la persona técnica acaba de ejecutar columnas.sql.
-              answerColumns.evict(table);
-              Set<String> existing = answerColumns.findColumns(table);
-              for (String column : columns == null ? List.<String>of() : columns) {
-                if (column == null || !COLUMN.matcher(column).matches()) {
-                  differences.add("El manifiesto pide una columna con nombre no válido.");
-                } else if (!existing.contains(column)) {
+              for (String column : columns) {
+                if (facts.get(column).columnStatus() != ColumnStatus.ACTIVE) {
                   differences.add("Falta la columna " + table + "." + column + ".");
                 }
               }
             });
     if (!differences.isEmpty()) {
       throw rejected("La base de datos no coincide con el paquete.", capped(differences));
+    }
+  }
+
+  /**
+   * El manifiesto debe listar al menos las columnas que el año pide en esta base: uno que liste
+   * menos no corresponde a estas preguntas.
+   */
+  private static void requireManifestColumns(
+      PackageManifest manifest, RuleSet incoming, Map<String, QuestionFacts> facts) {
+    List<String> missing = new ArrayList<>();
+    requiredColumns(incoming, facts)
+        .forEach(
+            (table, columns) -> {
+              List<String> listed = manifest.requiredColumns().get(table);
+              for (String column : columns) {
+                if (listed == null || !listed.contains(column)) {
+                  missing.add(table + "." + column);
+                }
+              }
+            });
+    if (!missing.isEmpty()) {
+      throw rejected("El manifiesto no coincide con las columnas del año.", capped(missing));
+    }
+  }
+
+  /** Las columnas de las preguntas del año por la tabla mapeada de su capítulo. */
+  private static Map<String, List<String>> requiredColumns(
+      RuleSet rules, Map<String, QuestionFacts> facts) {
+    Map<String, List<String>> required = new LinkedHashMap<>();
+    for (QuestionFacts question : facts.values()) {
+      Chapter chapter = SurveyPage.find(question.pageCode()).orElseThrow().chapter();
+      required
+          .computeIfAbsent(
+              PromotionPackageFormat.tableOf(rules, chapter), table -> new ArrayList<>())
+          .add(question.column());
+    }
+    return required;
+  }
+
+  /**
+   * La lista de publicación sobre esta base: un {@code reglas.json} editado con el hash al día no
+   * entra con errores de análisis ni con casos que no pasan (tampoco {@code por_revisar} porque
+   * aquí falte una columna).
+   */
+  private void requirePublicationGate(RuleSet incoming, PackageFacts facts) {
+    PublicationChecklist checklist =
+        publication.checklistFor(incoming, facts.facts(), facts.legacySkips());
+    List<String> failures =
+        checklist.items().stream()
+            .filter(item -> !item.passed())
+            .map(
+                item ->
+                    item.code()
+                        + ": "
+                        + item.detail()
+                        + (item.elements().isEmpty()
+                            ? ""
+                            : " (" + String.join(", ", item.elements()) + ")"))
+            .toList();
+    if (!failures.isEmpty()) {
+      throw rejected("reglas.json no pasa la lista de publicación en esta base.", failures);
     }
   }
 
@@ -355,15 +450,6 @@ public class PackageImportService {
       case INCOMPLETE -> "La tabla " + table + " no tiene las columnas C_C, ESTADO y TC.";
       default -> "El nombre de la tabla del capítulo " + chapter.code() + " no es válido.";
     };
-  }
-
-  private static boolean isMappedTable(RuleSet rules, String table) {
-    for (Chapter chapter : Chapter.values()) {
-      if (PromotionPackageFormat.tableOf(rules, chapter).equals(table)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**

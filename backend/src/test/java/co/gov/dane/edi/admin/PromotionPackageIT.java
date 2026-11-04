@@ -173,8 +173,23 @@ class PromotionPackageIT extends OracleIntegrationTest {
         .isEqualTo(writer.write(snapshot, PackageKind.ANIO, characterSet))
         .contains("-- Juego de caracteres de origen: " + characterSet);
     assertThat(isAscii(entries.get("columnas.sql"))).isTrue();
-    assertThat(new String(entries.get("columnas.sql"), StandardCharsets.US_ASCII).lines())
-        .allMatch(line -> line.startsWith("--"));
+    // Cada columna requerida lleva su bloque protegido, con la definición del diccionario de QA.
+    String columnScript = new String(entries.get("columnas.sql"), StandardCharsets.US_ASCII);
+    for (Map.Entry<String, JsonNode> table : required.properties()) {
+      for (JsonNode column : table.getValue().values()) {
+        assertThat(columnScript)
+            .contains(
+                "AND TABLE_NAME = '"
+                    + table.getKey()
+                    + "' AND COLUMN_NAME = '"
+                    + column.asString()
+                    + "';");
+      }
+    }
+    assertThat(columnScript)
+        .contains("ALTER TABLE " + H_TABLE + " ADD (H02A VARCHAR2(50))")
+        .contains("ALTER TABLE EDIN_20_CAP_C_EXP_PERS ADD (C01A VARCHAR2(1))")
+        .doesNotContain("CREATE TABLE");
 
     assertThat(output.getAll())
         .contains("operacion=generar-paquete")
@@ -281,6 +296,41 @@ class PromotionPackageIT extends OracleIntegrationTest {
     SqlPlusRunner.Run again = sqlPlus.run(script);
     assertThat(again.exitCode()).as(again.output()).isZero();
     answerColumns.evict(H_TABLE);
+  }
+
+  /**
+   * Una columna que no está en {@code columnasNuevas} (H02A la crea el fixture a mano) también se
+   * recrea, con el tipo que tiene en QA.
+   */
+  @Test
+  void columnScriptRecreatesARequiredColumnWithItsQaType() throws Exception {
+    fixture.installPublished("fixture");
+    assertThat(rulesFiles.load("EDIN", 2027).newColumns()).doesNotContainKey("H02A");
+    String before = columnType(H_TABLE, "H02A");
+    byte[] zip =
+        send(get(PACKAGE).param("tipo", "anio"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsByteArray();
+    String script =
+        new String(PackageZips.read(zip).get("columnas.sql"), StandardCharsets.US_ASCII);
+
+    jdbc.execute("ALTER TABLE " + H_TABLE + " DROP COLUMN H02A");
+    SqlPlusRunner.Run created = new SqlPlusRunner(ORACLE).run(script);
+
+    assertThat(created.exitCode()).as(created.output()).isZero();
+    assertThat(columnType(H_TABLE, "H02A")).isEqualTo(before).isEqualTo("VARCHAR2/50/B");
+    answerColumns.evict(H_TABLE);
+  }
+
+  private String columnType(String table, String column) {
+    return jdbc.queryForObject(
+        "SELECT DATA_TYPE || '/' || DATA_LENGTH || '/' || CHAR_USED FROM USER_TAB_COLUMNS"
+            + " WHERE TABLE_NAME = ? AND COLUMN_NAME = ?",
+        String.class,
+        table,
+        column);
   }
 
   private boolean columnExists(String table, String column) {

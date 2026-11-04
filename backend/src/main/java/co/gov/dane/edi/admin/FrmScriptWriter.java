@@ -76,9 +76,12 @@ public class FrmScriptWriter {
     return script.toString();
   }
 
-  /** Si el script trae la verificación del juego de caracteres (tiene texto no ASCII). */
+  /**
+   * Si el script trae la verificación del juego de caracteres (tiene texto no ASCII). Se busca la
+   * línea completa del comentario: un texto que lo contenga va dentro de una asignación.
+   */
   public static boolean checksCharacterSet(String script) {
-    return script.contains(CHARACTER_SET_CHECK_MARK);
+    return script.lines().anyMatch(CHARACTER_SET_CHECK_MARK::equals);
   }
 
   /** Primer bloque: nada se inserta si la base de destino no guarda los textos tal cual. */
