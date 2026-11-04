@@ -40,6 +40,12 @@ final class LogicWarnings {
   private static final String ARBITRARY_TEXT = "x";
   private static final String FILE_ELEMENT = "archivo";
 
+  /**
+   * Columnas (o reglas) que nombra como máximo un aviso, en su orden determinista; el mensaje
+   * resume el resto con «y N más». Sin tope, una cadena de R reglas daría avisos de tamaño R².
+   */
+  static final int MAX_NAMED = 20;
+
   private final RuleSet rules;
   private final Map<String, QuestionFacts> facts;
   private final Set<String> cyclicRuleIds;
@@ -159,9 +165,9 @@ final class LogicWarnings {
                 "La regla deshabilita preguntas que están antes de su disparador "
                     + first.column()
                     + ": "
-                    + String.join(", ", before)
+                    + describeNames(before)
                     + ".",
-                before));
+                firstNames(before)));
       }
     }
     facts.values().stream()
@@ -205,7 +211,7 @@ final class LogicWarnings {
                 AnalysisCodes.NO_ANALIZABLE,
                 element,
                 "Hay demasiadas combinaciones de "
-                    + String.join(", ", columns)
+                    + describeNames(columns)
                     + " para analizar (más de "
                     + RuleSetAnalyzer.MAX_COMBINATIONS
                     + " por elemento).",
@@ -461,9 +467,9 @@ final class LogicWarnings {
               AnalysisCodes.REGLAS_SOLAPADAS,
               "regla:" + ruleId,
               "La regla se solapa con "
-                  + String.join(", ", partners)
+                  + describeNames(partners)
                   + " sobre: "
-                  + String.join(", ", overlapShared.get(ruleId))
+                  + describeNames(overlapShared.get(ruleId))
                   + ".",
               List.copyOf(columns));
         });
@@ -632,6 +638,18 @@ final class LogicWarnings {
     }
   }
 
+  /** Las primeras {@link #MAX_NAMED}, en el orden recibido. */
+  static List<String> firstNames(Collection<String> names) {
+    return names.stream().limit(MAX_NAMED).toList();
+  }
+
+  /** «A, B, C» o, si son más de {@link #MAX_NAMED}, las primeras seguidas de «y N más». */
+  static String describeNames(Collection<String> names) {
+    String listed = String.join(", ", firstNames(names));
+    int rest = names.size() - MAX_NAMED;
+    return rest > 0 ? listed + " y " + rest + " más" : listed;
+  }
+
   /** Un solo NO_ANALIZABLE por elemento: se fusionan las columnas de todos sus análisis. */
   private void markNotAnalyzable(String element, Collection<String> columns) {
     notAnalyzable.computeIfAbsent(element, key -> new TreeSet<>()).addAll(columns);
@@ -639,7 +657,7 @@ final class LogicWarnings {
 
   /** Un solo aviso por (código, elemento, preguntas): el mismo par no se reporta dos veces. */
   private void add(String code, String element, String message, List<String> questions) {
-    Finding finding = new Finding(code, element, message, questions);
+    Finding finding = new Finding(code, element, message, firstNames(questions));
     findings.putIfAbsent(code + "|" + element + "|" + finding.questions(), finding);
   }
 }

@@ -363,6 +363,13 @@ Cambios respecto a lo escrito arriba, decididos durante la Fase 3b (plan
     no cabe) sale `NO_ANALIZABLE` una sola vez con sus propias columnas, nunca con la unión de sus
     socios. Las columnas que no son preguntas (ya `PREGUNTA_INEXISTENTE`) no entran en dominios,
     clausuras ni enumeración. Una prueba diferencial con semilla fija compara los dominios reducidos
-    con la enumeración completa.
+    con la enumeración completa. El tope también se cuenta sobre las reglas **efectivas** del año
+    (archivo más heredadas de `FRM_SALTO`): antes de analizar, un candidato que lo pasa responde 422
+    `ESTRUCTURA` «Las reglas del año (archivo y heredadas) superan 1000.»; si el año vigente ya lo
+    pasaba, no se exige «sin errores nuevos» (no hay análisis con qué comparar), basta con que el
+    candidato quede dentro. Cada aviso nombra a lo sumo 20 columnas en `questions` (las primeras en
+    su orden) y su mensaje lista esas mismas seguidas de «y N más»; los socios de
+    `REGLAS_SOLAPADAS` se resumen igual. Un archivo en disco que pasa el tope no carga ese año, como
+    cualquier archivo con estructura inválida; solo se llega ahí editando el disco a mano.
 
 Seguimiento de la 3b en el README, «Deuda técnica y riesgos».

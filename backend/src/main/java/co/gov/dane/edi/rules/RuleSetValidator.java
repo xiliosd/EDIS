@@ -34,6 +34,11 @@ public final class RuleSetValidator {
   /** Tope de casos de prueba por archivo: cada guardado los vuelve a correr todos. */
   public static final int MAX_CASES = 1000;
 
+  public static final String TOO_MANY_SKIPS_MESSAGE =
+      "El archivo tiene más de " + MAX_SKIPS + " reglas.";
+  public static final String TOO_MANY_CASES_MESSAGE =
+      "El archivo tiene más de " + MAX_CASES + " casos de prueba.";
+
   private RuleSetValidator() {}
 
   public static void validate(RuleSet rules) {
@@ -48,10 +53,10 @@ public final class RuleSetValidator {
     List<String> problems = new ArrayList<>();
     // Un archivo fuera de tamaño se rechaza entero, sin revisar ni listar cada regla o caso.
     if (rules.skips().size() > MAX_SKIPS) {
-      problems.add("El archivo tiene más de " + MAX_SKIPS + " reglas.");
+      problems.add(TOO_MANY_SKIPS_MESSAGE);
     }
     if (rules.cases().size() > MAX_CASES) {
-      problems.add("El archivo tiene más de " + MAX_CASES + " casos de prueba.");
+      problems.add(TOO_MANY_CASES_MESSAGE);
     }
     if (!problems.isEmpty()) {
       return problems;

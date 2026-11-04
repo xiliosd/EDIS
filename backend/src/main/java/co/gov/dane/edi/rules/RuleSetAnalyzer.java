@@ -38,20 +38,33 @@ public final class RuleSetAnalyzer {
    */
   public static final long MAX_TOTAL_WORK = 15_000_000L;
 
+  /**
+   * Error del año cuyas reglas efectivas (archivo más heredadas de FRM_SALTO) pasan el tope: el
+   * archivo solo cuenta las suyas, así que el tope del año se revisa aparte.
+   */
+  public static final String OVERSIZED_YEAR_MESSAGE =
+      "Las reglas del año (archivo y heredadas) superan " + RuleSetValidator.MAX_SKIPS + ".";
+
   private static final Set<String> VALUE_OPERATORS = Set.of("eq", "ne", "in", "notIn");
 
   private RuleSetAnalyzer() {}
 
   public static AnalysisReport analyze(RuleSet effective, Map<String, QuestionFacts> facts) {
     List<Finding> errors = new ArrayList<>();
+    if (exceedsSizeLimits(effective)) {
+      // Fuera de tamaño no se analiza nada más: cada revisión recorre todas las reglas o casos.
+      if (effective.skips().size() > RuleSetValidator.MAX_SKIPS) {
+        errors.add(oversized(OVERSIZED_YEAR_MESSAGE));
+      }
+      if (effective.cases().size() > RuleSetValidator.MAX_CASES) {
+        errors.add(oversized(RuleSetValidator.TOO_MANY_CASES_MESSAGE));
+      }
+      return new AnalysisReport(errors, List.of());
+    }
     RuleSetValidator.problems(effective)
         .forEach(
             problem ->
                 errors.add(new Finding(AnalysisCodes.ESTRUCTURA, "archivo", problem, List.of())));
-    if (exceedsSizeLimits(effective)) {
-      // Fuera de tamaño no se analiza nada más: cada revisión recorre todas las reglas o casos.
-      return new AnalysisReport(errors, List.of());
-    }
     checkUnknownQuestions(effective, facts, errors);
     checkCycles(effective, errors);
     checkOptionValues(effective, facts, errors);
@@ -92,7 +105,12 @@ public final class RuleSetAnalyzer {
     return warnings;
   }
 
-  private static boolean exceedsSizeLimits(RuleSet rules) {
+  private static Finding oversized(String message) {
+    return new Finding(AnalysisCodes.ESTRUCTURA, "archivo", message, List.of());
+  }
+
+  /** Si las reglas efectivas (o los casos) del año pasan el tope de {@link RuleSetValidator}. */
+  public static boolean exceedsSizeLimits(RuleSet rules) {
     return rules.skips().size() > RuleSetValidator.MAX_SKIPS
         || rules.cases().size() > RuleSetValidator.MAX_CASES;
   }

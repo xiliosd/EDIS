@@ -311,15 +311,20 @@ public class RulesAdminService {
           }
           List<SkipRule> legacy = effectiveRules.legacySkips(survey, year);
           RuleSet candidate = build.build(current, legacy);
+          RuleSet effectiveCandidate = EffectiveRulesService.merge(candidate, legacy);
+          rejectOversized(candidate, effectiveCandidate);
           Map<String, QuestionFacts> facts = factsService.facts(survey, year);
-          AnalysisReport before =
-              RuleSetAnalyzer.analyze(EffectiveRulesService.merge(current, legacy), facts);
-          AnalysisReport after =
-              RuleSetAnalyzer.analyze(EffectiveRulesService.merge(candidate, legacy), facts);
+          AnalysisReport after = RuleSetAnalyzer.analyze(effectiveCandidate, facts);
           rejectStructuralProblems(candidate, after);
-          List<Finding> added = after.newErrorsComparedTo(before);
-          if (!added.isEmpty()) {
-            throw new InvalidRulesException(new AnalysisReport(added, after.warnings()));
+          RuleSet effectiveCurrent = EffectiveRulesService.merge(current, legacy);
+          // Un año vigente fuera del tope no tiene un análisis con qué comparar (solo el error de
+          // tamaño): basta con que el candidato quede dentro del tope.
+          if (!RuleSetAnalyzer.exceedsSizeLimits(effectiveCurrent)) {
+            AnalysisReport before = RuleSetAnalyzer.analyze(effectiveCurrent, facts);
+            List<Finding> added = after.newErrorsComparedTo(before);
+            if (!added.isEmpty()) {
+              throw new InvalidRulesException(new AnalysisReport(added, after.warnings()));
+            }
           }
           RuleSet saved = rulesFiles.save(candidate, version, user, operation, codes);
           effectiveRules.evict();
@@ -328,6 +333,27 @@ public class RulesAdminService {
               after,
               CaseRunner.runAll(EffectiveRulesService.merge(saved, legacy), facts));
         });
+  }
+
+  /**
+   * El tope se revisa antes de analizar: el del archivo con el mensaje del validador y el del año
+   * (archivo más heredadas de FRM_SALTO), que el archivo por sí solo no ve.
+   */
+  private static void rejectOversized(RuleSet candidate, RuleSet effectiveCandidate) {
+    List<String> problems = new ArrayList<>();
+    if (candidate.skips().size() > RuleSetValidator.MAX_SKIPS
+        || candidate.cases().size() > RuleSetValidator.MAX_CASES) {
+      problems.addAll(RuleSetValidator.problems(candidate));
+    } else if (RuleSetAnalyzer.exceedsSizeLimits(effectiveCandidate)) {
+      problems.add(RuleSetAnalyzer.OVERSIZED_YEAR_MESSAGE);
+    }
+    if (!problems.isEmpty()) {
+      List<Finding> findings = new ArrayList<>();
+      problems.forEach(
+          problem ->
+              findings.add(new Finding(AnalysisCodes.ESTRUCTURA, "archivo", problem, List.of())));
+      throw new InvalidRulesException(new AnalysisReport(findings, List.of()));
+    }
   }
 
   /** El archivo no puede guardarse con problemas de estructura, aunque ya hubiera otros. */

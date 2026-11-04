@@ -430,7 +430,7 @@ class RuleSetAnalyzerWarningsTest {
 
     assertThat(report.errors())
         .extracting(Finding::message)
-        .containsExactly("El archivo tiene más de 1000 reglas.");
+        .containsExactly("Las reglas del año (archivo y heredadas) superan 1000.");
     assertThat(report.warnings()).isEmpty();
     assertThat(found)
         .extracting(f -> f.code() + "@" + f.element())
@@ -495,6 +495,40 @@ class RuleSetAnalyzerWarningsTest {
       assertThat(namedColumns).as("distinct=%s", distinct).isLessThanOrEqualTo(30L * ruleCount);
       assertThat(warnings(report)).contains("NO_ANALIZABLE@regla:r-0000");
     }
+  }
+
+  @Test
+  void chainWarningsStayLinear() {
+    int ruleCount = 1000;
+    List<QuestionFacts> questions = new ArrayList<>();
+    List<SkipRule> skips = new ArrayList<>();
+    for (int index = 0; index <= ruleCount; index++) {
+      questions.add(checkbox(String.format("K%04d", index), index));
+    }
+    for (int index = 0; index < ruleCount; index++) {
+      skips.add(
+          rule(
+              String.format("r-%04d", index),
+              eq(String.format("K%04d", index), "1"),
+              String.format("K%04d", index + 1)));
+    }
+    Map<String, QuestionFacts> facts = facts(questions.toArray(QuestionFacts[]::new));
+    RuleSet set = rules(skips.toArray(SkipRule[]::new));
+
+    AnalysisReport report =
+        assertTimeoutPreemptively(
+            Duration.ofMillis(3000), () -> RuleSetAnalyzer.analyze(set, facts));
+
+    // Al final de la cadena cada aviso alcanza cientos de columnas: solo nombra las 20 primeras.
+    long namedColumns = report.warnings().stream().mapToLong(f -> f.questions().size()).sum();
+    assertThat(namedColumns).isLessThanOrEqualTo(20L * report.warnings().size());
+    Finding last =
+        report.warnings().stream()
+            .filter(f -> f.element().equals("regla:r-0999"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(last.questions()).hasSize(20).startsWith("K0000", "K0001");
+    assertThat(last.message()).contains("K0019 y 980 más");
   }
 
   @Test
