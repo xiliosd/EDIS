@@ -3,16 +3,25 @@ package co.gov.dane.edi.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import co.gov.dane.edi.support.HostileTexts;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class FrmScriptWriterTest {
+
+  private static final Pattern ASCII_PART = Pattern.compile("'((?:[^']|'')*)'");
+  private static final Pattern CHR_PART = Pattern.compile("CHR\\((\\d+)\\)");
+  private static final Pattern UNISTR_PART =
+      Pattern.compile("TO_CHAR\\(UNISTR\\('((?:\\\\[0-9A-F]{4})+)'\\)\\)");
 
   private final FrmScriptWriter writer = new FrmScriptWriter();
 
@@ -23,12 +32,65 @@ class FrmScriptWriterTest {
 
     String script = writer.write(snapshot, PackageKind.ANIO);
 
-    assertThat(script).startsWith("SET DEFINE OFF\nWHENEVER SQLERROR EXIT ROLLBACK\n");
-    assertThat(script).contains("'O''Brien & <b>' || CHR(10) || 'X'");
+    assertThat(script)
+        .startsWith(
+            "SET DEFINE OFF\nSET AUTOCOMMIT OFF\nWHENEVER SQLERROR EXIT FAILURE ROLLBACK\n"
+                + "WHENEVER OSERROR EXIT FAILURE ROLLBACK\n");
+    assertThat(script).contains("  V_PREGUNTA := V_PREGUNTA || 'O''Brien & <b>';\n");
+    assertThat(script).contains("  V_PREGUNTA := V_PREGUNTA || CHR(10);\n");
+    assertThat(script).contains("  V_PREGUNTA := V_PREGUNTA || 'X';\n");
     assertThat(script).doesNotContain("O'Brien");
+    assertThat(script).contains("sesion nueva");
     assertThat(script).endsWith("COMMIT;\n");
-    // Ningún literal parte una línea: una línea "/" o "." dentro de un texto cortaría el bloque.
-    assertThat(script.lines()).noneMatch(line -> line.equals("X'"));
+  }
+
+  @Test
+  void scriptIsPureAsciiWithBoundedLines() {
+    List<Map<String, Object>> questions = new ArrayList<>();
+    List<String> texts = HostileTexts.all();
+    for (int index = 0; index < texts.size(); index++) {
+      questions.add(row(FrmTable.PREGUNTA, index + 1, texts.get(index), "L"));
+    }
+    Map<FrmTable, List<Map<String, Object>>> rows = emptyRows();
+    rows.put(FrmTable.PREGUNTA, questions);
+    FrmSnapshot snapshot = new FrmSnapshot("EDIN", 2027, rows);
+
+    for (PackageKind kind : PackageKind.values()) {
+      byte[] bytes = writer.write(snapshot, kind).getBytes(StandardCharsets.UTF_8);
+      int lineBytes = 0;
+      for (byte value : bytes) {
+        assertThat(value & 0xFF).as("byte no ASCII").isLessThan(0x80);
+        lineBytes = value == '\n' ? 0 : lineBytes + 1;
+        assertThat(lineBytes).as("bytes de una línea").isLessThanOrEqualTo(1000);
+      }
+    }
+    // El emoji va entero en un mismo UNISTR: el corte cae entre puntos de código.
+    assertThat(writer.write(snapshot, PackageKind.ANIO)).contains("UNISTR('\\D83D\\DE00')");
+  }
+
+  @Test
+  void textPartsDecodeBackToTheOriginalText() {
+    for (String text : HostileTexts.all()) {
+      List<String> parts = FrmScriptWriter.textParts(text);
+
+      assertThat(decode(parts)).as(text).isEqualTo(text);
+      assertThat(parts).allMatch(part -> part.length() <= 900);
+    }
+    assertThat(FrmScriptWriter.textParts("a\\b"))
+        .containsExactly("'a'", "TO_CHAR(UNISTR('\\005C'))", "'b'");
+    assertThat(FrmScriptWriter.textParts("\r\n\u0000\u000B\u007F"))
+        .containsExactly("CHR(13)", "CHR(10)", "CHR(0)", "CHR(11)", "CHR(127)");
+    assertThat(FrmScriptWriter.textParts("\u0085 ñ"))
+        .containsExactly("TO_CHAR(UNISTR('\\0085\\2028\\00F1'))");
+  }
+
+  @Test
+  void rejectsOversizedText() {
+    String tooLong = "ñ".repeat(2001);
+
+    assertThatThrownBy(() -> FrmScriptWriter.textParts(tooLong))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("4000");
   }
 
   @Test
@@ -42,12 +104,15 @@ class FrmScriptWriterTest {
 
     String raise = "RAISE_APPLICATION_ERROR(-20001, 'Id ocupado: FRM_ENCABEZADO COD_ENC=5')";
     assertThat(year).contains("INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO,");
+    assertThat(year).contains("VALUES (5, V_COD_CAP_PROY, V_TIPO, V_ENCABEZADO, V_ANIO);");
+    assertThat(year).contains("AND (ENCABEZADO = V_ENCABEZADO OR (ENCABEZADO IS NULL AND");
     assertThat(year).contains(raise).doesNotContain("UPDATE");
     // Una corrección que difiere solo en el texto lo actualiza; en otra columna aborta igual.
     assertThat(correction).contains(raise);
-    assertThat(correction).contains("UPDATE FRM_ENCABEZADO SET ENCABEZADO = 'Texto corregido'");
+    assertThat(correction).contains("UPDATE FRM_ENCABEZADO SET ENCABEZADO = V_ENCABEZADO\n");
+    assertThat(correction).contains("AND (TIPO = V_TIPO OR (TIPO IS NULL AND V_TIPO IS NULL))");
     assertThat(correction).doesNotContain("SET TIPO").doesNotContain("SET COD_CAP_PROY");
-    assertThat(correction).doesNotContain("TIPO = 'E',");
+    assertThat(correction).doesNotContain("AND (ENCABEZADO = V_ENCABEZADO OR (ENCABEZADO IS NULL");
   }
 
   @Test
@@ -60,14 +125,15 @@ class FrmScriptWriterTest {
 
     String correction = writer.write(snapshot, PackageKind.CORRECCION);
 
-    assertThat(correction).contains("UPDATE FRM_CAP_PROY SET COD_PRE_GRUPO = 42");
+    assertThat(correction).contains("  V_COD_PRE_GRUPO NUMBER := 42;");
+    assertThat(correction).contains("UPDATE FRM_CAP_PROY SET COD_PRE_GRUPO = V_COD_PRE_GRUPO");
     assertThat(correction.lines().filter(line -> line.contains("UPDATE"))).hasSize(1);
     // Una tabla sin columnas corregibles nunca se actualiza, ni en una corrección.
     assertThat(writer.write(periods, PackageKind.CORRECCION)).doesNotContain("UPDATE");
   }
 
   @Test
-  void rendersNullsNumbersTimestampsAndDependencyOrder() {
+  void rendersNullsNumbersAndDependencyOrder() {
     Map<FrmTable, List<Map<String, Object>>> rows = emptyRows();
     rows.put(FrmTable.ENC_AYUDA, List.of(row(FrmTable.ENC_AYUDA, 1, 3, null)));
     rows.put(
@@ -76,29 +142,25 @@ class FrmScriptWriterTest {
 
     String script = writer.write(snapshot, PackageKind.ANIO);
 
-    assertThat(script).contains("WHERE COD_PRE = 10;").contains("AND TEXTO IS NULL");
-    assertThat(script).contains("VALUES (1, 3, NULL)");
+    assertThat(script).contains("WHERE COD_PRE = 10;").contains("  V_TEXTO VARCHAR2(4000 BYTE);\n");
+    assertThat(script).doesNotContain("V_TEXTO := ");
+    assertThat(script).contains("VALUES (1, V_COD_ENC, V_TEXTO);");
     assertThat(script.indexOf("FRM_PREGUNTA")).isLessThan(script.indexOf("INSERT INTO FRM_ENC"));
-    assertThat(script).contains("-- Encuesta: EDIN").contains("-- Año: 2027");
+    assertThat(script).contains("-- Encuesta: EDIN").contains("-- Anio: 2027");
     assertThat(script).contains("FRM_PREGUNTA: 1").contains("FRM_ENC_AYUDA: 1");
     assertThat(script).contains("FRM_CAP_PERIODO: 0").contains("sqlplus");
-    assertThat(FrmScriptWriter.literal(LocalDateTime.of(2027, 1, 2, 3, 4, 5)))
-        .isEqualTo("TIMESTAMP '2027-01-02 03:04:05'");
   }
 
   @Test
-  void splitsLongLiteralsAndRejectsOversizedText() {
-    String longText = "a".repeat(1000) + "'" + "b".repeat(1500);
+  void rejectsUnsupportedValueTypes() {
+    Map<String, Object> question = row(FrmTable.PREGUNTA, 1, "Texto", "L");
+    question.put("TIPO", java.time.LocalDateTime.of(2027, 1, 2, 3, 4, 5));
+    FrmSnapshot snapshot = snapshotWith(FrmTable.PREGUNTA, question);
 
-    String literal = FrmScriptWriter.literal(longText);
-
-    assertThat(literal.lines()).hasSize(3).allMatch(line -> line.length() <= 1010);
-    assertThat(literal).contains("'\n|| '");
-    assertThat(literal.replace("'\n|| '", "")).isEqualTo("'" + longText.replace("'", "''") + "'");
-    String tooLong = "ñ".repeat(2001);
-    assertThatThrownBy(() -> FrmScriptWriter.literal(tooLong))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("4000");
+    assertThatThrownBy(() -> writer.write(snapshot, PackageKind.ANIO))
+        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> FrmSnapshot.rowHash(FrmTable.PREGUNTA, question))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
@@ -107,6 +169,28 @@ class FrmScriptWriterTest {
 
     assertThatThrownBy(() -> writer.write(snapshot, PackageKind.ANIO))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  /** Lo que haría Oracle con las partes: literales, CHR(n) y UNISTR('\XXXX...'). */
+  private static String decode(List<String> parts) {
+    StringBuilder text = new StringBuilder();
+    for (String part : parts) {
+      Matcher ascii = ASCII_PART.matcher(part);
+      Matcher chr = CHR_PART.matcher(part);
+      Matcher unistr = UNISTR_PART.matcher(part);
+      if (ascii.matches()) {
+        text.append(ascii.group(1).replace("''", "'"));
+      } else if (chr.matches()) {
+        text.append((char) Integer.parseInt(chr.group(1)));
+      } else if (unistr.matches()) {
+        for (String unit : unistr.group(1).substring(1).split("\\\\")) {
+          text.append((char) Integer.parseInt(unit, 16));
+        }
+      } else {
+        throw new AssertionError("Parte desconocida: " + part);
+      }
+    }
+    return text.toString();
   }
 
   private static FrmSnapshot snapshotWith(FrmTable table, Map<String, Object> row) {

@@ -9,9 +9,12 @@ import javax.sql.DataSource;
 
 /**
  * Ejecuta un {@code frm.sql} sin SQL*Plus: cada bloque PL/SQL termina en una línea con {@code /}.
- * Omite {@code SET DEFINE OFF}, {@code WHENEVER SQLERROR ...}, los comentarios y el {@code COMMIT;}
+ * Omite los {@code SET} y {@code WHENEVER} de la cabecera, los comentarios y el {@code COMMIT;}
  * final y maneja la transacción él mismo: ante el primer error hace rollback, igual que {@code
- * WHENEVER SQLERROR EXIT ROLLBACK}, y relanza el error.
+ * WHENEVER SQLERROR EXIT FAILURE ROLLBACK}, y relanza el error.
+ *
+ * <p>Es más rápido que {@link SqlPlusRunner} pero no reproduce el límite de línea ni la conversión
+ * de caracteres del cliente: las pruebas de textos hostiles usan el SQL*Plus real.
  */
 public final class FrmScriptRunner {
 
@@ -27,6 +30,8 @@ public final class FrmScriptRunner {
       boolean autoCommit = connection.getAutoCommit();
       connection.setAutoCommit(false);
       try (Statement statement = connection.createStatement()) {
+        // Sin el escape JDBC un texto con {fn x} llega a Oracle igual que desde SQL*Plus.
+        statement.setEscapeProcessing(false);
         for (String block : blocks) {
           statement.execute(block);
         }
@@ -63,7 +68,9 @@ public final class FrmScriptRunner {
     return line.isBlank()
         || line.startsWith("--")
         || line.equals("SET DEFINE OFF")
+        || line.equals("SET AUTOCOMMIT OFF")
         || line.startsWith("WHENEVER SQLERROR ")
+        || line.startsWith("WHENEVER OSERROR ")
         || line.equals("COMMIT;");
   }
 

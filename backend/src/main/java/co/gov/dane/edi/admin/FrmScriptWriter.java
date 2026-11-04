@@ -2,7 +2,6 @@ package co.gov.dane.edi.admin;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,15 +17,24 @@ import org.springframework.stereotype.Component;
  *
  * <p>Un paquete de corrección además actualiza en una fila existente solo las columnas de {@link
  * FrmTable#correctableColumns()}; si difiere cualquier otra, aborta igual que un paquete de año.
+ *
+ * <p>El script es ASCII puro y ninguna línea pasa de 1000 bytes: SQL*Plus descarta sin error las
+ * líneas largas (SP2-0027, que no dispara WHENEVER) y convierte el texto según el NLS_LANG del
+ * cliente. Por eso cada texto se arma en una variable del bloque, una parte por línea: tramos ASCII
+ * entre comillas, {@code CHR(n)} para los controles y {@code TO_CHAR(UNISTR('\XXXX'))} para lo
+ * demás.
  */
 @Component
 public class FrmScriptWriter {
 
-  /** Tope de VARCHAR2 en SQL con MAX_STRING_SIZE=STANDARD; el límite de 3a lo hace inalcanzable. */
-  private static final int MAX_LITERAL_BYTES = 4000;
+  /** Tope de VARCHAR2 con MAX_STRING_SIZE=STANDARD; el límite de 3a lo hace inalcanzable. */
+  private static final int MAX_TEXT_BYTES = 4000;
 
-  /** Trozo de un literal largo: así ninguna línea del script se vuelve gigante. */
-  private static final int LITERAL_CHUNK = 1000;
+  /** Largo máximo de una parte; con la asignación que la rodea la línea queda bajo 1000 bytes. */
+  static final int MAX_PART_LENGTH = 900;
+
+  private static final String UNISTR_OPEN = "TO_CHAR(UNISTR('";
+  private static final String UNISTR_CLOSE = "'))";
 
   private static final Pattern PROJECT_CODE = Pattern.compile("^[A-Za-z0-9_-]{1,40}$");
 
@@ -36,7 +44,9 @@ public class FrmScriptWriter {
     }
     StringBuilder script = new StringBuilder();
     script.append("SET DEFINE OFF\n");
-    script.append("WHENEVER SQLERROR EXIT ROLLBACK\n");
+    script.append("SET AUTOCOMMIT OFF\n");
+    script.append("WHENEVER SQLERROR EXIT FAILURE ROLLBACK\n");
+    script.append("WHENEVER OSERROR EXIT FAILURE ROLLBACK\n");
     appendHeader(script, snapshot, kind);
     for (FrmTable table : FrmSnapshot.TABLES) {
       for (Map<String, Object> row : snapshot.rows().getOrDefault(table, List.of())) {
@@ -48,9 +58,10 @@ public class FrmScriptWriter {
   }
 
   private static void appendHeader(StringBuilder script, FrmSnapshot snapshot, PackageKind kind) {
+    // La cabecera también es ASCII: sin tildes, para no depender del NLS_LANG del cliente.
     script.append("-- frm.sql generado por el administrador del cuestionario.\n");
     script.append("-- Encuesta: ").append(snapshot.project()).append('\n');
-    script.append("-- Año: ").append(snapshot.year()).append('\n');
+    script.append("-- Anio: ").append(snapshot.year()).append('\n');
     script.append("-- Paquete: ").append(kind.jsonValue()).append('\n');
     script.append("-- Filas por tabla:\n");
     for (FrmTable table : FrmSnapshot.TABLES) {
@@ -63,9 +74,10 @@ public class FrmScriptWriter {
     }
     script.append(
         """
-        -- Cómo ejecutarlo: con SQL*Plus o SQLcl, conectado al esquema dueño de las tablas FRM_* y
-        -- con el cliente en UTF-8 (por ejemplo NLS_LANG=SPANISH_COLOMBIA.AL32UTF8):
+        -- Como ejecutarlo: en una sesion nueva de SQL*Plus o SQLcl, sin trabajo pendiente,
+        -- conectado al esquema duenio de las tablas FRM_*:
         --   sqlplus usuario@servicio @frm.sql
+        -- El script es ASCII puro: funciona con cualquier NLS_LANG del cliente.
         -- Cada fila es un bloque PL/SQL terminado en "/". Es idempotente: una fila igual no se
         -- toca, una fila nueva se inserta y un id ocupado por otra fila aborta con ORA-20001; el
         -- WHENEVER SQLERROR deshace entonces todo lo hecho y nada queda escrito.
@@ -75,16 +87,34 @@ public class FrmScriptWriter {
   private static void appendRow(
       StringBuilder script, FrmTable table, Map<String, Object> row, PackageKind kind) {
     String name = table.tableName();
-    String idCondition = table.idColumn() + " = " + idLiteral(row.get(table.idColumn()));
+    String idCondition = table.idColumn() + " = " + number(row.get(table.idColumn()));
+    List<String> values = table.columns().subList(1, table.columns().size());
     List<String> correctable =
         kind == PackageKind.CORRECCION ? table.correctableColumns() : List.of();
-    List<String> fixed = new ArrayList<>(table.columns().subList(1, table.columns().size()));
+    List<String> fixed = new ArrayList<>(values);
     fixed.removeAll(correctable);
 
     script.append("DECLARE\n");
     script.append("  ROWS_WITH_ID PLS_INTEGER;\n");
     script.append("  MATCHING_ROWS PLS_INTEGER;\n");
+    for (String column : values) {
+      script.append("  ").append(declaration(column, row.get(column))).append(";\n");
+    }
     script.append("BEGIN\n");
+    for (String column : values) {
+      if (row.get(column) instanceof String text) {
+        for (String part : textParts(text)) {
+          script
+              .append("  ")
+              .append(variable(column))
+              .append(" := ")
+              .append(variable(column))
+              .append(" || ")
+              .append(part)
+              .append(";\n");
+        }
+      }
+    }
     script
         .append("  SELECT COUNT(*) INTO ROWS_WITH_ID FROM ")
         .append(name)
@@ -98,13 +128,11 @@ public class FrmScriptWriter {
         .append(" (")
         .append(String.join(", ", table.columns()))
         .append(")\n");
-    script
-        .append("    VALUES (")
-        .append(
-            table.columns().stream()
-                .map(column -> literal(row.get(column)))
-                .collect(Collectors.joining(", ")))
-        .append(");\n");
+    script.append("    VALUES (").append(number(row.get(table.idColumn())));
+    for (String column : values) {
+      script.append(", ").append(variable(column));
+    }
+    script.append(");\n");
     script.append("  ELSE\n");
     script
         .append("    SELECT COUNT(*) INTO MATCHING_ROWS FROM ")
@@ -112,7 +140,7 @@ public class FrmScriptWriter {
         .append(" WHERE ")
         .append(idCondition);
     for (String column : fixed) {
-      script.append("\n      AND ").append(equality(column, row.get(column)));
+      script.append("\n      AND ").append(equality(column));
     }
     script.append(";\n");
     script.append("    IF MATCHING_ROWS <> ROWS_WITH_ID THEN\n");
@@ -124,7 +152,7 @@ public class FrmScriptWriter {
         .append("');\n");
     script.append("    END IF;\n");
     if (!correctable.isEmpty()) {
-      appendCorrection(script, name, idCondition, correctable, row);
+      appendCorrection(script, name, idCondition, correctable);
     }
     script.append("  END IF;\n");
     script.append("END;\n");
@@ -133,101 +161,122 @@ public class FrmScriptWriter {
 
   /** Actualiza solo si algún texto difiere: una segunda ejecución no toca la fila. */
   private static void appendCorrection(
-      StringBuilder script,
-      String name,
-      String idCondition,
-      List<String> correctable,
-      Map<String, Object> row) {
+      StringBuilder script, String name, String idCondition, List<String> correctable) {
     script
         .append("    UPDATE ")
         .append(name)
         .append(" SET ")
         .append(
             correctable.stream()
-                .map(column -> column + " = " + literal(row.get(column)))
+                .map(column -> column + " = " + variable(column))
                 .collect(Collectors.joining(", ")))
         .append('\n');
+    script.append("     WHERE ").append(idCondition).append('\n');
     // CASE da un resultado de dos valores: con NOT y una columna nula la comparación quedaría
     // desconocida y la fila no se actualizaría.
-    script
-        .append("     WHERE ")
-        .append(idCondition)
-        .append("\n       AND CASE WHEN ")
-        .append(
-            correctable.stream()
-                .map(column -> equality(column, row.get(column)))
-                .collect(Collectors.joining(" AND ")))
-        .append(" THEN 0 ELSE 1 END = 1;\n");
+    script.append("       AND CASE WHEN ");
+    script.append(
+        correctable.stream()
+            .map(FrmScriptWriter::equality)
+            .collect(Collectors.joining("\n                 AND ")));
+    script.append("\n           THEN 0 ELSE 1 END = 1;\n");
   }
 
-  /** Igualdad nula-segura contra un literal conocido: {@code COL IS NULL} o {@code COL = valor}. */
-  private static String equality(String column, Object value) {
-    return value == null ? column + " IS NULL" : "(" + column + " = " + literal(value) + ")";
-  }
-
-  private static String idLiteral(Object id) {
-    if (!(id instanceof BigDecimal number)) {
-      throw new IllegalStateException("Id no numérico en la fotografía: " + id);
-    }
-    return literal(number);
-  }
-
-  /** Literal SQL de un valor de la fotografía; las cadenas largas van en trozos concatenados. */
-  static String literal(Object value) {
+  /**
+   * Un número va como NUMBER; un texto o un nulo, como VARCHAR2: un nulo comparado con una columna
+   * NUMBER se convierte sin error, y un texto comparado con un NUMBER no.
+   */
+  private static String declaration(String column, Object value) {
     return switch (value) {
-      case null -> "NULL";
-      case BigDecimal number -> number.stripTrailingZeros().toPlainString();
-      case String text -> textLiteral(text);
-      case LocalDateTime timestamp ->
-          "TIMESTAMP '" + timestamp.format(FrmSnapshot.TIMESTAMP_FORMAT) + "'";
+      case null -> variable(column) + " VARCHAR2(" + MAX_TEXT_BYTES + " BYTE)";
+      case BigDecimal number -> variable(column) + " NUMBER := " + number(number);
+      case String text -> variable(column) + " VARCHAR2(" + MAX_TEXT_BYTES + " BYTE)";
       default ->
           throw new IllegalStateException(
               "Tipo de valor no admitido en FRM_*: " + value.getClass().getSimpleName());
     };
   }
 
-  /**
-   * Comillas duplicadas y saltos de línea como {@code CHR(10)}/{@code CHR(13)}: un salto dentro del
-   * literal permitiría una línea "/" o "." que SQL*Plus tomaría como fin del bloque.
-   */
-  private static String textLiteral(String text) {
-    int bytes = text.getBytes(StandardCharsets.UTF_8).length;
-    if (bytes > MAX_LITERAL_BYTES) {
-      throw new IllegalStateException(
-          "Un texto de FRM_* supera " + MAX_LITERAL_BYTES + " bytes (" + bytes + ")");
-    }
-    List<String> parts = new ArrayList<>();
-    StringBuilder chunk = new StringBuilder();
-    for (int index = 0; index < text.length(); index++) {
-      char character = text.charAt(index);
-      if (character == '\n' || character == '\r') {
-        addChunk(parts, chunk);
-        parts.add("CHR(" + (int) character + ")");
-      } else {
-        if (chunk.length() == LITERAL_CHUNK) {
-          addChunk(parts, chunk);
-        }
-        chunk.append(character);
-      }
-    }
-    addChunk(parts, chunk);
-    if (parts.isEmpty()) {
-      return "''";
-    }
-    StringBuilder literal = new StringBuilder(parts.get(0));
-    for (int index = 1; index < parts.size(); index++) {
-      // Dos trozos de texto seguidos solo salen de partir uno largo: van en otra línea.
-      boolean longTextSplit =
-          parts.get(index - 1).endsWith("'") && parts.get(index).startsWith("'");
-      literal.append(longTextSplit ? "\n|| " : " || ").append(parts.get(index));
-    }
-    return literal.toString();
+  private static String variable(String column) {
+    return "V_" + column;
   }
 
-  private static void addChunk(List<String> parts, StringBuilder chunk) {
-    if (!chunk.isEmpty()) {
-      parts.add("'" + chunk.toString().replace("'", "''") + "'");
-      chunk.setLength(0);
+  /** La igualdad nula-segura del brief, contra la variable del bloque. */
+  private static String equality(String column) {
+    String value = variable(column);
+    return "(" + column + " = " + value + " OR (" + column + " IS NULL AND " + value + " IS NULL))";
+  }
+
+  private static String number(Object value) {
+    if (!(value instanceof BigDecimal number)) {
+      throw new IllegalStateException("Se esperaba un número en la fotografía: " + value);
+    }
+    return number.stripTrailingZeros().toPlainString();
+  }
+
+  /**
+   * Las partes ASCII que concatenadas dan {@code text}. Cada una mide a lo sumo {@link
+   * #MAX_PART_LENGTH} y ningún corte parte un punto de código. El {@code \} del texto va en UNISTR
+   * como {@code \005C}: así no depende de {@code SET ESCAPE} ni del propio UNISTR.
+   */
+  static List<String> textParts(String text) {
+    int bytes = text.getBytes(StandardCharsets.UTF_8).length;
+    if (bytes > MAX_TEXT_BYTES) {
+      throw new IllegalStateException(
+          "Un texto de FRM_* supera " + MAX_TEXT_BYTES + " bytes (" + bytes + ")");
+    }
+    List<String> parts = new ArrayList<>();
+    StringBuilder ascii = new StringBuilder();
+    StringBuilder unicode = new StringBuilder();
+    int index = 0;
+    while (index < text.length()) {
+      int codePoint = text.codePointAt(index);
+      index += Character.charCount(codePoint);
+      if (isPlainAscii(codePoint)) {
+        flushUnicode(parts, unicode);
+        String quoted = codePoint == '\'' ? "''" : String.valueOf((char) codePoint);
+        if (ascii.length() + quoted.length() + 2 > MAX_PART_LENGTH) {
+          flushAscii(parts, ascii);
+        }
+        ascii.append(quoted);
+      } else if (codePoint < 0x20 || codePoint == 0x7F) {
+        flushAscii(parts, ascii);
+        flushUnicode(parts, unicode);
+        parts.add("CHR(" + codePoint + ")");
+      } else {
+        flushAscii(parts, ascii);
+        StringBuilder units = new StringBuilder();
+        for (char unit : Character.toChars(codePoint)) {
+          units.append('\\').append(String.format("%04X", (int) unit));
+        }
+        int length = UNISTR_OPEN.length() + unicode.length() + units.length();
+        if (length + UNISTR_CLOSE.length() > MAX_PART_LENGTH) {
+          flushUnicode(parts, unicode);
+        }
+        unicode.append(units);
+      }
+    }
+    flushAscii(parts, ascii);
+    flushUnicode(parts, unicode);
+    return parts;
+  }
+
+  /** Imprimible y sin significado para SQL*Plus ni UNISTR: todo menos controles y {@code \}. */
+  private static boolean isPlainAscii(int codePoint) {
+    return codePoint >= 0x20 && codePoint < 0x7F && codePoint != '\\';
+  }
+
+  private static void flushAscii(List<String> parts, StringBuilder ascii) {
+    if (!ascii.isEmpty()) {
+      parts.add("'" + ascii + "'");
+      ascii.setLength(0);
+    }
+  }
+
+  private static void flushUnicode(List<String> parts, StringBuilder unicode) {
+    if (!unicode.isEmpty()) {
+      parts.add(UNISTR_OPEN + unicode + UNISTR_CLOSE);
+      unicode.setLength(0);
     }
   }
 }

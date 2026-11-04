@@ -8,7 +8,9 @@ import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.service.QuestionnaireService;
 import co.gov.dane.edi.support.DraftYearFixture;
 import co.gov.dane.edi.support.FrmScriptRunner;
+import co.gov.dane.edi.support.HostileTexts;
 import co.gov.dane.edi.support.OracleIntegrationTest;
+import co.gov.dane.edi.support.SqlPlusRunner;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -141,6 +143,85 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
     runner.run(correctionScript);
     assertThat(tableCounts()).isEqualTo(afterCorrection);
     assertThat(snapshots.snapshot(PROJECT, YEAR)).isEqualTo(original);
+  }
+
+  /**
+   * Los textos hostiles van por el SQL*Plus real del contenedor con el cliente en WE8MSWIN1252: el
+   * script ASCII los recrea idénticos, y un id ocupado sale con error y sin cambios.
+   */
+  @Test
+  void hostileTextsRoundTripThroughOracle() throws Exception {
+    List<long[]> slots = new ArrayList<>();
+    original
+        .rows()
+        .get(FrmTable.PRE_AYUDA)
+        .forEach(row -> slots.add(slot(FrmTable.PRE_AYUDA, row)));
+    original.rows().get(FrmTable.PREGUNTA).stream()
+        .filter(row -> ((BigDecimal) row.get("COD_PRE")).longValue() >= DraftYearFixture.OFFSET)
+        .forEach(row -> slots.add(slot(FrmTable.PREGUNTA, row)));
+    // Oracle Free (AL32UTF8) guarda el NUL tal cual: entra en la prueba como un texto más.
+    assertThat(oracleKeepsNul(slots.get(slots.size() - 1))).isTrue();
+    List<String> texts = new ArrayList<>(HostileTexts.all());
+    assertThat(slots).hasSizeGreaterThanOrEqualTo(texts.size());
+    for (int index = 0; index < texts.size(); index++) {
+      writeText(slots.get(index), texts.get(index));
+    }
+    FrmSnapshot hostile = snapshots.snapshot(PROJECT, YEAR);
+    List<Object> stored = new ArrayList<>();
+    for (int index = 0; index < texts.size(); index++) {
+      stored.add(readText(slots.get(index)));
+    }
+    assertThat(stored).containsExactlyElementsOf(texts);
+    String yearScript = writer.write(hostile, PackageKind.ANIO);
+    SqlPlusRunner sqlPlus = new SqlPlusRunner(ORACLE);
+    deleteOwnRows(hostile);
+
+    SqlPlusRunner.Run first = sqlPlus.run(yearScript);
+    assertThat(first.exitCode()).as(first.output()).isZero();
+    assertThat(first.output()).doesNotContain("SP2-").doesNotContain("ORA-");
+    assertThat(snapshots.snapshot(PROJECT, YEAR)).isEqualTo(hostile);
+
+    writeText(slots.get(0), "Texto cambiado a mano");
+    deleteRow(FrmTable.PREGUNTA, DraftYearFixture.H1_GROUP_2_FIRST);
+    Map<FrmTable, Long> beforeConflict = tableCounts();
+    SqlPlusRunner.Run conflict = sqlPlus.run(yearScript);
+    assertThat(conflict.exitCode()).isNotZero();
+    assertThat(conflict.output()).contains("ORA-20001").contains("Id ocupado: FRM_PRE_AYUDA");
+    assertThat(tableCounts()).isEqualTo(beforeConflict);
+  }
+
+  /** {tabla (ordinal), id} de una fila con texto. */
+  private static long[] slot(FrmTable table, Map<String, Object> row) {
+    return new long[] {table.ordinal(), ((BigDecimal) row.get(table.idColumn())).longValueExact()};
+  }
+
+  private boolean oracleKeepsNul(long[] slot) {
+    writeText(slot, HostileTexts.WITH_NUL);
+    return HostileTexts.WITH_NUL.equals(readText(slot));
+  }
+
+  private void writeText(long[] slot, String text) {
+    FrmTable table = FrmTable.values()[(int) slot[0]];
+    String column = table == FrmTable.PREGUNTA ? "PREGUNTA" : "TEXTO";
+    jdbc.update(
+        "UPDATE "
+            + table.tableName()
+            + " SET "
+            + column
+            + " = ? WHERE "
+            + table.idColumn()
+            + " = ?",
+        text,
+        slot[1]);
+  }
+
+  private String readText(long[] slot) {
+    FrmTable table = FrmTable.values()[(int) slot[0]];
+    String column = table == FrmTable.PREGUNTA ? "PREGUNTA" : "TEXTO";
+    return jdbc.queryForObject(
+        "SELECT " + column + " FROM " + table.tableName() + " WHERE " + table.idColumn() + " = ?",
+        String.class,
+        slot[1]);
   }
 
   /** Borra las filas del 2027 que no comparte con 2026, de las hijas a las madres. */

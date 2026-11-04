@@ -72,7 +72,8 @@ class FrmSnapshotRepositoryIT extends OracleIntegrationTest {
     }
     Map<String, Object> group = first.rows().get(FrmTable.OBJ_PRE).get(0);
     String canonical =
-        "COD_OBJ_PRE=1\u001FCOD_GRUPO=10\u001FGRUPO=10\u001FCOD_OBJ=1\u001FCOD_CAP_PROY=102";
+        "COD_OBJ_PRE=1:1\u001FCOD_GRUPO=2:10\u001FGRUPO=2:10\u001FCOD_OBJ=1:1"
+            + "\u001FCOD_CAP_PROY=3:102";
     assertThat(FrmSnapshot.rowHash(FrmTable.OBJ_PRE, group)).isEqualTo(sha256(canonical));
     // El hash de "b" (3e23…) va antes que el de "a" (ca97…) al ordenar.
     assertThat(FrmSnapshot.tableSum(List.of(sha256("a"), sha256("b"))))
@@ -82,7 +83,17 @@ class FrmSnapshotRepositoryIT extends OracleIntegrationTest {
     withNull.put("COD_ENC", new BigDecimal(3));
     withNull.put("TEXTO", null);
     assertThat(FrmSnapshot.rowHash(FrmTable.ENC_AYUDA, withNull))
-        .isEqualTo(sha256("COD_AYU=1\u001FCOD_ENC=3\u001FTEXTO=\u0000"));
+        .isEqualTo(sha256("COD_AYU=1:1\u001FCOD_ENC=1:3\u001FTEXTO=NULL"));
+    // Con la longitud delante, NULL no se confunde con un texto "NULL" ni con un NUL.
+    Map<String, Object> withNul = new LinkedHashMap<>(withNull);
+    withNul.put("TEXTO", "\u0000");
+    Map<String, Object> withWordNull = new LinkedHashMap<>(withNull);
+    withWordNull.put("TEXTO", "NULL");
+    assertThat(FrmSnapshot.rowHash(FrmTable.ENC_AYUDA, withNul))
+        .isNotEqualTo(FrmSnapshot.rowHash(FrmTable.ENC_AYUDA, withNull))
+        .isNotEqualTo(FrmSnapshot.rowHash(FrmTable.ENC_AYUDA, withWordNull));
+    assertThat(FrmSnapshot.rowHash(FrmTable.ENC_AYUDA, withWordNull))
+        .isNotEqualTo(FrmSnapshot.rowHash(FrmTable.ENC_AYUDA, withNull));
   }
 
   private static Map<FrmTable, Integer> countsOf(FrmSnapshot snapshot) {

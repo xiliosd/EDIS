@@ -3,7 +3,6 @@ package co.gov.dane.edi.admin;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,7 +103,6 @@ public class FrmSnapshotRepository {
       case String text -> text;
       case BigDecimal number -> number;
       case Number number -> new BigDecimal(number.toString());
-      case Timestamp timestamp -> timestamp.toLocalDateTime();
       default ->
           throw new SQLException(
               "Tipo de columna no admitido en FRM_*: " + raw.getClass().getSimpleName());
