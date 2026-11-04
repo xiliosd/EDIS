@@ -38,9 +38,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 - Diagramas de secuencia de crear un año y de editar con copia al escribir.
 - Reglas, simulador y casos de prueba (Fase 3b) para `ADMIN_CUESTIONARIO`: editor de saltos con
   constructor accesible (una condición o un nivel de Y/O), edición de validaciones, vista, descarga e
-  importación del JSON de reglas (hasta 1 MB) y análisis de lógica en cada guardado (ciclos,
-  preguntas inexistentes, valores que no son opciones, rangos, reglas que nunca se cumplen o
-  solapadas), acotado en tiempo: lo que no alcanza a analizarse sale en un solo aviso del archivo.
+  importación del JSON de reglas (hasta 1 MB, 1000 reglas y 1000 casos; más responde 422
+  `ESTRUCTURA`) y análisis de lógica en cada guardado (ciclos, preguntas inexistentes, valores que
+  no son opciones, rangos, reglas que nunca se cumplen o solapadas), acotado en tiempo y memoria:
+  lo que no alcanza a analizarse sale en un solo aviso del archivo.
   Solo bloquean (422) los errores que el archivo vigente no tenía; las advertencias nunca; un JSON
   con `null` donde va una condición, un valor o una pregunta responde 422 `ESTRUCTURA`. Desactivar
   una pregunta nombra las reglas y los casos que lo impiden, con enlace al simulador. Simulador con

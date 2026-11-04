@@ -169,7 +169,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [rulesChanged, setRulesChanged] = useState(false);
-  // Si el guardado se bloquea porque cambiaron las reglas, el id y el nombre esperan al reintento.
+  // Si el guardado no se completa (reglas cambiadas o 409), el id y el nombre esperan al reintento.
   const [pendingDraft, setPendingDraft] = useState<{ id: string; name: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -268,6 +268,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
       setStatusMessage(`Caso ${draft.id} guardado.`);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
+        setPendingDraft(draft);
         setConflict(caught.detail);
         setSaveOpen(false);
       } else {
@@ -302,6 +303,8 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
       setChosenPage(testCase.pagina);
     }
     setAnswers({ ...testCase.respuestas });
+    // El borrador era de otras respuestas: con otro caso ya no aplica.
+    setPendingDraft(null);
     setFormKey((count) => count + 1);
     setFocusRequest((count) => count + 1);
     setStatusMessage(`Caso ${testCase.id} cargado en el simulador.`);
@@ -309,6 +312,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
 
   function resetAnswers() {
     setAnswers({});
+    setPendingDraft(null);
     setFormKey((count) => count + 1);
     setStatusMessage('Respuestas reiniciadas.');
   }

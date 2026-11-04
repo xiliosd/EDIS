@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.rules.Condition;
 import co.gov.dane.edi.rules.RuleSet;
+import co.gov.dane.edi.rules.RuleSetValidator;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.rules.SkipAction;
 import co.gov.dane.edi.rules.SkipRule;
@@ -211,6 +212,33 @@ class RulesAdminIT extends OracleIntegrationTest {
     send(put(DRAFT + "/import"), body)
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.report.errors[?(@.code == 'CICLO')]").exists());
+
+    RuleSet unchanged = rulesFiles.load("EDIN", 2027);
+    assertThat(unchanged.version()).isEqualTo(1);
+    assertThat(unchanged.skips()).extracting(SkipRule::id).containsExactly("legacy-C01A");
+  }
+
+  @Test
+  void importWithMoreThanAThousandRulesIsRejectedAndFileUnchanged() throws Exception {
+    StringBuilder skips = new StringBuilder();
+    for (int index = 0; index <= RuleSetValidator.MAX_SKIPS; index++) {
+      skips
+          .append(index == 0 ? "" : ",")
+          .append("{\"id\":\"r-")
+          .append(index)
+          .append("\",\"si\":{\"pregunta\":\"C01A\",\"op\":\"eq\",\"valor\":\"1\"},")
+          .append("\"entonces\":{\"accion\":\"deshabilitar\",\"preguntas\":[\"C01B\"]}}");
+    }
+    String body =
+        "{\"rules\":{\"encuesta\":\"EDIN\",\"anio\":2027,\"version\":0,\"saltos\":["
+            + skips
+            + "],\"validaciones\":{}},\"version\":1}";
+
+    send(put(DRAFT + "/import"), body)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.report.errors[?(@.code == 'ESTRUCTURA')].message")
+                .value("El archivo tiene más de 1000 reglas."));
 
     RuleSet unchanged = rulesFiles.load("EDIN", 2027);
     assertThat(unchanged.version()).isEqualTo(1);

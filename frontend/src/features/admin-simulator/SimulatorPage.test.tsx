@@ -196,7 +196,52 @@ describe('SimulatorPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Otro usuario modificó el cuestionario. Recargue la página.');
     expect(within(alert).getByRole('button', { name: 'Recargar' })).toBeVisible();
+    // Lo escrito espera al reintento.
+    await user.click(screen.getByRole('button', { name: 'Guardar como caso de prueba' }));
+    expect(screen.getByLabelText('Identificador del caso')).toHaveValue('otro');
+    expect(screen.getByLabelText('Nombre del caso')).toHaveValue('Otro');
   });
+
+  it(
+    'el borrador de un guardado fallido se descarta al reiniciar o al abrir otro caso',
+    async () => {
+      server.use(
+        http.put(`${RULES_API}/cases/:id`, () =>
+          HttpResponse.json(
+            { title: 'Conflicto', detail: 'Otro usuario modificó el cuestionario.' },
+            { status: 409, headers: PROBLEM },
+          ),
+        ),
+      );
+      await openSimulator(rulesView({ cases: CASES, caseResults: RESULTS }));
+      const user = userEvent.setup();
+      const saveButton = () => screen.getByRole('button', { name: 'Guardar como caso de prueba' });
+      async function failToSave() {
+        await user.click(saveButton());
+        await user.type(screen.getByLabelText('Identificador del caso'), 'otro');
+        await user.type(screen.getByLabelText('Nombre del caso'), 'Otro');
+        await user.click(screen.getByRole('button', { name: 'Guardar caso' }));
+        await screen.findByText('Otro usuario modificó el cuestionario.');
+      }
+
+      await failToSave();
+      await user.click(screen.getByRole('button', { name: 'Reiniciar respuestas' }));
+      await user.click(saveButton());
+      expect(screen.getByLabelText('Identificador del caso')).toHaveValue('');
+      await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+      await failToSave();
+      await user.click(
+        within(document.getElementById('caso-caso-a')!).getByRole('button', {
+          name: /Abrir en el simulador/,
+        }),
+      );
+      await user.click(saveButton());
+      expect(screen.getByLabelText('Identificador del caso')).toHaveValue('');
+      expect(screen.getByLabelText('Nombre del caso')).toHaveValue('');
+    },
+    LONG_FLOW_TIMEOUT,
+  );
 
   it(
     'lista los casos con su estado y "Abrir en el simulador" restaura respuestas y página',

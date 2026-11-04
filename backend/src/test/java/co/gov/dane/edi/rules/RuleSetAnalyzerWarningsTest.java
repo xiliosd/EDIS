@@ -418,14 +418,23 @@ class RuleSetAnalyzerWarningsTest {
     Map<String, QuestionFacts> facts = facts(questions.toArray(QuestionFacts[]::new));
     RuleSet set = rules(skips.toArray(SkipRule[]::new));
 
+    // Pasa el tope de reglas: la validación lo rechaza antes de enumerar.
     AnalysisReport report =
         assertTimeoutPreemptively(
             Duration.ofMillis(3000), () -> RuleSetAnalyzer.analyze(set, facts));
-    // Los ~4,5 millones de pares comparten Z01: solo se guardan los que el presupuesto paga.
+    // Aun sin el tope, de los ~4,5 millones de pares hacia Z01 solo se guardan los que el
+    // presupuesto paga.
     LogicWarnings logic = new LogicWarnings(set, facts, Set.of());
-    logic.enumerated();
+    List<Finding> found =
+        assertTimeoutPreemptively(Duration.ofMillis(3000), () -> logic.enumerated());
 
-    assertThat(warnings(report)).contains("NO_ANALIZABLE@archivo");
+    assertThat(report.errors())
+        .extracting(Finding::message)
+        .containsExactly("El archivo tiene más de 1000 reglas.");
+    assertThat(report.warnings()).isEmpty();
+    assertThat(found)
+        .extracting(f -> f.code() + "@" + f.element())
+        .contains("NO_ANALIZABLE@archivo");
     assertThat(logic.plannedPairs()).isPositive();
     assertThat(logic.plannedPairs()).isLessThanOrEqualTo(RuleSetAnalyzer.MAX_TOTAL_WORK / 3000);
   }
@@ -448,6 +457,63 @@ class RuleSetAnalyzerWarningsTest {
             rules(skips.toArray(SkipRule[]::new)), facts(questions.toArray(QuestionFacts[]::new)));
 
     assertThat(warnings(report)).contains("NUNCA_SE_CUMPLE@regla:r-imposible");
+  }
+
+  @Test
+  void wideRulesStayBounded() {
+    int ruleCount = 1000;
+    for (boolean distinct : new boolean[] {true, false}) {
+      List<QuestionFacts> questions = new ArrayList<>();
+      List<String> common = new ArrayList<>();
+      if (!distinct) {
+        for (int index = 0; index < 13; index++) {
+          common.add("S" + index);
+          questions.add(checkbox("S" + index, questions.size()));
+        }
+      }
+      List<SkipRule> skips = new ArrayList<>();
+      for (int index = 0; index < ruleCount; index++) {
+        List<String> columns = new ArrayList<>(common);
+        for (int own = 0; own < (distinct ? 13 : 1); own++) {
+          String column = String.format("K%04d_%02d", index, own);
+          columns.add(column);
+          questions.add(checkbox(column, questions.size()));
+        }
+        Condition anyOf = new Condition(null, "eq", "1", null, null, columns, null, null);
+        skips.add(rule(String.format("r-%04d", index), anyOf, "Z01"));
+      }
+      questions.add(text("Z01", questions.size()));
+      Map<String, QuestionFacts> facts = facts(questions.toArray(QuestionFacts[]::new));
+      RuleSet set = rules(skips.toArray(SkipRule[]::new));
+
+      AnalysisReport report =
+          assertTimeoutPreemptively(
+              Duration.ofMillis(3000), () -> RuleSetAnalyzer.analyze(set, facts));
+
+      // Cada regla trae a lo sumo sus columnas y Z01 todas: lineal en el número de reglas.
+      long namedColumns = report.warnings().stream().mapToLong(f -> f.questions().size()).sum();
+      assertThat(namedColumns).as("distinct=%s", distinct).isLessThanOrEqualTo(30L * ruleCount);
+      assertThat(warnings(report)).contains("NO_ANALIZABLE@regla:r-0000");
+    }
+  }
+
+  @Test
+  void unknownColumnsDoNotInflateTheAnalysis() {
+    List<String> invented = new ArrayList<>();
+    for (int index = 0; index < 13; index++) {
+      invented.add(String.format("X%02d", index));
+    }
+    Condition anyInvented = new Condition(null, "eq", "1", null, null, invented, null, null);
+
+    AnalysisReport report =
+        RuleSetAnalyzer.analyze(
+            rules(rule("r-inventada", and(eq("K01", "1"), anyInvented), "K02")),
+            facts(checkbox("K01", 0), checkbox("K02", 1)));
+
+    assertThat(report.errors()).extracting(Finding::code).contains("PREGUNTA_INEXISTENTE");
+    assertThat(warnings(report)).doesNotContain("NO_ANALIZABLE@regla:r-inventada");
+    assertThat(report.warnings())
+        .allSatisfy(f -> assertThat(f.questions()).doesNotContainAnyElementsOf(invented));
   }
 
   @Test

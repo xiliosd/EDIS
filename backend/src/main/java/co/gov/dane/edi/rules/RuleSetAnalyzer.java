@@ -48,6 +48,10 @@ public final class RuleSetAnalyzer {
         .forEach(
             problem ->
                 errors.add(new Finding(AnalysisCodes.ESTRUCTURA, "archivo", problem, List.of())));
+    if (exceedsSizeLimits(effective)) {
+      // Fuera de tamaño no se analiza nada más: cada revisión recorre todas las reglas o casos.
+      return new AnalysisReport(errors, List.of());
+    }
     checkUnknownQuestions(effective, facts, errors);
     checkCycles(effective, errors);
     checkOptionValues(effective, facts, errors);
@@ -86,6 +90,11 @@ public final class RuleSetAnalyzer {
             .thenComparing(Finding::code)
             .thenComparing(f -> String.join(",", f.questions())));
     return warnings;
+  }
+
+  private static boolean exceedsSizeLimits(RuleSet rules) {
+    return rules.skips().size() > RuleSetValidator.MAX_SKIPS
+        || rules.cases().size() > RuleSetValidator.MAX_CASES;
   }
 
   // ---- PREGUNTA_INEXISTENTE ----

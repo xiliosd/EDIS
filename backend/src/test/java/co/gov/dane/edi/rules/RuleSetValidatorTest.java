@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -143,6 +144,31 @@ class RuleSetValidatorTest {
         .hasSize(1);
     assertThat(RuleSetValidator.problems(withCases(testCase("c01a-no", "Nombre", "Z9"))))
         .hasSize(1);
+  }
+
+  @Test
+  void atMostAThousandSkipsAndAThousandCases() {
+    List<SkipRule> skips = new ArrayList<>();
+    for (int index = 0; index <= RuleSetValidator.MAX_SKIPS; index++) {
+      skips.add(
+          new SkipRule(
+              "r-" + index,
+              null,
+              eq("C01A", "2"),
+              new SkipAction("deshabilitar", List.of("C01B"))));
+    }
+    List<TestCase> cases = new ArrayList<>();
+    for (int index = 0; index <= RuleSetValidator.MAX_CASES; index++) {
+      cases.add(testCase("caso-" + index, "Caso " + index, "C1"));
+    }
+    RuleSet empty = RuleSet.empty("EDIN", 2026);
+
+    assertThat(RuleSetValidator.problems(empty.withSkips(skips.subList(0, 1000)))).isEmpty();
+    assertThat(RuleSetValidator.problems(empty.withSkips(skips)))
+        .containsExactly("El archivo tiene más de 1000 reglas.");
+    assertThat(RuleSetValidator.problems(empty.withCases(cases.subList(0, 1000)))).isEmpty();
+    assertThat(RuleSetValidator.problems(empty.withCases(cases)))
+        .containsExactly("El archivo tiene más de 1000 casos de prueba.");
   }
 
   @Test

@@ -112,14 +112,22 @@ final class LogicWarnings {
     this.cyclicRuleIds = cyclicRuleIds;
     this.skips = rules.skips();
     this.workPerEvaluation = Math.max(1, skips.size());
+    // Una columna que no es pregunta ya es PREGUNTA_INEXISTENTE: no entra en dominios, clausuras
+    // ni enumeración, para que un archivo no pueda inflar el análisis con columnas inventadas.
     for (SkipRule rule : skips) {
       collectLiterals(rule.when());
-      triggersByRule.put(rule, RuleSetAnalyzer.triggersOf(rule));
-      Set<String> targets = RuleSetAnalyzer.targetsOf(rule);
+      triggersByRule.put(rule, knownColumns(RuleSetAnalyzer.triggersOf(rule)));
+      Set<String> targets = knownColumns(RuleSetAnalyzer.targetsOf(rule));
       targetsByRule.put(rule, targets);
       targets.forEach(
           target -> rulesByTarget.computeIfAbsent(target, key -> new ArrayList<>()).add(rule));
     }
+  }
+
+  private Set<String> knownColumns(Set<String> columns) {
+    Set<String> known = new HashSet<>(columns);
+    known.retainAll(facts.keySet());
+    return known;
   }
 
   /** Avisos que no necesitan enumerar: se calculan aunque la estructura tenga problemas. */
@@ -270,6 +278,7 @@ final class LogicWarnings {
     }
     int[] collectedFor = new int[analyzable.size()];
     Arrays.fill(collectedFor, -1);
+    boolean[] markedOwn = new boolean[analyzable.size()];
     for (int first = 0; first < analyzable.size(); first++) {
       SkipRule one = analyzable.get(first);
       List<Integer> partners = new ArrayList<>();
@@ -284,17 +293,17 @@ final class LogicWarnings {
       Collections.sort(partners);
       String element = "regla:" + one.id();
       Check ownOne = ownChecks.get(one);
-      // Muchas reglas comparten columnas: cada lista distinta se fusiona una sola vez.
-      Set<List<String>> mergedColumns = new HashSet<>();
       boolean oneUnanalyzed = false;
       for (int position : partners) {
         SkipRule other = analyzable.get(position);
         Check ownOther = ownChecks.get(other);
         if (exceedsLimit(ownOne) || exceedsLimit(ownOther)) {
-          for (Check own : List.of(ownOne, ownOther)) {
-            if (mergedColumns.add(own.columns())) {
-              markNotAnalyzable(element, own.columns());
-            }
+          // El solape de a queda sin analizar: se marca a (y b si es ella la que no cabe) una sola
+          // vez y con sus propias columnas, nunca con la unión de sus socios, que crecería con el
+          // número de reglas.
+          markOwnNotAnalyzable(ownOne, markedOwn, first);
+          if (exceedsLimit(ownOther)) {
+            markOwnNotAnalyzable(ownOther, markedOwn, position);
           }
         } else if (remainingWork - reservedWork < workPerEvaluation) {
           if (!oneUnanalyzed) {
@@ -309,6 +318,13 @@ final class LogicWarnings {
           plannedPairs++;
         }
       }
+    }
+  }
+
+  private void markOwnNotAnalyzable(Check own, boolean[] markedOwn, int position) {
+    if (!markedOwn[position]) {
+      markedOwn[position] = true;
+      markNotAnalyzable(own.element(), own.columns());
     }
   }
 
@@ -602,7 +618,7 @@ final class LogicWarnings {
         columns.addAll(condition.any());
       }
       for (String column : columns) {
-        if (column != null) {
+        if (column != null && facts.containsKey(column)) {
           literalsByColumn.computeIfAbsent(column, key -> new TreeSet<>()).addAll(values);
           leavesByColumn.computeIfAbsent(column, key -> new ArrayList<>()).add(condition);
         }

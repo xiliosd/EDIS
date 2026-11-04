@@ -352,5 +352,17 @@ Cambios respecto a lo escrito arriba, decididos durante la Fase 3b (plan
     y el caso nunca fallaría al cambiar el destino.
 17. **Casos de 2026 en desarrollo.** Si se importan los 12 casos reales contra el cuestionario
     ficticio, salen `POR_REVISAR`; con el cuestionario real de QA se evalúan.
+18. **Tope de tamaño y memoria del análisis.** Un archivo admite a lo sumo 1000 saltos y 1000 casos
+    (`RuleSetValidator.MAX_SKIPS` y `MAX_CASES`; el cuestionario real tiene unas 160 reglas). Al
+    pasarse responde 422 `ESTRUCTURA` («El archivo tiene más de 1000 reglas.» o «… más de 1000
+    casos de prueba.») y no se analiza nada más. Dentro del tope, el análisis de lógica no guarda
+    O(R²) pares: los socios de cada regla salen del índice por destino y cada par planeado reserva
+    una evaluación del presupuesto, así que se guardan a lo sumo `MAX_TOTAL_WORK / R` pares (es
+    reserva y no cobro, para no dejar sin presupuesto a preguntas y reglas). Si una de las dos
+    reglas ya supera 4096 combinaciones, el par no se planea: la regla a (y la b, si es ella la que
+    no cabe) sale `NO_ANALIZABLE` una sola vez con sus propias columnas, nunca con la unión de sus
+    socios. Las columnas que no son preguntas (ya `PREGUNTA_INEXISTENTE`) no entran en dominios,
+    clausuras ni enumeración. Una prueba diferencial con semilla fija compara los dominios reducidos
+    con la enumeración completa.
 
 Seguimiento de la 3b en el README, «Deuda técnica y riesgos».

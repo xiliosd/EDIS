@@ -25,6 +25,15 @@ public final class RuleSetValidator {
   private static final Pattern CASE_ID = Pattern.compile("[a-z0-9][a-z0-9-]{0,39}");
   private static final int MAX_CASE_NAME = 100;
 
+  /**
+   * Tope de saltos por archivo. El cuestionario real tiene unas 160 reglas; el tope deja holgura y
+   * acota el análisis de lógica, que crece con el cuadrado de las reglas que comparten destino.
+   */
+  public static final int MAX_SKIPS = 1000;
+
+  /** Tope de casos de prueba por archivo: cada guardado los vuelve a correr todos. */
+  public static final int MAX_CASES = 1000;
+
   private RuleSetValidator() {}
 
   public static void validate(RuleSet rules) {
@@ -37,6 +46,16 @@ public final class RuleSetValidator {
   /** Los problemas estructurales de las reglas, sin lanzar; vacío si son válidas. */
   public static List<String> problems(RuleSet rules) {
     List<String> problems = new ArrayList<>();
+    // Un archivo fuera de tamaño se rechaza entero, sin revisar ni listar cada regla o caso.
+    if (rules.skips().size() > MAX_SKIPS) {
+      problems.add("El archivo tiene más de " + MAX_SKIPS + " reglas.");
+    }
+    if (rules.cases().size() > MAX_CASES) {
+      problems.add("El archivo tiene más de " + MAX_CASES + " casos de prueba.");
+    }
+    if (!problems.isEmpty()) {
+      return problems;
+    }
     Set<String> ids = new HashSet<>();
     for (SkipRule rule : rules.skips()) {
       String id = rule.id() == null ? "(sin id)" : rule.id();
