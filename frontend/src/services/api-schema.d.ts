@@ -169,6 +169,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/package": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar el paquete de promoción de un año publicado
+         * @description ZIP con manifiesto.json, reglas.json, frm.sql y columnas.sql. El tipo anio instala el año completo; correccion exige una versión posterior a la publicación y además corrige los textos de las filas que ya existen. La persona técnica ejecuta columnas.sql y frm.sql en producción antes de importarlo.
+         */
+        get: operations["packageDownload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/package/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revisar o confirmar la importación de un paquete
+         * @description Comprueba el ZIP contra su manifiesto y contra esta base: los archivos, las reglas, las filas FRM_* (que frm.sql ya debe haber dejado), las columnas y tablas de respuesta y la versión. Con confirmar=false solo muestra el impacto: cuántos encuestados ya guardaron cada página cuyas reglas cambian. Con confirmar=true además reemplaza el archivo de reglas conservando la versión del paquete. Nunca escribe en FRM_*.
+         */
+        post: operations["packageImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/entries": {
         parameters: {
             query?: never;
@@ -804,6 +844,13 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
+        ImportPreview: {
+            alreadyImported?: boolean;
+            impact?: components["schemas"]["PageImpact"][];
+            kind?: string;
+            /** Format: int32 */
+            version?: number;
+        };
         ImportRulesRequest: {
             motivo?: string;
             rules: components["schemas"]["RuleSet"];
@@ -858,6 +905,11 @@ export interface components {
             pageCode?: string;
             /** @enum {string} */
             state?: "SAVED" | "AVAILABLE" | "LOCKED";
+        };
+        PageImpact: {
+            pageCode?: string;
+            /** Format: int64 */
+            savedCount?: number;
         };
         PageSaveResult: {
             nextPageCode?: string;
@@ -1521,6 +1573,127 @@ export interface operations {
                 };
             };
             /** @description La restauración agrega errores de análisis (propiedad report) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    packageDownload: {
+        parameters: {
+            query: {
+                /** @description Tipo de paquete */
+                tipo: "anio" | "correccion";
+            };
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paquete del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            /** @description Falta el tipo o no es anio ni correccion */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año no está publicado o no hay correcciones posteriores a la publicación */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    packageImport: {
+        parameters: {
+            query?: {
+                confirmar?: boolean;
+            };
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    archivo: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Impacto de la importación */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreview"];
+                };
+            };
+            /** @description La encuesta no existe */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La versión del paquete no es posterior a la de este ambiente */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El paquete supera 5 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El paquete no pasa una revisión; la propiedad differences lista lo que no coincide */
             422: {
                 headers: {
                     [name: string]: unknown;

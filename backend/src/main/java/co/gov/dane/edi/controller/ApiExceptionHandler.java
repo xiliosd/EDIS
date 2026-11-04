@@ -1,6 +1,8 @@
 package co.gov.dane.edi.controller;
 
 import co.gov.dane.edi.admin.InvalidRulesException;
+import co.gov.dane.edi.admin.PackageRejectedException;
+import co.gov.dane.edi.admin.PackageTooLargeException;
 import co.gov.dane.edi.admin.PublicationBlockedException;
 import co.gov.dane.edi.admin.SharedRowException;
 import co.gov.dane.edi.service.error.AnswerValidationException;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
@@ -89,6 +92,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         problem(HttpStatus.UNPROCESSABLE_CONTENT, "No se puede publicar", exception.getMessage());
     body.setProperty("checklist", exception.checklist());
     return body;
+  }
+
+  @ExceptionHandler(PackageRejectedException.class)
+  ProblemDetail handlePackageRejected(PackageRejectedException exception) {
+    ProblemDetail body =
+        problem(HttpStatus.UNPROCESSABLE_CONTENT, "Paquete rechazado", exception.getMessage());
+    body.setProperty("differences", exception.differences());
+    return body;
+  }
+
+  @ExceptionHandler(PackageTooLargeException.class)
+  ProblemDetail handlePackageTooLarge(PackageTooLargeException exception) {
+    return problem(
+        HttpStatus.CONTENT_TOO_LARGE, "Archivo demasiado grande", PackageTooLargeException.MESSAGE);
   }
 
   @ExceptionHandler(SurveyNotAvailableException.class)
@@ -188,6 +205,24 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Solicitud inválida",
                 "El cuerpo de la solicitud no tiene el formato esperado."));
+  }
+
+  /**
+   * El tope de multipart de Spring (5 MB, el del paquete de promoción): mismo mensaje que la
+   * revisión del servicio.
+   */
+  @Override
+  protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+      MaxUploadSizeExceededException exception,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+        .body(
+            problem(
+                HttpStatus.CONTENT_TOO_LARGE,
+                "Archivo demasiado grande",
+                PackageTooLargeException.MESSAGE));
   }
 
   static ProblemDetail problem(HttpStatus status, String title, String detail) {

@@ -88,6 +88,13 @@ public class FrmSnapshotRepository {
     return jdbc.query(sql, (resultSet, rowNumber) -> row(columns, resultSet), parameters);
   }
 
+  /** NLS_CHARACTERSET de esta base: el paquete lo anota y la importación lo compara. */
+  public String characterSet() {
+    return jdbc.queryForObject(
+        "SELECT VALUE FROM NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_CHARACTERSET'",
+        String.class);
+  }
+
   private static Map<String, Object> row(List<String> columns, ResultSet resultSet)
       throws SQLException {
     Map<String, Object> row = new LinkedHashMap<>();

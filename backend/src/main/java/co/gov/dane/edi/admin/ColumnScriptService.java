@@ -1,5 +1,7 @@
 package co.gov.dane.edi.admin;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -19,6 +21,9 @@ public class ColumnScriptService {
   public static final int MAX_VARCHAR2_LENGTH = 4000;
   public static final int MAX_NUMBER_PRECISION = 38;
 
+  /** El código de encuesta entra en un comentario del script. */
+  private static final Pattern PROJECT_CODE = Pattern.compile("[A-Za-z0-9_-]{1,40}");
+
   /** {@code ALTER TABLE T ADD (C VARCHAR2(n));}; para NUMBER, {@code length} es la precisión. */
   public String alterTable(String table, String column, String type, Integer length) {
     requireTable(table);
@@ -33,6 +38,90 @@ public class ColumnScriptService {
     requireTable(newTable);
     requireTable(sourceTable);
     return "CREATE TABLE " + newTable + " AS SELECT * FROM " + sourceTable + " WHERE 1 = 0;";
+  }
+
+  /** Tabla de respuestas que el año mapea y que se crea vacía a partir de la de otro año. */
+  public record TableCopy(String table, String sourceTable) {}
+
+  /** Columna nueva del año ({@code columnasNuevas}) en la tabla de su capítulo. */
+  public record ColumnAddition(String table, String column, String type, Integer length) {}
+
+  /**
+   * {@code columnas.sql} del paquete de promoción: un bloque PL/SQL por tabla y por columna que
+   * solo ejecuta el DDL si el objeto aún no existe en el esquema actual. Así se puede correr otra
+   * vez sin error. Va primero cada tabla y luego las columnas, que pueden ser de esa tabla. Sin
+   * nada que crear queda solo un comentario.
+   */
+  public String packageScript(
+      String project, int year, List<TableCopy> tables, List<ColumnAddition> columns) {
+    if (project == null || !PROJECT_CODE.matcher(project).matches()) {
+      throw new IllegalArgumentException("Código de encuesta inválido");
+    }
+    List<String> blocks = new ArrayList<>();
+    for (TableCopy copy : tables) {
+      String ddl = withoutSemicolon(createTableLike(copy.table(), copy.sourceTable()));
+      blocks.add(guardedBlock("ALL_TABLES", "TABLE_NAME = '" + copy.table() + "'", ddl));
+    }
+    for (ColumnAddition addition : columns) {
+      String ddl =
+          withoutSemicolon(
+              alterTable(addition.table(), addition.column(), addition.type(), addition.length()));
+      blocks.add(
+          guardedBlock(
+              "ALL_TAB_COLUMNS",
+              "TABLE_NAME = '"
+                  + addition.table()
+                  + "' AND COLUMN_NAME = '"
+                  + addition.column()
+                  + "'",
+              ddl));
+    }
+    StringBuilder script = new StringBuilder();
+    if (blocks.isEmpty()) {
+      script.append("-- columnas.sql: este paquete no crea tablas ni columnas de respuesta.\n");
+      script.append("-- Encuesta: ").append(project).append('\n');
+      script.append("-- Anio: ").append(year).append('\n');
+      return script.toString();
+    }
+    script.append("SET DEFINE OFF\n");
+    script.append("WHENEVER SQLERROR EXIT FAILURE ROLLBACK\n");
+    script.append("WHENEVER OSERROR EXIT FAILURE ROLLBACK\n");
+    script.append("-- columnas.sql generado por el administrador del cuestionario.\n");
+    script.append("-- Encuesta: ").append(project).append('\n');
+    script.append("-- Anio: ").append(year).append('\n');
+    script.append(
+        """
+        -- Ejecutelo ANTES de frm.sql, en SQL*Plus o SQLcl, conectado al esquema duenio de las
+        -- tablas de respuestas:
+        --   sqlplus usuario@servicio @columnas.sql
+        -- Cada tabla o columna solo se crea si aun no existe: se puede ejecutar otra vez.
+        -- Atencion: el DDL de Oracle confirma solo. Lo que este script cree no se puede deshacer
+        -- con ROLLBACK; si falla a mitad, lo ya creado queda y basta con volver a ejecutarlo.
+        """);
+    blocks.forEach(script::append);
+    return script.toString();
+  }
+
+  private static String guardedBlock(String dictionaryView, String condition, String ddl) {
+    return "DECLARE\n"
+        + "  EXISTING PLS_INTEGER;\n"
+        + "BEGIN\n"
+        + "  SELECT COUNT(*) INTO EXISTING FROM "
+        + dictionaryView
+        + " WHERE OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AND "
+        + condition
+        + ";\n"
+        + "  IF EXISTING = 0 THEN\n"
+        + "    EXECUTE IMMEDIATE '"
+        + ddl
+        + "';\n"
+        + "  END IF;\n"
+        + "END;\n"
+        + "/\n";
+  }
+
+  private static String withoutSemicolon(String statement) {
+    return statement.substring(0, statement.length() - 1);
   }
 
   /** Mensaje en español si el tipo y la longitud no son coherentes; nulo si lo son. */

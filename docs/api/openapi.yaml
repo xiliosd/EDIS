@@ -24,6 +24,9 @@ tags:
 - description: Versiones del archivo de reglas de un año y su restauración en borrador
     (rol ADMIN_CUESTIONARIO)
   name: Historial del cuestionario
+- description: "Paquete verificable de un año publicado: se genera en QA y se importa\
+    \ en producción (rol ADMIN_CUESTIONARIO)"
+  name: Paquetes de promoción
 - description: Consulta y edición de años y árbol del cuestionario (rol ADMIN_CUESTIONARIO)
   name: Administración del cuestionario
 paths:
@@ -494,6 +497,138 @@ paths:
       summary: Restaurar una versión del historial en un borrador
       tags:
       - Historial del cuestionario
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/package:
+    get:
+      description: "ZIP con manifiesto.json, reglas.json, frm.sql y columnas.sql.\
+        \ El tipo anio instala el año completo; correccion exige una versión posterior\
+        \ a la publicación y además corrige los textos de las filas que ya existen.\
+        \ La persona técnica ejecuta columnas.sql y frm.sql en producción antes de\
+        \ importarlo."
+      operationId: packageDownload
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - description: Tipo de paquete
+        in: query
+        name: tipo
+        required: true
+        schema:
+          type: string
+          enum:
+          - anio
+          - correccion
+      responses:
+        "200":
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          description: Paquete del año
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Falta el tipo o no es anio ni correccion
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta o el año no existen
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El año no está publicado o no hay correcciones posteriores
+            a la publicación
+      summary: Descargar el paquete de promoción de un año publicado
+      tags:
+      - Paquetes de promoción
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/package/import:
+    post:
+      description: "Comprueba el ZIP contra su manifiesto y contra esta base: los\
+        \ archivos, las reglas, las filas FRM_* (que frm.sql ya debe haber dejado),\
+        \ las columnas y tablas de respuesta y la versión. Con confirmar=false solo\
+        \ muestra el impacto: cuántos encuestados ya guardaron cada página cuyas reglas\
+        \ cambian. Con confirmar=true además reemplaza el archivo de reglas conservando\
+        \ la versión del paquete. Nunca escribe en FRM_*."
+      operationId: packageImport
+      parameters:
+      - in: path
+        name: encuesta
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: anio
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: confirmar
+        required: false
+        schema:
+          type: boolean
+          default: false
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archivo:
+                  type: string
+                  format: binary
+              required:
+              - archivo
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+          description: Impacto de la importación
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La encuesta no existe
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: La versión del paquete no es posterior a la de este ambiente
+        "413":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El paquete supera 5 MB
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El paquete no pasa una revisión; la propiedad differences lista
+            lo que no coincide
+      summary: Revisar o confirmar la importación de un paquete
+      tags:
+      - Paquetes de promoción
   /api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/entries:
     post:
       operationId: addQuestion
@@ -2035,6 +2170,20 @@ components:
         version:
           type: integer
           format: int32
+    ImportPreview:
+      type: object
+      properties:
+        alreadyImported:
+          type: boolean
+        impact:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageImpact"
+        kind:
+          type: string
+        version:
+          type: integer
+          format: int32
     ImportRulesRequest:
       type: object
       properties:
@@ -2158,6 +2307,14 @@ components:
           - SAVED
           - AVAILABLE
           - LOCKED
+    PageImpact:
+      type: object
+      properties:
+        pageCode:
+          type: string
+        savedCount:
+          type: integer
+          format: int64
     PageSaveResult:
       type: object
       properties:

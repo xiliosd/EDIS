@@ -49,6 +49,14 @@ public record FrmSnapshot(String project, int year, Map<FrmTable, List<Map<Strin
     rows = Collections.unmodifiableMap(copy);
   }
 
+  /** Si algún texto tiene caracteres fuera de ASCII: dependen del juego de caracteres. */
+  public boolean hasNonAsciiText() {
+    return rows.values().stream()
+        .flatMap(List::stream)
+        .flatMap(row -> row.values().stream())
+        .anyMatch(value -> value instanceof String text && text.chars().anyMatch(c -> c > 0x7F));
+  }
+
   /**
    * SHA-256 de {@code COL=<largo>:<valor>} unidos con U+001F en el orden de {@link
    * FrmTable#columns()}; un nulo es {@code COL=NULL}, sin largo. El largo (en unidades UTF-16)

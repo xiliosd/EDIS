@@ -38,16 +38,35 @@ public class FrmScriptWriter {
 
   private static final Pattern PROJECT_CODE = Pattern.compile("^[A-Za-z0-9_-]{1,40}$");
 
-  public String write(FrmSnapshot snapshot, PackageKind kind) {
+  /** Nombre de un juego de caracteres de Oracle: entra en un literal y en un comentario. */
+  private static final Pattern CHARACTER_SET = Pattern.compile("^[A-Z][A-Z0-9_]{0,29}$");
+
+  /** Comentario que abre el bloque de verificación del juego de caracteres. */
+  private static final String CHARACTER_SET_CHECK_MARK =
+      "-- Verificacion del juego de caracteres de destino";
+
+  /**
+   * {@code sourceCharacterSet} es el NLS_CHARACTERSET de la base donde se genera: va en la cabecera
+   * y, si hay texto no ASCII, en un primer bloque que aborta con ORA-20002 antes de escribir nada
+   * cuando la base de destino tiene otro. {@code TO_CHAR(UNISTR())} reemplazaría en silencio con
+   * "?" lo que el destino no puede guardar.
+   */
+  public String write(FrmSnapshot snapshot, PackageKind kind, String sourceCharacterSet) {
     if (!PROJECT_CODE.matcher(snapshot.project()).matches()) {
       throw new IllegalArgumentException("Código de encuesta no válido para el script");
+    }
+    if (sourceCharacterSet == null || !CHARACTER_SET.matcher(sourceCharacterSet).matches()) {
+      throw new IllegalArgumentException("Juego de caracteres no válido para el script");
     }
     StringBuilder script = new StringBuilder();
     script.append("SET DEFINE OFF\n");
     script.append("SET AUTOCOMMIT OFF\n");
     script.append("WHENEVER SQLERROR EXIT FAILURE ROLLBACK\n");
     script.append("WHENEVER OSERROR EXIT FAILURE ROLLBACK\n");
-    appendHeader(script, snapshot, kind);
+    appendHeader(script, snapshot, kind, sourceCharacterSet);
+    if (snapshot.hasNonAsciiText()) {
+      appendCharacterSetCheck(script, sourceCharacterSet);
+    }
     for (FrmTable table : FrmSnapshot.TABLES) {
       for (Map<String, Object> row : snapshot.rows().getOrDefault(table, List.of())) {
         appendRow(script, table, row, kind);
@@ -57,12 +76,38 @@ public class FrmScriptWriter {
     return script.toString();
   }
 
-  private static void appendHeader(StringBuilder script, FrmSnapshot snapshot, PackageKind kind) {
+  /** Si el script trae la verificación del juego de caracteres (tiene texto no ASCII). */
+  public static boolean checksCharacterSet(String script) {
+    return script.contains(CHARACTER_SET_CHECK_MARK);
+  }
+
+  /** Primer bloque: nada se inserta si la base de destino no guarda los textos tal cual. */
+  private static void appendCharacterSetCheck(StringBuilder script, String sourceCharacterSet) {
+    script.append(CHARACTER_SET_CHECK_MARK).append('\n');
+    script.append("DECLARE\n");
+    script.append("  TARGET_CHARACTER_SET VARCHAR2(64);\n");
+    script.append("BEGIN\n");
+    script.append("  SELECT VALUE INTO TARGET_CHARACTER_SET FROM NLS_DATABASE_PARAMETERS\n");
+    script.append("   WHERE PARAMETER = 'NLS_CHARACTERSET';\n");
+    script.append("  IF TARGET_CHARACTER_SET <> '").append(sourceCharacterSet).append("' THEN\n");
+    script
+        .append("    RAISE_APPLICATION_ERROR(-20002,\n")
+        .append("      'Juego de caracteres distinto: origen ")
+        .append(sourceCharacterSet)
+        .append(", destino ' || TARGET_CHARACTER_SET);\n");
+    script.append("  END IF;\n");
+    script.append("END;\n");
+    script.append("/\n");
+  }
+
+  private static void appendHeader(
+      StringBuilder script, FrmSnapshot snapshot, PackageKind kind, String sourceCharacterSet) {
     // La cabecera también es ASCII: sin tildes, para no depender del NLS_LANG del cliente.
     script.append("-- frm.sql generado por el administrador del cuestionario.\n");
     script.append("-- Encuesta: ").append(snapshot.project()).append('\n');
     script.append("-- Anio: ").append(snapshot.year()).append('\n');
     script.append("-- Paquete: ").append(kind.jsonValue()).append('\n');
+    script.append("-- Juego de caracteres de origen: ").append(sourceCharacterSet).append('\n');
     script.append("-- Filas por tabla:\n");
     for (FrmTable table : FrmSnapshot.TABLES) {
       script
@@ -80,7 +125,9 @@ public class FrmScriptWriter {
         -- El script es ASCII puro: funciona con cualquier NLS_LANG del cliente.
         -- Cada fila es un bloque PL/SQL terminado en "/". Es idempotente: una fila igual no se
         -- toca, una fila nueva se inserta y un id ocupado por otra fila aborta con ORA-20001; el
-        -- WHENEVER SQLERROR deshace entonces todo lo hecho y nada queda escrito.
+        -- WHENEVER SQLERROR deshace entonces todo lo hecho y nada queda escrito. Si hay texto
+        -- no ASCII y la base de destino tiene otro juego de caracteres, aborta con ORA-20002
+        -- antes de escribir nada.
         """);
   }
 

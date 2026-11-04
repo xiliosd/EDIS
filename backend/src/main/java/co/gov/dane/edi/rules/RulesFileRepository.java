@@ -190,22 +190,34 @@ public class RulesFileRepository {
             ? pending.previous()
             : find(incoming.survey(), incoming.year()).orElse(null);
     RuleSet current = pending != null ? pending.saved() : committed;
-    if (current != null && incoming.version() <= current.version()) {
-      if (sameContent(incoming, current)) {
-        return current;
-      }
-      throw new ConflictException(
-          "La versión del paquete ("
-              + incoming.version()
-              + ") no es posterior a la de este ambiente ("
-              + current.version()
-              + ").");
+    if (isAlreadyImported(incoming, current)) {
+      return current;
     }
     RuleSet toSave =
         incoming.withLastChange(new ChangeNote(user, clock.instant(), IMPORT_OPERATION, null));
     write(name, committed, toSave);
     recordAudit(toSave, user, IMPORT_OPERATION, List.of());
     return toSave;
+  }
+
+  /**
+   * La regla de versión de un paquete frente al archivo vigente ({@code current}, nulo si el año no
+   * tiene archivo): verdadero si ya está importado (misma versión y mismo contenido salvo el último
+   * cambio), falso si es posterior y 409 en cualquier otro caso.
+   */
+  public static boolean isAlreadyImported(RuleSet incoming, RuleSet current) {
+    if (current == null || incoming.version() > current.version()) {
+      return false;
+    }
+    if (sameContent(incoming, current)) {
+      return true;
+    }
+    throw new ConflictException(
+        "La versión del paquete ("
+            + incoming.version()
+            + ") no es posterior a la de este ambiente ("
+            + current.version()
+            + ").");
   }
 
   private static boolean sameContent(RuleSet incoming, RuleSet current) {

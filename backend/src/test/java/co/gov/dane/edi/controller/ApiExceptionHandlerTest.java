@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @WebMvcTest(controllers = ApiExceptionHandlerTest.FailingController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -94,6 +95,14 @@ class ApiExceptionHandlerTest {
         .andExpect(jsonPath("$.errors.username").value("Ingrese su usuario"));
   }
 
+  @Test
+  void uploadAboveTheMultipartLimitIs413InSpanish() throws Exception {
+    mockMvc
+        .perform(get("/test/too-large"))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.detail").value("El paquete supera 5 MB."));
+  }
+
   record Payload(@NotBlank(message = "Ingrese su usuario") String username) {}
 
   @RestController
@@ -124,6 +133,11 @@ class ApiExceptionHandlerTest {
       throw new YearCreationFailedException(
           "No fue posible guardar el archivo de reglas.",
           new java.io.UncheckedIOException(new java.io.IOException("ruta-interna")));
+    }
+
+    @GetMapping("/test/too-large")
+    void tooLarge() {
+      throw new MaxUploadSizeExceededException(5_242_880);
     }
 
     @PostMapping("/test/validated")

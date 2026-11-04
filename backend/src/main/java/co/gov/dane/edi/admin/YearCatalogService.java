@@ -52,16 +52,24 @@ public class YearCatalogService {
 
   /** Reglas del año; 404 si no tiene archivo (salvo el activo, que se siembra). */
   public RuleSet requireYear(String surveyCode, int year) {
-    requireSurvey(surveyCode);
-    if (year < MIN_YEAR || year > MAX_YEAR) {
-      throw new ResourceNotFoundException("El año solicitado no existe.");
-    }
+    requireSurveyAndYearRange(surveyCode, year);
     if (isActive(surveyCode, year)) {
       return rulesFiles.load(surveyCode, year);
     }
     return rulesFiles
         .find(surveyCode, year)
         .orElseThrow(() -> new ResourceNotFoundException("El año solicitado no existe."));
+  }
+
+  /**
+   * 404 si la encuesta no existe o el año está fuera de rango; no exige que el año tenga archivo
+   * (la importación de un paquete lo crea).
+   */
+  public void requireSurveyAndYearRange(String surveyCode, int year) {
+    requireSurvey(surveyCode);
+    if (year < MIN_YEAR || year > MAX_YEAR) {
+      throw new ResourceNotFoundException("El año solicitado no existe.");
+    }
   }
 
   /** A lo sumo hay un borrador por encuesta. */

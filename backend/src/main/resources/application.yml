@@ -10,6 +10,13 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  # Único multipart de la API: la importación del paquete de promoción (5 MB, 413 en español).
+  # El umbral igual al tope deja la parte en memoria: el ZIP nunca se escribe en disco.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+      file-size-threshold: 5MB
 
 server:
   port: 8080

@@ -43,6 +43,11 @@ public class AnswerColumnRepository {
     columnsByTable.remove(tableName);
   }
 
+  /** Descarta todas las tablas: tras importar un paquete que pudo venir con columnas nuevas. */
+  public void evictAll() {
+    columnsByTable.clear();
+  }
+
   private Map<String, AnswerColumn> loadColumns(String tableName) {
     Map<String, AnswerColumn> columns = new LinkedHashMap<>();
     jdbc.query(

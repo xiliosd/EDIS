@@ -137,6 +137,25 @@ public class AnswerRepository {
         parameters);
   }
 
+  /**
+   * Cuántos encuestados tienen respuesta en esa columna de la tabla del capítulo en ese año: con la
+   * primera columna activa de una página, cuántos ya la guardaron. Solo el conteo sale de la base.
+   */
+  public long countAnswered(Chapter chapter, String surveyCode, int year, String column) {
+    String table = tables.tableFor(chapter, surveyCode, year);
+    if (column == null
+        || !COLUMN.matcher(column).matches()
+        || !answerColumns.findColumns(table).contains(column)) {
+      throw new IllegalArgumentException("Columna no permitida en " + table);
+    }
+    Long count =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM " + table + " WHERE " + column + " IS NOT NULL",
+            Map.of(),
+            Long.class);
+    return count == null ? 0 : count;
+  }
+
   public String findObservations(String respondentCode) {
     return findAnswers(Chapter.H, respondentCode, List.of(OBSERVATIONS_COLUMN))
         .get(OBSERVATIONS_COLUMN);

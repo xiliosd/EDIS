@@ -23,6 +23,8 @@ class FrmScriptWriterTest {
   private static final Pattern UNISTR_PART =
       Pattern.compile("TO_CHAR\\(UNISTR\\('((?:\\\\[0-9A-F]{4})+)'\\)\\)");
 
+  private static final String SOURCE_CHARSET = "AL32UTF8";
+
   private final FrmScriptWriter writer = new FrmScriptWriter();
 
   @Test
@@ -30,7 +32,7 @@ class FrmScriptWriterTest {
     FrmSnapshot snapshot =
         snapshotWith(FrmTable.PREGUNTA, row(FrmTable.PREGUNTA, 7, "O'Brien & <b>\nX", "L"));
 
-    String script = writer.write(snapshot, PackageKind.ANIO);
+    String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
 
     assertThat(script)
         .startsWith(
@@ -56,7 +58,7 @@ class FrmScriptWriterTest {
     FrmSnapshot snapshot = new FrmSnapshot("EDIN", 2027, rows);
 
     for (PackageKind kind : PackageKind.values()) {
-      byte[] bytes = writer.write(snapshot, kind).getBytes(StandardCharsets.UTF_8);
+      byte[] bytes = writer.write(snapshot, kind, SOURCE_CHARSET).getBytes(StandardCharsets.UTF_8);
       int lineBytes = 0;
       for (byte value : bytes) {
         assertThat(value & 0xFF).as("byte no ASCII").isLessThan(0x80);
@@ -65,7 +67,8 @@ class FrmScriptWriterTest {
       }
     }
     // El emoji va entero en un mismo UNISTR: el corte cae entre puntos de código.
-    assertThat(writer.write(snapshot, PackageKind.ANIO)).contains("UNISTR('\\D83D\\DE00')");
+    assertThat(writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET))
+        .contains("UNISTR('\\D83D\\DE00')");
   }
 
   @Test
@@ -99,8 +102,8 @@ class FrmScriptWriterTest {
         snapshotWith(
             FrmTable.ENCABEZADO, row(FrmTable.ENCABEZADO, 5, 101, "E", "Texto corregido", "2027"));
 
-    String year = writer.write(snapshot, PackageKind.ANIO);
-    String correction = writer.write(snapshot, PackageKind.CORRECCION);
+    String year = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
+    String correction = writer.write(snapshot, PackageKind.CORRECCION, SOURCE_CHARSET);
 
     String raise = "RAISE_APPLICATION_ERROR(-20001, 'Id ocupado: FRM_ENCABEZADO COD_ENC=5')";
     assertThat(year).contains("INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO,");
@@ -123,13 +126,14 @@ class FrmScriptWriterTest {
     FrmSnapshot periods =
         snapshotWith(FrmTable.CAP_PERIODO, row(FrmTable.CAP_PERIODO, 3, 2027, "EDIN", 9, "H01*."));
 
-    String correction = writer.write(snapshot, PackageKind.CORRECCION);
+    String correction = writer.write(snapshot, PackageKind.CORRECCION, SOURCE_CHARSET);
 
     assertThat(correction).contains("  V_COD_PRE_GRUPO NUMBER := 42;");
     assertThat(correction).contains("UPDATE FRM_CAP_PROY SET COD_PRE_GRUPO = V_COD_PRE_GRUPO");
     assertThat(correction.lines().filter(line -> line.contains("UPDATE"))).hasSize(1);
     // Una tabla sin columnas corregibles nunca se actualiza, ni en una corrección.
-    assertThat(writer.write(periods, PackageKind.CORRECCION)).doesNotContain("UPDATE");
+    assertThat(writer.write(periods, PackageKind.CORRECCION, SOURCE_CHARSET))
+        .doesNotContain("UPDATE");
   }
 
   @Test
@@ -140,7 +144,7 @@ class FrmScriptWriterTest {
         FrmTable.PREGUNTA, List.of(row(FrmTable.PREGUNTA, new BigDecimal("10.000"), "P", "L")));
     FrmSnapshot snapshot = new FrmSnapshot("EDIN", 2027, rows);
 
-    String script = writer.write(snapshot, PackageKind.ANIO);
+    String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
 
     assertThat(script).contains("WHERE COD_PRE = 10;").contains("  V_TEXTO VARCHAR2(4000 BYTE);\n");
     assertThat(script).doesNotContain("V_TEXTO := ");
@@ -157,17 +161,62 @@ class FrmScriptWriterTest {
     question.put("TIPO", java.time.LocalDateTime.of(2027, 1, 2, 3, 4, 5));
     FrmSnapshot snapshot = snapshotWith(FrmTable.PREGUNTA, question);
 
-    assertThatThrownBy(() -> writer.write(snapshot, PackageKind.ANIO))
+    assertThatThrownBy(() -> writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET))
         .isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(() -> FrmSnapshot.rowHash(FrmTable.PREGUNTA, question))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
+  void headerNamesTheSourceCharacterSet() {
+    FrmSnapshot snapshot = snapshotWith(FrmTable.PREGUNTA, row(FrmTable.PREGUNTA, 7, "Texto", "L"));
+
+    String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
+
+    assertThat(script).contains("-- Juego de caracteres de origen: AL32UTF8\n");
+    assertThat(script).doesNotContain("RAISE_APPLICATION_ERROR(-20002");
+    assertThat(FrmScriptWriter.checksCharacterSet(script)).isFalse();
+  }
+
+  @Test
+  void nonAsciiTextIsGuardedByACharacterSetCheckBeforeAnyInsert() {
+    FrmSnapshot snapshot =
+        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 9, 101, "Atención"));
+
+    String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
+
+    int check = script.indexOf("RAISE_APPLICATION_ERROR(-20002");
+    assertThat(check).isPositive();
+    assertThat(check).isLessThan(script.indexOf("INSERT INTO"));
+    assertThat(script.indexOf("WHENEVER OSERROR")).isLessThan(check);
+    assertThat(script)
+        .contains("WHERE PARAMETER = 'NLS_CHARACTERSET'")
+        .contains("IF TARGET_CHARACTER_SET <> 'AL32UTF8' THEN")
+        .contains(
+            "'Juego de caracteres distinto: origen AL32UTF8, destino ' || TARGET_CHARACTER_SET");
+    assertThat(FrmScriptWriter.checksCharacterSet(script)).isTrue();
+    assertThat(snapshot.hasNonAsciiText()).isTrue();
+    FrmSnapshot ascii =
+        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 9, 101, "ASCII\n' \\ ~"));
+    assertThat(ascii.hasNonAsciiText()).isFalse();
+  }
+
+  @Test
+  void rejectsACharacterSetNameThatCouldBreakTheScript() {
+    FrmSnapshot snapshot = snapshotWith(FrmTable.PREGUNTA, row(FrmTable.PREGUNTA, 7, "Texto", "L"));
+
+    for (String name : new String[] {null, "", "AL32UTF8'; DROP", "al32utf8", "A".repeat(31)}) {
+      assertThatThrownBy(() -> writer.write(snapshot, PackageKind.ANIO, name))
+          .as(String.valueOf(name))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+  }
+
+  @Test
   void rejectsAProjectCodeThatCouldBreakTheHeader() {
     FrmSnapshot snapshot = new FrmSnapshot("EDIN\nDROP", 2027, emptyRows());
 
-    assertThatThrownBy(() -> writer.write(snapshot, PackageKind.ANIO))
+    assertThatThrownBy(() -> writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

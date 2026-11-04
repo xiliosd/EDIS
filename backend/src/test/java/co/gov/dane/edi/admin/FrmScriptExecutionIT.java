@@ -36,6 +36,7 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
 
   private static final String PROJECT = "EDIN";
   private static final int YEAR = 2027;
+  private static final String SOURCE_CHARSET = "AL32UTF8";
 
   @Autowired private JdbcTemplate jdbc;
   @Autowired private DataSource dataSource;
@@ -66,8 +67,8 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
 
   @Test
   void frmScriptIsIdempotentAndStopsOnOccupiedId() throws SQLException {
-    String yearScript = writer.write(original, PackageKind.ANIO);
-    String correctionScript = writer.write(original, PackageKind.CORRECCION);
+    String yearScript = writer.write(original, PackageKind.ANIO, SOURCE_CHARSET);
+    String correctionScript = writer.write(original, PackageKind.CORRECCION, SOURCE_CHARSET);
     deleteOwnRows(original);
     assertThat(snapshots.snapshot(PROJECT, YEAR).rows().get(FrmTable.CAP_PERIODO)).isEmpty();
 
@@ -99,7 +100,7 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
 
   @Test
   void correctionPackageAbortsWhenNonCorrectableColumnDiffers() throws SQLException {
-    String correctionScript = writer.write(original, PackageKind.CORRECCION);
+    String correctionScript = writer.write(original, PackageKind.CORRECCION, SOURCE_CHARSET);
     long capProy = firstId(FrmTable.CAP_PROY);
     jdbc.update("UPDATE FRM_CAP_PROY SET NUMERAL = 'Z99.' WHERE COD_CAP_PROY = ?", capProy);
     deleteRow(FrmTable.PREGUNTA, DraftYearFixture.H1_GROUP_2_FIRST);
@@ -118,8 +119,8 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
 
   @Test
   void correctionPackageUpdatesOnlyCorrectableColumns() throws SQLException {
-    String correctionScript = writer.write(original, PackageKind.CORRECCION);
-    String yearScript = writer.write(original, PackageKind.ANIO);
+    String correctionScript = writer.write(original, PackageKind.CORRECCION, SOURCE_CHARSET);
+    String yearScript = writer.write(original, PackageKind.ANIO, SOURCE_CHARSET);
     long question = DraftYearFixture.H1_GROUP_2_FIRST;
     long capProy = DraftYearFixture.H1_GROUP_2_SECOND;
     long header = firstId(FrmTable.ENCABEZADO);
@@ -172,7 +173,7 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
       stored.add(readText(slots.get(index)));
     }
     assertThat(stored).containsExactlyElementsOf(texts);
-    String yearScript = writer.write(hostile, PackageKind.ANIO);
+    String yearScript = writer.write(hostile, PackageKind.ANIO, SOURCE_CHARSET);
     SqlPlusRunner sqlPlus = new SqlPlusRunner(ORACLE);
     deleteOwnRows(hostile);
 
@@ -188,6 +189,34 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
     assertThat(conflict.exitCode()).isNotZero();
     assertThat(conflict.output()).contains("ORA-20001").contains("Id ocupado: FRM_PRE_AYUDA");
     assertThat(tableCounts()).isEqualTo(beforeConflict);
+  }
+
+  /**
+   * Un paquete con texto no ASCII generado en una base WE8MSWIN1252 no se aplica en esta
+   * (AL32UTF8): el primer bloque aborta con ORA-20002 antes de escribir nada. Con el mismo juego de
+   * caracteres pasa.
+   */
+  @Test
+  void characterSetCheckStopsBeforeAnyInsert() throws Exception {
+    long[] help = slot(FrmTable.PRE_AYUDA, original.rows().get(FrmTable.PRE_AYUDA).get(0));
+    writeText(help, "Atención con el año");
+    FrmSnapshot accented = snapshots.snapshot(PROJECT, YEAR);
+    String otherSource = writer.write(accented, PackageKind.ANIO, "WE8MSWIN1252");
+    String sameSource = writer.write(accented, PackageKind.ANIO, SOURCE_CHARSET);
+    SqlPlusRunner sqlPlus = new SqlPlusRunner(ORACLE);
+    deleteOwnRows(accented);
+    Map<FrmTable, Long> before = tableCounts();
+
+    SqlPlusRunner.Run rejected = sqlPlus.run(otherSource);
+    assertThat(rejected.exitCode()).isNotZero();
+    assertThat(rejected.output())
+        .contains("ORA-20002")
+        .contains("Juego de caracteres distinto: origen WE8MSWIN1252, destino AL32UTF8");
+    assertThat(tableCounts()).isEqualTo(before);
+
+    SqlPlusRunner.Run accepted = sqlPlus.run(sameSource);
+    assertThat(accepted.exitCode()).as(accepted.output()).isZero();
+    assertThat(snapshots.snapshot(PROJECT, YEAR)).isEqualTo(accented);
   }
 
   /** {tabla (ordinal), id} de una fila con texto. */
