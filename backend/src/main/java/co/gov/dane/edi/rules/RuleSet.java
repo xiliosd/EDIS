@@ -21,32 +21,10 @@ public record RuleSet(
     @JsonProperty("tablas") @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, String> tables,
     @JsonProperty("columnasNuevas") @JsonInclude(JsonInclude.Include.NON_EMPTY)
         Map<String, NewColumn> newColumns,
-    @JsonProperty("casos") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<TestCase> cases) {
-
-  /** Sin casos de prueba: el caso de los archivos y llamadores anteriores. */
-  public RuleSet(
-      String survey,
-      int year,
-      int version,
-      List<SkipRule> skips,
-      Map<String, FieldValidation> validations,
-      YearState state,
-      Map<String, String> tables,
-      Map<String, NewColumn> newColumns) {
-    this(survey, year, version, skips, validations, state, tables, newColumns, List.of());
-  }
-
-  /** Sin columnas nuevas: el caso de los archivos y llamadores anteriores. */
-  public RuleSet(
-      String survey,
-      int year,
-      int version,
-      List<SkipRule> skips,
-      Map<String, FieldValidation> validations,
-      YearState state,
-      Map<String, String> tables) {
-    this(survey, year, version, skips, validations, state, tables, Map.of());
-  }
+    @JsonProperty("casos") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<TestCase> cases,
+    @JsonProperty("publicacion") @JsonInclude(JsonInclude.Include.NON_NULL) Publication publication,
+    @JsonProperty("ultimoCambio") @JsonInclude(JsonInclude.Include.NON_NULL)
+        ChangeNote lastChange) {
 
   public RuleSet {
     skips = skips == null ? List.of() : List.copyOf(skips);
@@ -57,7 +35,8 @@ public record RuleSet(
   }
 
   public static RuleSet empty(String survey, int year) {
-    return new RuleSet(survey, year, 0, List.of(), Map.of(), null, Map.of());
+    return new RuleSet(
+        survey, year, 0, List.of(), Map.of(), null, Map.of(), Map.of(), List.of(), null, null);
   }
 
   /** Un archivo sin {@code estado} se considera publicado y de solo lectura. */
@@ -67,35 +46,136 @@ public record RuleSet(
 
   public RuleSet withState(YearState newState) {
     return new RuleSet(
-        survey, year, version, skips, validations, newState, tables, newColumns, cases);
+        survey,
+        year,
+        version,
+        skips,
+        validations,
+        newState,
+        tables,
+        newColumns,
+        cases,
+        publication,
+        lastChange);
   }
 
   public RuleSet withTables(Map<String, String> newTables) {
     return new RuleSet(
-        survey, year, version, skips, validations, state, newTables, newColumns, cases);
+        survey,
+        year,
+        version,
+        skips,
+        validations,
+        state,
+        newTables,
+        newColumns,
+        cases,
+        publication,
+        lastChange);
   }
 
   public RuleSet withVersion(int newVersion) {
     return new RuleSet(
-        survey, year, newVersion, skips, validations, state, tables, newColumns, cases);
+        survey,
+        year,
+        newVersion,
+        skips,
+        validations,
+        state,
+        tables,
+        newColumns,
+        cases,
+        publication,
+        lastChange);
   }
 
   public RuleSet withNewColumns(Map<String, NewColumn> columns) {
-    return new RuleSet(survey, year, version, skips, validations, state, tables, columns, cases);
+    return new RuleSet(
+        survey,
+        year,
+        version,
+        skips,
+        validations,
+        state,
+        tables,
+        columns,
+        cases,
+        publication,
+        lastChange);
   }
 
   public RuleSet withSkips(List<SkipRule> newSkips) {
     return new RuleSet(
-        survey, year, version, newSkips, validations, state, tables, newColumns, cases);
+        survey,
+        year,
+        version,
+        newSkips,
+        validations,
+        state,
+        tables,
+        newColumns,
+        cases,
+        publication,
+        lastChange);
   }
 
   public RuleSet withValidations(Map<String, FieldValidation> newValidations) {
     return new RuleSet(
-        survey, year, version, skips, newValidations, state, tables, newColumns, cases);
+        survey,
+        year,
+        version,
+        skips,
+        newValidations,
+        state,
+        tables,
+        newColumns,
+        cases,
+        publication,
+        lastChange);
   }
 
   public RuleSet withCases(List<TestCase> newCases) {
     return new RuleSet(
-        survey, year, version, skips, validations, state, tables, newColumns, newCases);
+        survey,
+        year,
+        version,
+        skips,
+        validations,
+        state,
+        tables,
+        newColumns,
+        newCases,
+        publication,
+        lastChange);
+  }
+
+  public RuleSet withPublication(Publication newPublication) {
+    return new RuleSet(
+        survey,
+        year,
+        version,
+        skips,
+        validations,
+        state,
+        tables,
+        newColumns,
+        cases,
+        newPublication,
+        lastChange);
+  }
+
+  public RuleSet withLastChange(ChangeNote newLastChange) {
+    return new RuleSet(
+        survey,
+        year,
+        version,
+        skips,
+        validations,
+        state,
+        tables,
+        newColumns,
+        cases,
+        publication,
+        newLastChange);
   }
 }

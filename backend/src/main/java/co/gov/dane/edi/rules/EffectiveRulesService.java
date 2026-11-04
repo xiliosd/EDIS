@@ -81,6 +81,8 @@ public class EffectiveRulesService {
         fromFile.state(),
         fromFile.tables(),
         fromFile.newColumns(),
-        fromFile.cases());
+        fromFile.cases(),
+        fromFile.publication(),
+        fromFile.lastChange());
   }
 }

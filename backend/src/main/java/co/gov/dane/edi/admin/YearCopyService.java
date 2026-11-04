@@ -142,7 +142,9 @@ public class YearCopyService {
         YearState.BORRADOR,
         source.tables(),
         Map.of(),
-        source.cases().stream().map(testCase -> testCase.withNeedsReview(false)).toList());
+        source.cases().stream().map(testCase -> testCase.withNeedsReview(false)).toList(),
+        null,
+        null);
   }
 
   /**

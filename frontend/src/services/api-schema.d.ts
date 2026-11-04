@@ -628,6 +628,13 @@ export interface components {
             /** @enum {string} */
             status?: "pasa" | "falla" | "por_revisar";
         };
+        ChangeNote: {
+            /** Format: date-time */
+            fecha?: string;
+            motivo?: string;
+            operacion?: string;
+            usuario?: string;
+        };
         ChapterDetail: {
             code?: string;
             entries?: components["schemas"]["QuestionnaireEntry"][];
@@ -768,6 +775,14 @@ export interface components {
             /** Format: uri */
             type?: string;
         };
+        Publication: {
+            avisos?: string[];
+            /** Format: date-time */
+            fecha?: string;
+            usuario?: string;
+            /** Format: int32 */
+            version?: number;
+        };
         QuestionnaireEntry: {
             answer?: components["schemas"]["AnswerSpec"];
             headers?: components["schemas"]["SectionHeader"][];
@@ -817,10 +832,12 @@ export interface components {
             encuesta?: string;
             /** @enum {string} */
             estado?: "borrador" | "publicado";
+            publicacion?: components["schemas"]["Publication"];
             saltos?: components["schemas"]["SkipRule"][];
             tablas?: {
                 [key: string]: string;
             };
+            ultimoCambio?: components["schemas"]["ChangeNote"];
             validaciones?: {
                 [key: string]: components["schemas"]["FieldValidation"];
             };

@@ -1570,6 +1570,18 @@ components:
           - pasa
           - falla
           - por_revisar
+    ChangeNote:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        motivo:
+          type: string
+        operacion:
+          type: string
+        usuario:
+          type: string
     ChapterDetail:
       type: object
       properties:
@@ -1865,6 +1877,21 @@ components:
         type:
           type: string
           format: uri
+    Publication:
+      type: object
+      properties:
+        avisos:
+          type: array
+          items:
+            type: string
+        fecha:
+          type: string
+          format: date-time
+        usuario:
+          type: string
+        version:
+          type: integer
+          format: int32
     QuestionnaireEntry:
       type: object
       properties:
@@ -1969,6 +1996,8 @@ components:
           enum:
           - borrador
           - publicado
+        publicacion:
+          $ref: "#/components/schemas/Publication"
         saltos:
           type: array
           items:
@@ -1977,6 +2006,8 @@ components:
           type: object
           additionalProperties:
             type: string
+        ultimoCambio:
+          $ref: "#/components/schemas/ChangeNote"
         validaciones:
           type: object
           additionalProperties:

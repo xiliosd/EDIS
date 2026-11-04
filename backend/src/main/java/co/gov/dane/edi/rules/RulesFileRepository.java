@@ -12,6 +12,10 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,11 +43,15 @@ public class RulesFileRepository {
   private static final Logger LOGGER = LoggerFactory.getLogger(RulesFileRepository.class);
   private static final Pattern SURVEY_CODE = Pattern.compile("[A-Z]{4}");
   private static final String HISTORY_DIR = "historial";
+  private static final String IMPORT_OPERATION = "importar-paquete";
+  private static final Pattern HISTORY_COPY =
+      Pattern.compile("[A-Z]{4}-\\d{4}\\.(\\d+)(?:-\\d+)?\\.json");
 
   private final JsonMapper jsonMapper;
   private final SurveyProperties survey;
   private final RulesSeedProperties seed;
   private final AdminAudit audit;
+  private final Clock clock;
   private final Map<String, RuleSet> cache = new ConcurrentHashMap<>();
 
   /**
@@ -56,11 +64,16 @@ public class RulesFileRepository {
   private record PendingSave(RuleSet previous, RuleSet saved) {}
 
   public RulesFileRepository(
-      JsonMapper jsonMapper, SurveyProperties survey, RulesSeedProperties seed, AdminAudit audit) {
+      JsonMapper jsonMapper,
+      SurveyProperties survey,
+      RulesSeedProperties seed,
+      AdminAudit audit,
+      Clock clock) {
     this.jsonMapper = jsonMapper;
     this.survey = survey;
     this.seed = seed;
     this.audit = audit;
+    this.clock = clock;
   }
 
   /** Reglas de un año; si no hay archivo se siembra (o se usan reglas vacías sin semilla). */
@@ -127,10 +140,24 @@ public class RulesFileRepository {
    */
   public synchronized RuleSet save(
       RuleSet rules, int expectedVersion, String user, String operation, List<String> codes) {
+    return save(rules, expectedVersion, user, operation, codes, null);
+  }
+
+  /**
+   * Como {@link #save(RuleSet, int, String, String, List)}, y deja en {@code ultimoCambio} quién,
+   * cuándo, qué operación y, si se indica, el motivo. El motivo vive solo en el archivo: nunca se
+   * envía a la auditoría.
+   */
+  public synchronized RuleSet save(
+      RuleSet rules,
+      int expectedVersion,
+      String user,
+      String operation,
+      List<String> codes,
+      String reason) {
     AdminAudit.validate(operation, codes);
     RuleSetValidator.validate(rules);
     String name = fileName(rules.survey(), rules.year());
-    Path file = rulesDir().resolve(name);
     PendingSave pending = pendingSaves.get(name);
     RuleSet committed =
         pending != null ? pending.previous() : find(rules.survey(), rules.year()).orElse(null);
@@ -139,7 +166,56 @@ public class RulesFileRepository {
     if (currentVersion != expectedVersion) {
       throw new ConflictException("Otro usuario modificó el cuestionario. Recargue la página.");
     }
-    RuleSet toSave = rules.withVersion(currentVersion + 1);
+    RuleSet toSave =
+        rules
+            .withVersion(currentVersion + 1)
+            .withLastChange(new ChangeNote(user, clock.instant(), operation, reason));
+    write(name, committed, toSave);
+    recordAudit(toSave, user, operation, codes);
+    return toSave;
+  }
+
+  /**
+   * Reemplaza el archivo del año por el de un paquete conservando su versión, de modo que el mismo
+   * número exista en QA y en producción. Sigue las reglas de {@link #save}: copia al historial,
+   * escritura atómica, caché publicada tras el COMMIT y auditoría con la operación {@code
+   * importar-paquete}. Un paquete idéntico al vigente (salvo el último cambio) no hace nada.
+   */
+  public synchronized RuleSet replaceWithPackage(RuleSet incoming, String user) {
+    RuleSetValidator.validate(incoming);
+    String name = fileName(incoming.survey(), incoming.year());
+    PendingSave pending = pendingSaves.get(name);
+    RuleSet committed =
+        pending != null
+            ? pending.previous()
+            : find(incoming.survey(), incoming.year()).orElse(null);
+    RuleSet current = pending != null ? pending.saved() : committed;
+    if (current != null && incoming.version() <= current.version()) {
+      if (sameContent(incoming, current)) {
+        return current;
+      }
+      throw new ConflictException(
+          "La versión del paquete ("
+              + incoming.version()
+              + ") no es posterior a la de este ambiente ("
+              + current.version()
+              + ").");
+    }
+    RuleSet toSave =
+        incoming.withLastChange(new ChangeNote(user, clock.instant(), IMPORT_OPERATION, null));
+    write(name, committed, toSave);
+    recordAudit(toSave, user, IMPORT_OPERATION, List.of());
+    return toSave;
+  }
+
+  private static boolean sameContent(RuleSet incoming, RuleSet current) {
+    return incoming.version() == current.version()
+        && incoming.withLastChange(null).equals(current.withLastChange(null));
+  }
+
+  /** Copia el archivo vigente al historial, escribe el nuevo de forma atómica y lo publica. */
+  private void write(String name, RuleSet committed, RuleSet toSave) {
+    Path file = rulesDir().resolve(name);
     Path temporary = null;
     try {
       Files.createDirectories(file.getParent());
@@ -156,8 +232,98 @@ public class RulesFileRepository {
       deleteQuietly(temporary);
     }
     publish(name, new PendingSave(committed, toSave));
-    recordAudit(toSave, user, operation, codes);
-    return toSave;
+  }
+
+  /**
+   * Versiones del archivo de un año, la más nueva primero: el archivo vigente y las copias del
+   * historial. Una copia que no se puede leer se omite con un aviso sin su contenido.
+   */
+  public List<HistoryEntry> history(String surveyCode, int year) {
+    String name = fileName(surveyCode, year);
+    List<HistoryEntry> entries = new ArrayList<>();
+    find(surveyCode, year).ifPresent(rules -> entries.add(entryOf(rules, true, currentTime(name))));
+    for (Path copy : historyCopies(name)) {
+      Instant copiedAt = copyTime(copy.getFileName().toString());
+      readCopy(copy).ifPresent(rules -> entries.add(entryOf(rules, false, copiedAt)));
+    }
+    entries.sort(
+        Comparator.comparingInt(HistoryEntry::version)
+            .thenComparing(HistoryEntry::current)
+            .thenComparing(HistoryEntry::savedAt)
+            .reversed());
+    return List.copyOf(entries);
+  }
+
+  /** Reglas de una versión concreta: la vigente o la copia más reciente del historial. */
+  public Optional<RuleSet> historyVersion(String surveyCode, int year, int version) {
+    String name = fileName(surveyCode, year);
+    Optional<RuleSet> current = find(surveyCode, year).filter(rules -> rules.version() == version);
+    if (current.isPresent()) {
+      return current;
+    }
+    return historyCopies(name).stream()
+        .map(this::readCopy)
+        .flatMap(Optional::stream)
+        .filter(rules -> rules.version() == version)
+        .findFirst();
+  }
+
+  /** Sin último cambio (copias anteriores a los metadatos) la fecha sale del nombre de la copia. */
+  private static HistoryEntry entryOf(RuleSet rules, boolean current, Instant fallbackTime) {
+    ChangeNote change = rules.lastChange();
+    if (change == null) {
+      return new HistoryEntry(rules.version(), fallbackTime, null, null, null, current);
+    }
+    Instant savedAt = change.at() == null ? fallbackTime : change.at();
+    return new HistoryEntry(
+        rules.version(), savedAt, change.user(), change.operation(), change.reason(), current);
+  }
+
+  private Instant currentTime(String name) {
+    try {
+      return Files.getLastModifiedTime(rulesDir().resolve(name)).toInstant();
+    } catch (IOException exception) {
+      return Instant.EPOCH;
+    }
+  }
+
+  /** El sufijo en milisegundos del nombre: {@code <ENC>-<AAAA>.<millis>[-n].json}. */
+  private static Instant copyTime(String copyName) {
+    Matcher matcher = HISTORY_COPY.matcher(copyName);
+    return matcher.matches()
+        ? Instant.ofEpochMilli(Long.parseLong(matcher.group(1)))
+        : Instant.EPOCH;
+  }
+
+  /** Copias del historial de un año, de la más reciente a la más antigua. */
+  private List<Path> historyCopies(String name) {
+    Path history = rulesDir().resolve(HISTORY_DIR);
+    if (Files.notExists(history)) {
+      return List.of();
+    }
+    String prefix = name.substring(0, name.length() - ".json".length()) + ".";
+    try (Stream<Path> files = Files.list(history)) {
+      return files
+          .filter(file -> file.getFileName().toString().startsWith(prefix))
+          .filter(file -> HISTORY_COPY.matcher(file.getFileName().toString()).matches())
+          .sorted(
+              Comparator.comparing((Path file) -> copyTime(file.getFileName().toString()))
+                  .thenComparing(file -> file.getFileName().toString())
+                  .reversed())
+          .toList();
+    } catch (IOException exception) {
+      throw new UncheckedIOException("No fue posible listar el historial de " + name, exception);
+    }
+  }
+
+  private Optional<RuleSet> readCopy(Path copy) {
+    try {
+      return Optional.of(jsonMapper.readValue(copy.toFile(), RuleSet.class));
+    } catch (JacksonException exception) {
+      // El contenido no se registra: puede ser grande y no aporta al diagnóstico.
+      LOGGER.warn("Copia del historial ilegible: {}", copy.getFileName());
+      return Optional.empty();
+    }
   }
 
   /** Sin transacción la caché se actualiza ya; con ella, al terminar según su resultado. */

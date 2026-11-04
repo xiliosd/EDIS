@@ -3,6 +3,7 @@ package co.gov.dane.edi.rules;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import co.gov.dane.edi.admin.YearState;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -64,5 +65,54 @@ class RuleSetJsonTest {
     assertThat(base.withNewColumns(Map.of()).cases()).isEqualTo(cases);
     assertThat(base.withSkips(List.of()).cases()).isEqualTo(cases);
     assertThat(base.withValidations(Map.of()).cases()).isEqualTo(cases);
+  }
+
+  @Test
+  void publicationAndLastChangeRoundTripAndAreOmittedWhenNull() throws Exception {
+    Publication publication =
+        new Publication(
+            Instant.parse("2026-11-04T10:00:00Z"),
+            "admin1",
+            4,
+            List.of("NO_ANALIZABLE@regla:f04-alguna-si"));
+    ChangeNote change =
+        new ChangeNote("admin1", Instant.parse("2026-11-04T11:00:00Z"), "publicar", null);
+    RuleSet rules = RuleSet.empty("EDIN", 2026).withPublication(publication).withLastChange(change);
+
+    String json = mapper.writeValueAsString(rules);
+
+    assertThat(json)
+        .contains(
+            "\"publicacion\":{\"fecha\":\"2026-11-04T10:00:00Z\",\"usuario\":\"admin1\","
+                + "\"version\":4,\"avisos\":[\"NO_ANALIZABLE@regla:f04-alguna-si\"]}")
+        .contains(
+            "\"ultimoCambio\":{\"usuario\":\"admin1\",\"fecha\":\"2026-11-04T11:00:00Z\","
+                + "\"operacion\":\"publicar\"}")
+        .doesNotContain("motivo");
+    assertThat(mapper.readValue(json, RuleSet.class)).isEqualTo(rules);
+    String empty = mapper.writeValueAsString(RuleSet.empty("EDIN", 2026));
+    assertThat(empty).doesNotContain("publicacion").doesNotContain("ultimoCambio");
+  }
+
+  @Test
+  void withersKeepPublicationAndLastChange() {
+    Publication publication = new Publication(Instant.EPOCH, "admin1", 2, List.of());
+    ChangeNote change = new ChangeNote("admin1", Instant.EPOCH, "x", "motivo de prueba");
+    RuleSet base = RuleSet.empty("EDIN", 2026).withPublication(publication).withLastChange(change);
+
+    for (RuleSet changed :
+        List.of(
+            base.withState(YearState.BORRADOR),
+            base.withTables(Map.of("B", "TABLA_B")),
+            base.withVersion(5),
+            base.withNewColumns(Map.of()),
+            base.withSkips(List.of()),
+            base.withValidations(Map.of()),
+            base.withCases(List.of()))) {
+      assertThat(changed.publication()).isEqualTo(publication);
+      assertThat(changed.lastChange()).isEqualTo(change);
+    }
+    assertThat(base.withPublication(null).lastChange()).isEqualTo(change);
+    assertThat(base.withLastChange(null).publication()).isEqualTo(publication);
   }
 }

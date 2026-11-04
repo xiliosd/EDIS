@@ -8,8 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import co.gov.dane.edi.admin.YearState;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.Chapter;
+import co.gov.dane.edi.rules.ChangeNote;
 import co.gov.dane.edi.rules.EffectiveRulesService;
 import co.gov.dane.edi.rules.NewColumn;
+import co.gov.dane.edi.rules.Publication;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.security.Role;
@@ -19,7 +21,9 @@ import co.gov.dane.edi.support.OracleIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,6 +84,38 @@ class SurveyRulesIT extends OracleIntegrationTest {
           .andExpect(jsonPath("$.estado").doesNotExist())
           .andExpect(jsonPath("$.tablas").doesNotExist())
           .andExpect(jsonPath("$.columnasNuevas").doesNotExist());
+    } finally {
+      Files.write(file, original);
+      rulesFiles.evict();
+      effectiveRules.evict();
+    }
+  }
+
+  @Test
+  void respondentRulesNeverExposePublicationOrLastChange() throws Exception {
+    RuleSet published = rulesFiles.load(survey.code(), survey.year());
+    Path file = Path.of(survey.rulesDir()).resolve(survey.code() + "-" + survey.year() + ".json");
+    byte[] original = Files.readAllBytes(file);
+    try {
+      jsonMapper.writeValue(
+          file.toFile(),
+          published
+              .withPublication(
+                  new Publication(Instant.parse("2026-11-04T10:00:00Z"), "adm", 3, List.of("A@b")))
+              .withLastChange(
+                  new ChangeNote(
+                      "adm",
+                      Instant.parse("2026-11-04T10:00:00Z"),
+                      "publicar",
+                      "motivo secreto de prueba")));
+      rulesFiles.evict();
+      effectiveRules.evict();
+      mockMvc
+          .perform(get("/api/v1/survey/rules").cookie(session(SessionPrincipal.respondent("1"))))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.encuesta").value("EDIN"))
+          .andExpect(jsonPath("$.publicacion").doesNotExist())
+          .andExpect(jsonPath("$.ultimoCambio").doesNotExist());
     } finally {
       Files.write(file, original);
       rulesFiles.evict();

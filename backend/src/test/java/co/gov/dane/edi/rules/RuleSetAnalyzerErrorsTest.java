@@ -47,9 +47,7 @@ class RuleSetAnalyzerErrorsTest {
   }
 
   private static RuleSet rules(List<SkipRule> skips, Map<String, FieldValidation> validations) {
-    return new RuleSet("EDIN", 2026, 1, List.of(), Map.of(), null, Map.of())
-        .withSkips(skips)
-        .withValidations(validations);
+    return RuleSet.empty("EDIN", 2026).withVersion(1).withSkips(skips).withValidations(validations);
   }
 
   private static FieldValidation validation(

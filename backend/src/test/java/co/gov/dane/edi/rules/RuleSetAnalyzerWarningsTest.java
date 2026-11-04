@@ -61,8 +61,7 @@ class RuleSetAnalyzerWarningsTest {
   }
 
   private static RuleSet rules(SkipRule... skips) {
-    return new RuleSet("EDIN", 2026, 1, List.of(), Map.of(), null, Map.of())
-        .withSkips(List.of(skips));
+    return RuleSet.empty("EDIN", 2026).withVersion(1).withSkips(List.of(skips));
   }
 
   private static List<String> warnings(AnalysisReport report) {

@@ -16,7 +16,7 @@ class RuleSetValidatorTest {
   }
 
   private static RuleSet withSkip(SkipRule rule) {
-    return new RuleSet("EDIN", 2026, 1, List.of(rule), Map.of(), null, Map.of());
+    return RuleSet.empty("EDIN", 2026).withVersion(1).withSkips(List.of(rule));
   }
 
   @Test
@@ -70,7 +70,7 @@ class RuleSetValidatorTest {
     SkipRule first =
         new SkipRule("dup", null, eq("C01A", "2"), new SkipAction("deshabilitar", List.of("C01B")));
     RuleSet duplicated =
-        new RuleSet("EDIN", 2026, 1, List.of(first, first), Map.of(), null, Map.of());
+        RuleSet.empty("EDIN", 2026).withVersion(1).withSkips(List.of(first, first));
     SkipRule badColumn =
         new SkipRule(
             "col", null, eq("C01A; DROP", "2"), new SkipAction("deshabilitar", List.of("C01B")));
@@ -96,7 +96,11 @@ class RuleSetValidatorTest {
                     new java.math.BigDecimal("15"),
                     null)),
             null,
-            Map.of());
+            Map.of(),
+            Map.of(),
+            List.of(),
+            null,
+            null);
     assertThatThrownBy(() -> RuleSetValidator.validate(rules)).hasMessageContaining("B06");
   }
 

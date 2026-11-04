@@ -30,7 +30,11 @@ class CaseRunnerTest {
                   new SkipAction("deshabilitar", List.of("C01B")))),
           Map.of(),
           null,
-          Map.of());
+          Map.of(),
+          Map.of(),
+          List.of(),
+          null,
+          null);
 
   private static Map<String, QuestionFacts> facts(ColumnStatus statusOfC02) {
     Map<String, QuestionFacts> facts = new LinkedHashMap<>();

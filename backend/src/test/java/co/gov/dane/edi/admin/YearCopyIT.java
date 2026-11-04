@@ -236,7 +236,7 @@ class YearCopyIT extends OracleIntegrationTest {
   void failedRulesFileWriteDeletesTheCopiedRows() {
     Map<FrmTable, Long> before = counts();
     RulesFileRepository failingFiles =
-        new RulesFileRepository(jsonMapper, survey, seed, audit) {
+        new RulesFileRepository(jsonMapper, survey, seed, audit, java.time.Clock.systemUTC()) {
           @Override
           public synchronized RuleSet save(
               RuleSet rules,
@@ -262,7 +262,7 @@ class YearCopyIT extends OracleIntegrationTest {
   void writtenFileIsRemovedWhenTheSaveFailsAfterWriting() {
     Map<FrmTable, Long> before = counts();
     RulesFileRepository failsAfterWriting =
-        new RulesFileRepository(jsonMapper, survey, seed, audit) {
+        new RulesFileRepository(jsonMapper, survey, seed, audit, java.time.Clock.systemUTC()) {
           @Override
           public synchronized RuleSet save(
               RuleSet rules,
@@ -287,7 +287,7 @@ class YearCopyIT extends OracleIntegrationTest {
   void conflictingRulesFileIsAConflictAndLeavesNoRows() {
     Map<FrmTable, Long> before = counts();
     RulesFileRepository conflicting =
-        new RulesFileRepository(jsonMapper, survey, seed, audit) {
+        new RulesFileRepository(jsonMapper, survey, seed, audit, java.time.Clock.systemUTC()) {
           @Override
           public synchronized RuleSet save(
               RuleSet rules,
@@ -316,7 +316,7 @@ class YearCopyIT extends OracleIntegrationTest {
           }
         };
     RulesFileRepository failingFiles =
-        new RulesFileRepository(jsonMapper, survey, seed, audit) {
+        new RulesFileRepository(jsonMapper, survey, seed, audit, java.time.Clock.systemUTC()) {
           @Override
           public synchronized RuleSet save(
               RuleSet rules,

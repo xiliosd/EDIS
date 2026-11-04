@@ -27,7 +27,11 @@ class EffectiveRulesMergeTest {
             List.of(rule("legacy-C09G", "C09A", "C10"), rule("propia", "B10", "B11")),
             Map.of(),
             YearState.BORRADOR,
-            Map.of("B", "TABLA_B"));
+            Map.of("B", "TABLA_B"),
+            Map.of(),
+            List.of(),
+            null,
+            null);
     List<SkipRule> legacy =
         List.of(rule("legacy-C09G", "C09G", "C10"), rule("legacy-E05", "E05", "E06A"));
 

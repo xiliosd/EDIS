@@ -40,9 +40,7 @@ class LogicWarningsDifferentialTest {
     Random random = new Random(SEED);
     int comparedWarnings = 0;
     for (int iteration = 0; iteration < RULE_SETS; iteration++) {
-      RuleSet set =
-          new RuleSet("EDIN", 2026, 1, List.of(), Map.of(), null, Map.of())
-              .withSkips(randomRules(random));
+      RuleSet set = RuleSet.empty("EDIN", 2026).withVersion(1).withSkips(randomRules(random));
       List<Finding> full = new LogicWarnings(set, facts, Set.of(), AMPLE_WORK, false).enumerated();
       List<Finding> reduced =
           new LogicWarnings(set, facts, Set.of(), AMPLE_WORK, true).enumerated();

@@ -14,6 +14,10 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -38,12 +42,15 @@ class RulesFileRepositoryTest {
     return repository(rulesDir, code, DEV_SEED_DIR.toString());
   }
 
+  private Clock clock = Clock.systemUTC();
+
   private RulesFileRepository repository(Path rulesDir, String code, String seedDir) {
     return new RulesFileRepository(
         JsonMapper.builder().build(),
         new SurveyProperties(code, 2026, "S", rulesDir.toString()),
         new RulesSeedProperties(seedDir),
-        new AdminAudit());
+        new AdminAudit(),
+        clock);
   }
 
   @Test
@@ -216,7 +223,8 @@ class RulesFileRepositoryTest {
             JsonMapper.builder().build(),
             new SurveyProperties("EDIN", 2026, "S", tempDir.toString()),
             new RulesSeedProperties(""),
-            new AdminAudit()) {
+            new AdminAudit(),
+            clock) {
           @Override
           void writeFile(Path file, RuleSet rules) throws IOException {
             Files.writeString(file, "{medio", StandardCharsets.UTF_8);
@@ -444,5 +452,185 @@ class RulesFileRepositoryTest {
     try (var history = Files.list(tempDir.resolve("historial"))) {
       assertThat(history.count()).isEqualTo(8);
     }
+  }
+
+  /** Un reloj que avanza un minuto en cada lectura: cada guardado tiene su propia fecha. */
+  private static final class SteppingClock extends Clock {
+    private Instant next = Instant.parse("2026-11-04T10:00:00Z");
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      Instant now = next;
+      next = next.plusSeconds(60);
+      return now;
+    }
+  }
+
+  @Test
+  void saveStampsLastChangeWithClockAndReason() throws Exception {
+    clock = Clock.fixed(Instant.parse("2026-11-04T12:30:00Z"), ZoneOffset.UTC);
+    writeYear(tempDir, "EDIN", 2027, 1, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet current = repository.load("EDIN", 2027);
+
+    RuleSet saved =
+        repository.save(
+            current, 1, "admin1", "corregir-editar-texto", List.of("B06"), "Corrige la tilde");
+    RuleSet withoutReason = repository.save(saved, 2, "admin2", "editar-texto", List.of("B06"));
+
+    assertThat(saved.lastChange())
+        .isEqualTo(
+            new ChangeNote(
+                "admin1",
+                Instant.parse("2026-11-04T12:30:00Z"),
+                "corregir-editar-texto",
+                "Corrige la tilde"));
+    assertThat(withoutReason.lastChange().reason()).isNull();
+    assertThat(withoutReason.lastChange().user()).isEqualTo("admin2");
+    assertThat(repository.load("EDIN", 2027).lastChange()).isEqualTo(withoutReason.lastChange());
+  }
+
+  @Test
+  void historyListsVersionsNewestFirstWithReasons() throws Exception {
+    clock = new SteppingClock();
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet rules = RuleSet.empty("EDIN", 2027);
+    rules = repository.save(rules, 0, "u1", "uno", List.of(), "primer motivo largo");
+    rules = repository.save(rules, 1, "u2", "dos", List.of(), null);
+    repository.save(rules, 2, "u3", "tres", List.of(), "tercer motivo largo");
+
+    List<HistoryEntry> history = repository.history("EDIN", 2027);
+
+    assertThat(history).extracting(HistoryEntry::version).containsExactly(3, 2, 1);
+    assertThat(history).extracting(HistoryEntry::current).containsExactly(true, false, false);
+    assertThat(history).extracting(HistoryEntry::user).containsExactly("u3", "u2", "u1");
+    assertThat(history).extracting(HistoryEntry::operation).containsExactly("tres", "dos", "uno");
+    assertThat(history)
+        .extracting(HistoryEntry::reason)
+        .containsExactly("tercer motivo largo", null, "primer motivo largo");
+    assertThat(history.get(0).savedAt()).isEqualTo(Instant.parse("2026-11-04T10:02:00Z"));
+  }
+
+  @Test
+  void historyShowsLegacyCopiesWithoutMetadataAndSkipsBrokenOnes(CapturedOutput output)
+      throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 3, "");
+    Path history = Files.createDirectories(tempDir.resolve("historial"));
+    Files.writeString(
+        history.resolve("EDIN-2027.1700000000000.json"),
+        "{\"encuesta\":\"EDIN\",\"anio\":2027,\"version\":2,\"saltos\":[],\"validaciones\":{}}",
+        StandardCharsets.UTF_8);
+    Files.writeString(
+        history.resolve("EDIN-2027.1700000001000.json"), "{secreto roto", StandardCharsets.UTF_8);
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+
+    List<HistoryEntry> entries = repository.history("EDIN", 2027);
+
+    assertThat(entries).extracting(HistoryEntry::version).containsExactly(3, 2);
+    HistoryEntry legacy = entries.get(1);
+    assertThat(legacy.savedAt()).isEqualTo(Instant.ofEpochMilli(1700000000000L));
+    assertThat(legacy.user()).isNull();
+    assertThat(legacy.operation()).isNull();
+    assertThat(legacy.reason()).isNull();
+    assertThat(legacy.current()).isFalse();
+    assertThat(output.getAll()).contains("EDIN-2027.1700000001000.json").doesNotContain("secreto");
+  }
+
+  @Test
+  void historyVersionReadsAnOldCopy() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 0, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet v1 = repository.save(repository.load("EDIN", 2027), 0, "u1", "uno", List.of());
+    RuleSet v2 = repository.save(v1, 1, "u1", "dos", List.of());
+    repository.save(v2.withTables(Map.of("B", "TABLA_B")), 2, "u1", "tres", List.of());
+
+    assertThat(repository.historyVersion("EDIN", 2027, 1)).contains(v1);
+    assertThat(repository.historyVersion("EDIN", 2027, 2)).contains(v2);
+    assertThat(repository.historyVersion("EDIN", 2027, 3)).isPresent();
+    assertThat(repository.historyVersion("EDIN", 2027, 9)).isEmpty();
+  }
+
+  @Test
+  void replaceWithPackageKeepsIncomingVersion() throws Exception {
+    clock = Clock.fixed(Instant.parse("2026-11-04T12:30:00Z"), ZoneOffset.UTC);
+    writeYear(tempDir, "EDIN", 2027, 2, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet incoming = RuleSet.empty("EDIN", 2027).withVersion(5).withTables(Map.of("B", "TB"));
+
+    RuleSet replaced = repository.replaceWithPackage(incoming, "admin1");
+
+    assertThat(replaced.version()).isEqualTo(5);
+    assertThat(replaced.tables()).containsEntry("B", "TB");
+    assertThat(replaced.lastChange())
+        .isEqualTo(
+            new ChangeNote(
+                "admin1", Instant.parse("2026-11-04T12:30:00Z"), "importar-paquete", null));
+    assertThat(repository.load("EDIN", 2027)).isSameAs(replaced);
+    assertThat(repository.historyVersion("EDIN", 2027, 2)).isPresent();
+  }
+
+  @Test
+  void replaceWithPackageRejectsOlderVersion() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 4, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    String before = Files.readString(tempDir.resolve("EDIN-2027.json"), StandardCharsets.UTF_8);
+
+    assertThatThrownBy(
+            () ->
+                repository.replaceWithPackage(RuleSet.empty("EDIN", 2027).withVersion(3), "admin1"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("La versión del paquete (3) no es posterior a la de este ambiente (4).");
+
+    assertThat(Files.readString(tempDir.resolve("EDIN-2027.json"), StandardCharsets.UTF_8))
+        .isEqualTo(before);
+    assertThat(tempDir.resolve("historial")).doesNotExist();
+  }
+
+  @Test
+  void replaceWithPackageIsNoOpWhenIdentical() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 2, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet incoming = RuleSet.empty("EDIN", 2027).withVersion(5);
+
+    RuleSet first = repository.replaceWithPackage(incoming, "admin1");
+    String afterFirst = Files.readString(tempDir.resolve("EDIN-2027.json"), StandardCharsets.UTF_8);
+    RuleSet second = repository.replaceWithPackage(incoming, "admin2");
+
+    assertThat(second).isEqualTo(first);
+    assertThat(Files.readString(tempDir.resolve("EDIN-2027.json"), StandardCharsets.UTF_8))
+        .isEqualTo(afterFirst);
+    try (var copies = Files.list(tempDir.resolve("historial"))) {
+      assertThat(copies.count()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  void replaceWithPackagePublishesTheCacheOnlyAfterCommit() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 2, "");
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+    RuleSet before = repository.load("EDIN", 2027);
+    TransactionTemplate transaction = new TransactionTemplate(new NoopTransactionManager());
+
+    RuleSet replaced =
+        transaction.execute(
+            status -> {
+              RuleSet result =
+                  repository.replaceWithPackage(
+                      RuleSet.empty("EDIN", 2027).withVersion(6), "admin1");
+              assertThat(repository.load("EDIN", 2027)).isSameAs(before);
+              return result;
+            });
+
+    assertThat(repository.load("EDIN", 2027)).isSameAs(replaced);
   }
 }
