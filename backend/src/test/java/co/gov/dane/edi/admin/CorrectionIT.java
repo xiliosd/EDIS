@@ -11,8 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
+import co.gov.dane.edi.rules.ExpectedOutcome;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
+import co.gov.dane.edi.rules.TestCase;
 import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
@@ -23,6 +25,7 @@ import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -256,10 +259,68 @@ class CorrectionIT extends OracleIntegrationTest {
         .andExpect(status().isUnprocessableContent())
         .andExpect(
             jsonPath("$.detail")
-                .value("La corrección hace fallar casos de prueba: c01a-no-oculta-c01b."));
+                .value("La corrección deja casos de prueba en rojo: c01a-no-oculta-c01b."));
 
     assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(published);
     assertThat(output.getAll()).doesNotContain(REASON);
+  }
+
+  @Test
+  void newCaseSavedRedOnPublishedYearIsRejected() throws Exception {
+    fixture.installPublished("fixture");
+    RuleSet published = rulesFiles.load("EDIN", 2027);
+
+    send(put(RULES + "/cases/caso-rojo"), caseBody("caso-rojo", "[\"C01B\"]", 2))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.detail").value("La corrección deja casos de prueba en rojo: caso-rojo."));
+
+    assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(published);
+  }
+
+  @Test
+  void unreviewedCaseSavedRedIsRejected() throws Exception {
+    fixture.installPublished("fixture");
+    send(
+            put(YEAR + "/entries/" + fixture.draft().draftCapProy(C01A) + "/text"),
+            textBody("Texto corregido", 2, REASON))
+        .andExpect(status().isOk());
+    RuleSet unreviewed = rulesFiles.load("EDIN", 2027);
+    assertThat(unreviewed.cases()).allMatch(testCase -> testCase.isNeedsReview());
+
+    send(put(RULES + "/cases/c01a-no-oculta-c01b"), caseBody("c01a-no-oculta-c01b", "[]", 3))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.detail")
+                .value("La corrección deja casos de prueba en rojo: c01a-no-oculta-c01b."));
+
+    assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(unreviewed);
+  }
+
+  @Test
+  void alreadyRedCaseDoesNotBlockUnrelatedCorrection() throws Exception {
+    fixture.installPublished("fixture");
+    RuleSet published = rulesFiles.load("EDIN", 2027);
+    List<TestCase> cases = new ArrayList<>(published.cases());
+    cases.add(
+        new TestCase(
+            "caso-ya-rojo",
+            "Ya estaba en rojo",
+            "C1",
+            Map.of("C01A", "1"),
+            new ExpectedOutcome(List.of("C01B"), null),
+            null));
+    rulesFiles.save(published.withCases(cases), 2, "fixture", "editar-caso", List.of());
+
+    send(
+            put(RULES + "/validations/B06"),
+            "{\"validation\":{\"tipo\":\"entero\",\"min\":0,\"max\":99},\"version\":3,"
+                + "\"motivo\":\""
+                + REASON
+                + "\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.caseResults[?(@.id == 'caso-ya-rojo')].status").value("falla"));
+    assertThat(operation()).isEqualTo("corregir-editar-validacion");
   }
 
   @Test
@@ -335,6 +396,22 @@ class CorrectionIT extends OracleIntegrationTest {
 
   private String operation() {
     return rulesFiles.load("EDIN", 2027).lastChange().operation();
+  }
+
+  /** Caso en C1 con C01A en Sí: C01B queda visible, así que esperarla oculta lo pone en rojo. */
+  private static String caseBody(String id, String hidden, int version) {
+    return "{\"testCase\":{\"id\":\""
+        + id
+        + "\",\"nombre\":\"Caso de prueba\",\"pagina\":\"C1\","
+        + "\"respuestas\":{\"C01A\":\""
+        + ("[]".equals(hidden) ? "2" : "1")
+        + "\"},\"esperado\":{\"ocultas\":"
+        + hidden
+        + "}},\"version\":"
+        + version
+        + ",\"motivo\":\""
+        + REASON
+        + "\"}";
   }
 
   private static String textBody(String text, int version, String reason) {

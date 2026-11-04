@@ -396,6 +396,7 @@ class RulesAdminIT extends OracleIntegrationTest {
 
   @Test
   void publishedYearRulesNeedAReasonForEveryChange() throws Exception {
+    int versionBefore = rulesFiles.load("EDIN", 2026).version();
     send(put(PUBLISHED + "/skips/c01a-si-oculta-c01b"), SKIP_C01A_YES.formatted(2))
         .andExpect(status().isUnprocessableContent())
         .andExpect(
@@ -403,6 +404,7 @@ class RulesAdminIT extends OracleIntegrationTest {
                 .value("Indique el motivo de la corrección (entre 10 y 500 caracteres)."));
     send(delete(PUBLISHED + "/cases/c01a-no-oculta-c01b?version=2"), null)
         .andExpect(status().isUnprocessableContent());
+    assertThat(rulesFiles.load("EDIN", 2026).version()).isEqualTo(versionBefore);
     mockMvc.perform(get(PUBLISHED).cookie(admin())).andExpect(status().isOk());
   }
 

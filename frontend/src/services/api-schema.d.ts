@@ -66,7 +66,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Editar el texto de una pregunta de un año en borrador */
+        /** Editar el texto de una pregunta de un año (corrección con motivo si está publicado) */
         put: operations["editQuestionText"];
         post?: never;
         delete?: never;
@@ -83,7 +83,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Editar un encabezado de un año en borrador */
+        /** Editar un encabezado de un año (corrección con motivo si está publicado) */
         put: operations["editHeader"];
         post?: never;
         delete?: never;
@@ -100,7 +100,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Editar la ayuda de una pregunta de un año en borrador */
+        /** Editar la ayuda de una pregunta de un año (corrección con motivo si está publicado) */
         put: operations["editHelp"];
         post?: never;
         delete?: never;
@@ -238,7 +238,7 @@ export interface paths {
         get?: never;
         /**
          * Importar reglas, validaciones y casos
-         * @description Reemplaza solo los saltos, las validaciones y los casos del año en borrador. El estado, las tablas y las columnas nuevas del archivo importado se ignoran. Se rechaza con 422 si el análisis encuentra errores nuevos, por ejemplo un ciclo entre reglas.
+         * @description Reemplaza solo los saltos, las validaciones y los casos del año, en borrador o como corrección con motivo en uno publicado. El estado, las tablas y las columnas nuevas del archivo importado se ignoran. Se rechaza con 422 si el análisis encuentra errores nuevos, por ejemplo un ciclo entre reglas.
          */
         put: operations["rulesImport"];
         post?: never;
@@ -1173,7 +1173,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            /** @description La versión cambió o la fila la usa otro año */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1182,7 +1182,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El texto queda vacío o es demasiado largo */
+            /** @description El texto queda vacío o es demasiado largo, o en un año publicado falta el motivo (10 a 500 caracteres) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1237,7 +1237,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            /** @description La versión cambió o la fila la usa otro año */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1246,7 +1246,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El texto queda vacío o es demasiado largo */
+            /** @description El texto queda vacío o es demasiado largo, o en un año publicado falta el motivo (10 a 500 caracteres) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1301,7 +1301,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            /** @description La versión cambió o la fila la usa otro año */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1310,7 +1310,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El texto queda vacío o es demasiado largo */
+            /** @description El texto queda vacío o es demasiado largo, o en un año publicado falta el motivo (10 a 500 caracteres) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1429,7 +1429,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado, la versión cambió o la fila la usa otro año */
+            /** @description El año está publicado (edición estructural), la versión cambió o la fila la usa otro año */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1602,7 +1602,7 @@ export interface operations {
                     "application/json": components["schemas"]["RulesEditResult"];
                 };
             };
-            /** @description El año está publicado o la versión cambió */
+            /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1611,7 +1611,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El id no coincide o no es válido, o el caso no es válido */
+            /** @description El id no coincide o no es válido, el caso no es válido, deja casos en rojo o falta el motivo */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1657,8 +1657,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado o la versión cambió */
+            /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Falta el motivo de la corrección (año publicado) o no tiene entre 10 y 500 caracteres */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1725,7 +1734,7 @@ export interface operations {
                     "application/json": components["schemas"]["RulesEditResult"];
                 };
             };
-            /** @description El año está publicado o la versión cambió */
+            /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1743,7 +1752,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El archivo es de otra encuesta o año, o agrega errores (propiedad report) */
+            /** @description El archivo es de otra encuesta o año, o agrega errores (propiedad report), o falta el motivo en un año publicado */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1789,7 +1798,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado o la versión cambió */
+            /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1798,7 +1807,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El id no coincide, no es válido o la regla agrega errores (propiedad report) */
+            /** @description El id no coincide, no es válido o la regla agrega errores (propiedad report), o falta el motivo en un año publicado */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1844,7 +1853,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado o la versión cambió */
+            /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1853,7 +1862,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description Al borrarla quedan errores nuevos (propiedad report) */
+            /** @description Al borrarla quedan errores nuevos (propiedad report), o falta el motivo en un año publicado */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1890,7 +1899,7 @@ export interface operations {
                     "application/json": components["schemas"]["RulesEditResult"];
                 };
             };
-            /** @description El año está publicado o la versión cambió */
+            /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1899,7 +1908,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description La columna no es válida o la validación agrega errores (propiedad report) */
+            /** @description La columna no es válida o la validación agrega errores (propiedad report), o falta el motivo en un año publicado */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1945,8 +1954,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description El año está publicado o la versión cambió */
+            /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Falta el motivo de la corrección (año publicado) o no tiene entre 10 y 500 caracteres */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

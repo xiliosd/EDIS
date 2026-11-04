@@ -37,7 +37,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(
     name = "Administración de reglas",
     description =
-        "Reglas de salto, validaciones y casos de prueba de un año (rol ADMIN_CUESTIONARIO)")
+        "Reglas de salto, validaciones y casos de prueba de un año (rol ADMIN_CUESTIONARIO). En un"
+            + " año publicado cada cambio es una corrección: exige motivo (10 a 500 caracteres), no"
+            + " agrega errores y no deja casos de prueba en rojo")
 public class RulesAdminController {
 
   private static final String PROBLEM = "application/problem+json";
@@ -87,12 +89,14 @@ public class RulesAdminController {
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado o la versión cambió",
+      description = "La versión cambió: otro usuario modificó el cuestionario",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "El id no coincide, no es válido o la regla agrega errores (propiedad report)",
+      description =
+          "El id no coincide, no es válido o la regla agrega errores (propiedad report), o falta"
+              + " el motivo en un año publicado",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @PutMapping(value = "/skips/{ruleId}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -117,12 +121,14 @@ public class RulesAdminController {
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado o la versión cambió",
+      description = "La versión cambió: otro usuario modificó el cuestionario",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "Al borrarla quedan errores nuevos (propiedad report)",
+      description =
+          "Al borrarla quedan errores nuevos (propiedad report), o falta el motivo en un año"
+              + " publicado",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @DeleteMapping(value = "/skips/{ruleId}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -144,12 +150,14 @@ public class RulesAdminController {
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado o la versión cambió",
+      description = "La versión cambió: otro usuario modificó el cuestionario",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "La columna no es válida o la validación agrega errores (propiedad report)",
+      description =
+          "La columna no es válida o la validación agrega errores (propiedad report), o falta el"
+              + " motivo en un año publicado",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @PutMapping(value = "/validations/{column}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -172,7 +180,13 @@ public class RulesAdminController {
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado o la versión cambió",
+      description = "La versión cambió: otro usuario modificó el cuestionario",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description =
+          "Falta el motivo de la corrección (año publicado) o no tiene entre 10 y 500 caracteres",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @DeleteMapping(value = "/validations/{column}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -194,12 +208,14 @@ public class RulesAdminController {
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado o la versión cambió",
+      description = "La versión cambió: otro usuario modificó el cuestionario",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "El id no coincide o no es válido, o el caso no es válido",
+      description =
+          "El id no coincide o no es válido, el caso no es válido, deja casos en rojo o falta el"
+              + " motivo",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @PutMapping(value = "/cases/{caseId}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -222,7 +238,13 @@ public class RulesAdminController {
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado o la versión cambió",
+      description = "La versión cambió: otro usuario modificó el cuestionario",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description =
+          "Falta el motivo de la corrección (año publicado) o no tiene entre 10 y 500 caracteres",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @DeleteMapping(value = "/cases/{caseId}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -272,13 +294,14 @@ public class RulesAdminController {
       operationId = "rulesImport",
       summary = "Importar reglas, validaciones y casos",
       description =
-          "Reemplaza solo los saltos, las validaciones y los casos del año en borrador. El estado,"
+          "Reemplaza solo los saltos, las validaciones y los casos del año, en borrador o como"
+              + " corrección con motivo en uno publicado. El estado,"
               + " las tablas y las columnas nuevas del archivo importado se ignoran. Se rechaza con"
               + " 422 si el análisis encuentra errores nuevos, por ejemplo un ciclo entre reglas.")
   @ApiResponse(responseCode = "200", description = "Versión nueva, análisis y resultado de casos")
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado o la versión cambió",
+      description = "La versión cambió: otro usuario modificó el cuestionario",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
@@ -288,7 +311,9 @@ public class RulesAdminController {
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "El archivo es de otra encuesta o año, o agrega errores (propiedad report)",
+      description =
+          "El archivo es de otra encuesta o año, o agrega errores (propiedad report), o falta el"
+              + " motivo en un año publicado",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @PutMapping(value = "/import", produces = MediaType.APPLICATION_JSON_VALUE)

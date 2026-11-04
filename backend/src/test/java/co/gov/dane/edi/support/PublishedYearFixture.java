@@ -116,14 +116,27 @@ public final class PublishedYearFixture {
   public void remove() {
     try {
       dropCreatedColumns();
-    } finally {
+    } catch (RuntimeException dropFailure) {
+      try {
+        removeDraftAndHistory();
+      } catch (RuntimeException cleanupFailure) {
+        dropFailure.addSuppressed(cleanupFailure);
+      }
+      throw dropFailure;
+    }
+    removeDraftAndHistory();
+  }
+
+  private void removeDraftAndHistory() {
+    try {
       try {
         draft.remove();
       } finally {
         deleteNewHistory();
-        questionnaire.evict();
-        rulesFiles.evict();
       }
+    } finally {
+      questionnaire.evict();
+      rulesFiles.evict();
     }
   }
 

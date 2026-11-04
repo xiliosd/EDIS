@@ -363,24 +363,24 @@ public class RulesAdminService {
   }
 
   /**
-   * Una corrección no puede dejar en rojo un caso que pasaba: las reglas de un año publicado son
-   * las que sus pruebas daban por buenas. Los casos que queden por revisar no bloquean.
+   * Una corrección no puede dejar en rojo un caso que no lo estaba (uno que pasaba, uno por revisar
+   * o uno nuevo): un año publicado no gana casos fallando. Los que ya fallaban antes no bloquean.
    */
   private static void rejectCasesTurnedRed(List<CaseResult> before, List<CaseResult> after) {
-    Set<String> passing =
+    Set<String> alreadyRed =
         before.stream()
-            .filter(result -> result.status() == CaseResult.Status.PASA)
+            .filter(result -> result.status() == CaseResult.Status.FALLA)
             .map(CaseResult::id)
             .collect(Collectors.toSet());
-    List<String> turnedRed =
+    List<String> newlyRed =
         after.stream()
             .filter(result -> result.status() == CaseResult.Status.FALLA)
             .map(CaseResult::id)
-            .filter(passing::contains)
+            .filter(id -> !alreadyRed.contains(id))
             .toList();
-    if (!turnedRed.isEmpty()) {
+    if (!newlyRed.isEmpty()) {
       throw new InvalidEditException(
-          "La corrección hace fallar casos de prueba: " + String.join(", ", turnedRed) + ".");
+          "La corrección deja casos de prueba en rojo: " + String.join(", ", newlyRed) + ".");
     }
   }
 

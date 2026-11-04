@@ -91,7 +91,9 @@ public class QuestionnaireAdminController {
 
   private static final String EDIT_BASE = "/questionnaire/{encuesta}/{anio}";
 
-  @Operation(summary = "Editar el texto de una pregunta de un año en borrador")
+  @Operation(
+      summary =
+          "Editar el texto de una pregunta de un año (corrección con motivo si está publicado)")
   @ApiResponse(responseCode = "200", description = "Página actualizada y nueva versión del año")
   @ApiResponse(
       responseCode = "400",
@@ -109,14 +111,17 @@ public class QuestionnaireAdminController {
               schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      description = "La versión cambió o la fila la usa otro año",
       content =
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "El texto queda vacío o es demasiado largo",
+      description =
+          "El texto queda vacío o es demasiado largo, o en un año publicado falta el motivo (10 a"
+              + " 500"
+              + " caracteres)",
       content =
           @Content(
               mediaType = "application/problem+json",
@@ -134,7 +139,7 @@ public class QuestionnaireAdminController {
         survey, year, capProyId, request.text(), request.version(), user(jwt), request.motivo());
   }
 
-  @Operation(summary = "Editar un encabezado de un año en borrador")
+  @Operation(summary = "Editar un encabezado de un año (corrección con motivo si está publicado)")
   @ApiResponse(responseCode = "200", description = "Página actualizada y nueva versión del año")
   @ApiResponse(
       responseCode = "400",
@@ -152,14 +157,17 @@ public class QuestionnaireAdminController {
               schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      description = "La versión cambió o la fila la usa otro año",
       content =
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "El texto queda vacío o es demasiado largo",
+      description =
+          "El texto queda vacío o es demasiado largo, o en un año publicado falta el motivo (10 a"
+              + " 500"
+              + " caracteres)",
       content =
           @Content(
               mediaType = "application/problem+json",
@@ -175,7 +183,9 @@ public class QuestionnaireAdminController {
         survey, year, codEnc, request.text(), request.version(), user(jwt), request.motivo());
   }
 
-  @Operation(summary = "Editar la ayuda de una pregunta de un año en borrador")
+  @Operation(
+      summary =
+          "Editar la ayuda de una pregunta de un año (corrección con motivo si está publicado)")
   @ApiResponse(responseCode = "200", description = "Página actualizada y nueva versión del año")
   @ApiResponse(
       responseCode = "400",
@@ -193,14 +203,17 @@ public class QuestionnaireAdminController {
               schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      description = "La versión cambió o la fila la usa otro año",
       content =
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "422",
-      description = "El texto queda vacío o es demasiado largo",
+      description =
+          "El texto queda vacío o es demasiado largo, o en un año publicado falta el motivo (10 a"
+              + " 500"
+              + " caracteres)",
       content =
           @Content(
               mediaType = "application/problem+json",
@@ -236,7 +249,9 @@ public class QuestionnaireAdminController {
               schema = @Schema(implementation = ProblemDetail.class)))
   @ApiResponse(
       responseCode = "409",
-      description = "El año está publicado, la versión cambió o la fila la usa otro año",
+      description =
+          "El año está publicado (edición estructural), la versión cambió o la fila la usa otro"
+              + " año",
       content =
           @Content(
               mediaType = "application/problem+json",
