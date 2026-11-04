@@ -56,6 +56,9 @@ public class RulesAdminService {
   /** Lo que admite un código de auditoría: los ids importados deben poder auditarse al editarse. */
   private static final Pattern AUDITABLE_ID = Pattern.compile("[A-Za-z0-9_-]{1,40}");
 
+  /** Mensaje de una versión del historial que no existe. */
+  static final String MISSING_VERSION = "La versión no existe.";
+
   private static final Pattern COLUMN = Pattern.compile("[A-Z][0-9A-Z_]{1,29}");
 
   private final YearCatalogService years;
@@ -313,8 +316,41 @@ public class RulesAdminService {
   }
 
   /**
-   * Cambia el archivo del año con el candado de administración (ver la descripción de la clase).
+   * Restaura en un borrador los saltos, validaciones, casos, tablas y columnas nuevas de una
+   * versión anterior; el estado y la publicación se conservan, y las filas FRM_* no se tocan. Pasa
+   * por el mismo camino que cualquier cambio (tope, errores nuevos, candado y versión).
    */
+  public RulesEditResult restore(
+      String survey, int year, int sourceVersion, int version, String user) {
+    return locks.withAdminLock(
+        () -> {
+          if (years.requireYear(survey, year).effectiveState() != YearState.BORRADOR) {
+            throw new ConflictException("Solo se puede restaurar una versión en borrador.");
+          }
+          return apply(
+              survey,
+              year,
+              version,
+              user,
+              null,
+              EditKind.STRUCTURAL,
+              "restaurar-version",
+              List.of("v" + sourceVersion),
+              (current, legacy) -> {
+                RuleSet source =
+                    rulesFiles
+                        .historyVersion(survey, year, sourceVersion)
+                        .orElseThrow(() -> new ResourceNotFoundException(MISSING_VERSION));
+                return current
+                    .withSkips(source.skips())
+                    .withValidations(source.validations())
+                    .withCases(source.cases())
+                    .withTables(source.tables())
+                    .withNewColumns(source.newColumns());
+              });
+        });
+  }
+
   private RulesEditResult apply(
       String survey,
       int year,
@@ -324,10 +360,26 @@ public class RulesAdminService {
       String operation,
       List<String> codes,
       CandidateBuilder build) {
+    return apply(survey, year, version, user, reason, EditKind.CORRECTION, operation, codes, build);
+  }
+
+  /**
+   * Cambia el archivo del año con el candado de administración (ver la descripción de la clase).
+   */
+  private RulesEditResult apply(
+      String survey,
+      int year,
+      int version,
+      String user,
+      String reason,
+      EditKind kind,
+      String operation,
+      List<String> codes,
+      CandidateBuilder build) {
     return locks.withAdminLock(
         () -> {
           // Sobre un año publicado esto es una corrección: lleva motivo y su propia operación.
-          String storedReason = years.requireEditable(survey, year, EditKind.CORRECTION, reason);
+          String storedReason = years.requireEditable(survey, year, kind, reason);
           String audited =
               storedReason == null ? operation : EditKind.correctionOperation(operation);
           RuleSet current = years.requireYear(survey, year);

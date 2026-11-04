@@ -109,6 +109,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar el historial de versiones de un año
+         * @description La versión vigente, el estado del año y cada versión guardada con quién, cuándo, la operación y, en las correcciones, el motivo; de la más reciente a la más antigua.
+         */
+        get: operations["historyView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/history/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Leer las reglas de una versión del historial
+         * @description Devuelve el archivo de reglas tal como estaba guardado en esa versión.
+         */
+        get: operations["historyVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/history/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restaurar una versión del historial en un borrador
+         * @description Reemplaza saltos, validaciones, casos, tablas y columnas nuevas por los de la versión elegida y guarda el resultado como versión nueva. Conserva el estado y no restaura las filas FRM_*. Pasa por el mismo análisis que cualquier cambio: los errores nuevos lo rechazan.
+         */
+        post: operations["historyRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questionnaire/{encuesta}/{anio}/pages/{pageCode}/entries": {
         parameters: {
             query?: never;
@@ -727,6 +787,23 @@ export interface components {
         FinishResult: {
             receipt?: string;
         };
+        HistoryEntry: {
+            current?: boolean;
+            operation?: string;
+            reason?: string;
+            /** Format: date-time */
+            savedAt?: string;
+            user?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        HistoryView: {
+            entries?: components["schemas"]["HistoryEntry"][];
+            /** @enum {string} */
+            state?: "borrador" | "publicado";
+            /** Format: int32 */
+            version?: number;
+        };
         ImportRulesRequest: {
             motivo?: string;
             rules: components["schemas"]["RuleSet"];
@@ -854,6 +931,10 @@ export interface components {
             };
             /** Format: int32 */
             version?: number;
+        };
+        RestoreRequest: {
+            /** Format: int32 */
+            version: number;
         };
         RuleQuestion: {
             column?: string;
@@ -1311,6 +1392,135 @@ export interface operations {
                 };
             };
             /** @description El texto queda vacío o es demasiado largo, o en un año publicado falta el motivo (10 a 500 caracteres) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    historyView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Historial del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryView"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    historyVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reglas de la versión */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleSet"];
+                };
+            };
+            /** @description La encuesta, el año o la versión no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    historyRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Versión restaurada; análisis y casos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description Cuerpo inválido: falta la versión */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta, el año o la versión no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año está publicado o la versión vigente cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La restauración agrega errores de análisis (propiedad report) */
             422: {
                 headers: {
                     [name: string]: unknown;
