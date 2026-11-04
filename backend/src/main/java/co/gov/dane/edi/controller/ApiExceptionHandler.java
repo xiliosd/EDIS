@@ -1,6 +1,7 @@
 package co.gov.dane.edi.controller;
 
 import co.gov.dane.edi.admin.InvalidRulesException;
+import co.gov.dane.edi.admin.PublicationBlockedException;
 import co.gov.dane.edi.admin.SharedRowException;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
@@ -79,6 +80,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             "Las reglas tienen errores.",
             "Corrija los errores marcados antes de guardar.");
     body.setProperty("report", exception.report());
+    return body;
+  }
+
+  @ExceptionHandler(PublicationBlockedException.class)
+  ProblemDetail handlePublicationBlocked(PublicationBlockedException exception) {
+    ProblemDetail body =
+        problem(HttpStatus.UNPROCESSABLE_CONTENT, "No se puede publicar", exception.getMessage());
+    body.setProperty("checklist", exception.checklist());
     return body;
   }
 

@@ -143,6 +143,30 @@ export interface paths {
         patch: operations["reorderPage"];
         trace?: never;
     };
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/publication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar la lista de comprobación para publicar un año
+         * @description Cuatro condiciones: análisis sin errores, casos de prueba en verde, columnas creadas y tablas válidas. Los avisos del análisis no bloquean. También responde para años publicados, de forma informativa.
+         */
+        get: operations["publicationChecklist"];
+        put?: never;
+        /**
+         * Publicar el cuestionario de un año en borrador
+         * @description Recalcula la lista dentro del candado de administración. Si está completa, pasa el año a publicado y guarda quién, cuándo, la versión y los avisos. Un año publicado solo admite correcciones.
+         */
+        post: operations["publishYear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questionnaire/{encuesta}/{anio}/rules": {
         parameters: {
             query?: never;
@@ -646,6 +670,12 @@ export interface components {
             module?: string;
             title?: string;
         };
+        ChecklistItem: {
+            code?: string;
+            detail?: string;
+            elements?: string[];
+            passed?: boolean;
+        };
         Condition: {
             alguna?: string[];
             o?: components["schemas"]["Condition"][];
@@ -782,6 +812,17 @@ export interface components {
             usuario?: string;
             /** Format: int32 */
             version?: number;
+        };
+        PublicationChecklist: {
+            items?: components["schemas"]["ChecklistItem"][];
+            ready?: boolean;
+            /** Format: int32 */
+            version?: number;
+            warnings?: string[];
+        };
+        PublishRequest: {
+            /** Format: int32 */
+            version: number;
         };
         QuestionnaireEntry: {
             answer?: components["schemas"]["AnswerSpec"];
@@ -1393,6 +1434,101 @@ export interface operations {
                 };
             };
             /** @description La lista no coincide con las preguntas de la página o mueve una pregunta de grupo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    publicationChecklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lista de comprobación del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationChecklist"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    publishYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encuesta: string;
+                anio: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Año publicado; lista de comprobación vigente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationChecklist"];
+                };
+            };
+            /** @description Cuerpo inválido: falta la versión */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La encuesta o el año no existen */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año ya está publicado o la versión cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El año no cumple las condiciones (propiedad checklist) */
             422: {
                 headers: {
                     [name: string]: unknown;

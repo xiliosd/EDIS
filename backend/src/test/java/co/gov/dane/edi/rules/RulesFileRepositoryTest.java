@@ -547,6 +547,28 @@ class RulesFileRepositoryTest {
   }
 
   @Test
+  void historyIgnoresUnexpectedFileNames() throws Exception {
+    writeYear(tempDir, "EDIN", 2027, 3, "");
+    Path history = Files.createDirectories(tempDir.resolve("historial"));
+    String content =
+        "{\"encuesta\":\"EDIN\",\"anio\":2027,\"version\":2,\"saltos\":[],\"validaciones\":{}}";
+    for (String name :
+        List.of(
+            "EDIN-2027.abc.json",
+            "EDIN-2028.1700000000000.json",
+            "EDID-2027.1700000000000.json",
+            "EDIN-2027.99999999999999999999.json")) {
+      Files.writeString(history.resolve(name), content, StandardCharsets.UTF_8);
+    }
+    RulesFileRepository repository = repository(tempDir, "EDIN");
+
+    List<HistoryEntry> entries = repository.history("EDIN", 2027);
+
+    assertThat(entries).extracting(HistoryEntry::version).containsExactly(3);
+    assertThat(repository.historyVersion("EDIN", 2027, 2)).isEmpty();
+  }
+
+  @Test
   void historyVersionReadsAnOldCopy() throws Exception {
     writeYear(tempDir, "EDIN", 2027, 0, "");
     RulesFileRepository repository = repository(tempDir, "EDIN");

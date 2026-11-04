@@ -45,7 +45,7 @@ public class RulesFileRepository {
   private static final String HISTORY_DIR = "historial";
   private static final String IMPORT_OPERATION = "importar-paquete";
   private static final Pattern HISTORY_COPY =
-      Pattern.compile("[A-Z]{4}-\\d{4}\\.(\\d+)(?:-\\d+)?\\.json");
+      Pattern.compile("[A-Z]{4}-\\d{4}\\.(\\d{1,15})(?:-\\d{1,6})?\\.json");
 
   private final JsonMapper jsonMapper;
   private final SurveyProperties survey;
