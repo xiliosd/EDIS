@@ -395,14 +395,14 @@ class RulesAdminIT extends OracleIntegrationTest {
   }
 
   @Test
-  void publishedYearRulesAreReadOnly() throws Exception {
+  void publishedYearRulesNeedAReasonForEveryChange() throws Exception {
     send(put(PUBLISHED + "/skips/c01a-si-oculta-c01b"), SKIP_C01A_YES.formatted(2))
-        .andExpect(status().isConflict())
+        .andExpect(status().isUnprocessableContent())
         .andExpect(
             jsonPath("$.detail")
-                .value("El cuestionario de 2026 está publicado y no se puede editar."));
+                .value("Indique el motivo de la corrección (entre 10 y 500 caracteres)."));
     send(delete(PUBLISHED + "/cases/c01a-no-oculta-c01b?version=2"), null)
-        .andExpect(status().isConflict());
+        .andExpect(status().isUnprocessableContent());
     mockMvc.perform(get(PUBLISHED).cookie(admin())).andExpect(status().isOk());
   }
 

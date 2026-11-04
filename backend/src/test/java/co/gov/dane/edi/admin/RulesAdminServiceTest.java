@@ -71,7 +71,7 @@ class RulesAdminServiceTest {
               null));
     }
     when(factsService.facts(SURVEY, YEAR)).thenReturn(facts);
-    when(rulesFiles.save(any(), anyInt(), anyString(), anyString(), anyList()))
+    when(rulesFiles.save(any(), anyInt(), anyString(), anyString(), anyList(), any()))
         .thenAnswer(invocation -> invocation.<RuleSet>getArgument(0).withVersion(2));
   }
 
@@ -110,7 +110,8 @@ class RulesAdminServiceTest {
     InvalidRulesException rejected =
         catchThrowableOfType(
             InvalidRulesException.class,
-            () -> service.importRules(SURVEY, YEAR, current.withSkips(candidate), 1, "admin"));
+            () ->
+                service.importRules(SURVEY, YEAR, current.withSkips(candidate), 1, "admin", null));
 
     assertThat(rejected.report().errors())
         .extracting(Finding::code, Finding::message)
@@ -118,7 +119,7 @@ class RulesAdminServiceTest {
     assertThat(RuleSetAnalyzer.OVERSIZED_YEAR_MESSAGE)
         .isEqualTo("Las reglas del año (archivo y heredadas) superan 1000.");
     verify(factsService, never()).facts(SURVEY, YEAR);
-    verify(rulesFiles, never()).save(any(), anyInt(), anyString(), anyString(), anyList());
+    verify(rulesFiles, never()).save(any(), anyInt(), anyString(), anyString(), anyList(), any());
   }
 
   @Test
@@ -130,12 +131,12 @@ class RulesAdminServiceTest {
     RuleSet current = givenYear(rules("f", 845), legacy);
 
     RulesEditResult result =
-        service.importRules(SURVEY, YEAR, current.withSkips(rules("f", 800)), 1, "admin");
+        service.importRules(SURVEY, YEAR, current.withSkips(rules("f", 800)), 1, "admin", null);
 
     assertThat(result.version()).isEqualTo(2);
     assertThat(result.report().errors())
         .extracting(Finding::code)
         .contains(AnalysisCodes.PREGUNTA_INEXISTENTE);
-    verify(rulesFiles).save(any(), anyInt(), anyString(), anyString(), anyList());
+    verify(rulesFiles).save(any(), anyInt(), anyString(), anyString(), anyList(), any());
   }
 }

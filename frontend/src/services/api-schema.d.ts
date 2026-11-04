@@ -696,6 +696,7 @@ export interface components {
             token?: string;
         };
         EditTextRequest: {
+            motivo?: string;
             text: string;
             /** Format: int32 */
             version: number;
@@ -727,6 +728,7 @@ export interface components {
             receipt?: string;
         };
         ImportRulesRequest: {
+            motivo?: string;
             rules: components["schemas"]["RuleSet"];
             /** Format: int32 */
             version: number;
@@ -940,6 +942,7 @@ export interface components {
             si?: components["schemas"]["Condition"];
         };
         SkipRuleRequest: {
+            motivo?: string;
             rule: components["schemas"]["SkipRule"];
             /** Format: int32 */
             version: number;
@@ -976,11 +979,13 @@ export interface components {
             };
         };
         TestCaseRequest: {
+            motivo?: string;
             testCase: components["schemas"]["TestCase"];
             /** Format: int32 */
             version: number;
         };
         ValidationRequest: {
+            motivo?: string;
             validation: components["schemas"]["FieldValidation"];
             /** Format: int32 */
             version: number;
@@ -1621,6 +1626,8 @@ export interface operations {
         parameters: {
             query: {
                 version: number;
+                /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la URL: no escriba datos personales. */
+                motivo?: string;
             };
             header?: never;
             path: {
@@ -1806,6 +1813,8 @@ export interface operations {
         parameters: {
             query: {
                 version: number;
+                /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la URL: no escriba datos personales. */
+                motivo?: string;
             };
             header?: never;
             path: {
@@ -1905,6 +1914,8 @@ export interface operations {
         parameters: {
             query: {
                 version: number;
+                /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la URL: no escriba datos personales. */
+                motivo?: string;
             };
             header?: never;
             path: {

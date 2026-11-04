@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.ColumnStatus;
-import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.rules.Condition;
 import co.gov.dane.edi.rules.ExpectedOutcome;
@@ -24,17 +23,15 @@ import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
 import co.gov.dane.edi.service.QuestionnaireService;
-import co.gov.dane.edi.support.DraftYearFixture;
 import co.gov.dane.edi.support.OracleIntegrationTest;
+import co.gov.dane.edi.support.PublishedYearFixture;
 import jakarta.servlet.http.Cookie;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,27 +58,33 @@ class PublicationIT extends OracleIntegrationTest {
   @Autowired private AnswerColumnRepository answerColumns;
   @Autowired private QuestionFactsService factsService;
   @Autowired private JsonMapper jsonMapper;
+  @Autowired private PublicationService publication;
 
-  private DraftYearFixture fixture;
-  private final Map<String, String> createdColumns = new LinkedHashMap<>();
+  private PublishedYearFixture fixture;
 
   @BeforeEach
   void installDraftYear() {
-    fixture = new DraftYearFixture(jdbc, rulesFiles, survey, yearCopy);
-    fixture.install();
-    questionnaire.evict();
+    fixture =
+        new PublishedYearFixture(
+            jdbc,
+            rulesFiles,
+            survey,
+            yearCopy,
+            factsService,
+            answerColumns,
+            questionnaire,
+            publication);
+    fixture.installDraft();
   }
 
   @AfterEach
   void removeDraftYear() {
-    dropCreatedColumns();
     fixture.remove();
-    questionnaire.evict();
   }
 
   @Test
   void checklistOfCleanDraftIsReady() throws Exception {
-    createMissingColumns(2027);
+    fixture.createMissingColumns(2027);
 
     mockMvc
         .perform(get(DRAFT).cookie(admin()))
@@ -94,7 +97,7 @@ class PublicationIT extends OracleIntegrationTest {
         .andExpect(jsonPath("$.items[0].detail").value("El análisis no tiene errores."))
         .andExpect(jsonPath("$.items[1].code").value("CASOS_EN_VERDE"))
         .andExpect(jsonPath("$.items[1].passed").value(true))
-        .andExpect(jsonPath("$.items[1].detail").value("Los 1 casos de prueba pasan."))
+        .andExpect(jsonPath("$.items[1].detail").value("El caso de prueba pasa."))
         .andExpect(jsonPath("$.items[2].code").value("COLUMNAS_CREADAS"))
         .andExpect(jsonPath("$.items[2].passed").value(true))
         .andExpect(jsonPath("$.items[3].code").value("TABLAS_VALIDAS"))
@@ -104,7 +107,7 @@ class PublicationIT extends OracleIntegrationTest {
 
   @Test
   void checklistWithoutCasesPassesWithItsOwnDetail() throws Exception {
-    createMissingColumns(2027);
+    fixture.createMissingColumns(2027);
     RuleSet draft = rulesFiles.load("EDIN", 2027);
     rulesFiles.save(
         draft.withCases(List.of()), draft.version(), "fixture", "borrar-caso", List.of());
@@ -139,7 +142,7 @@ class PublicationIT extends OracleIntegrationTest {
     assertStillDraftAtVersion(1);
 
     // 2. Un caso que falla.
-    createMissingColumns(2027);
+    fixture.createMissingColumns(2027);
     RuleSet draft = rulesFiles.load("EDIN", 2027);
     TestCase failing =
         new TestCase(
@@ -182,7 +185,7 @@ class PublicationIT extends OracleIntegrationTest {
 
   @Test
   void publishBlockedByInvalidMappedTable() throws Exception {
-    createMissingColumns(2027);
+    fixture.createMissingColumns(2027);
     RuleSet draft = rulesFiles.load("EDIN", 2027);
     rulesFiles.save(
         draft.withTables(Map.of("B", "TABLA_QUE_NO_EXISTE")),
@@ -204,7 +207,7 @@ class PublicationIT extends OracleIntegrationTest {
 
   @Test
   void publishBlockedByAnalysisErrors() throws Exception {
-    createMissingColumns(2027);
+    fixture.createMissingColumns(2027);
     RuleSet draft = rulesFiles.load("EDIN", 2027);
     SkipRule broken =
         new SkipRule(
@@ -224,14 +227,14 @@ class PublicationIT extends OracleIntegrationTest {
                 .value("regla:apunta-a-z99"))
         .andExpect(
             jsonPath("$.checklist.items[?(@.code == 'SIN_ERRORES')].detail")
-                .value("El análisis tiene 1 errores."));
+                .value("El análisis tiene 1 error."));
     assertStillDraftAtVersion(2);
   }
 
   @Test
   void publishSwitchesStateRecordsWarningsAndLiftsSurveyGate() throws Exception {
-    createMissingColumns(2027);
-    createMissingColumns(2026);
+    fixture.createMissingColumns(2027);
+    fixture.createMissingColumns(2026);
     // El año activo (2026) en borrador: el encuestado recibe 503 hasta que se publique.
     Path activeFile =
         Path.of(survey.rulesDir()).resolve(survey.code() + "-" + survey.year() + ".json");
@@ -281,7 +284,6 @@ class PublicationIT extends OracleIntegrationTest {
           .andExpect(jsonPath("$.warnings[?(@ =~ /DESTINO_ANTES@.*/)]").isNotEmpty());
     } finally {
       Files.write(activeFile, original);
-      deleteHistoryCopies(survey.code() + "-" + survey.year() + ".");
       rulesFiles.evict();
       questionnaire.evict();
     }
@@ -302,7 +304,7 @@ class PublicationIT extends OracleIntegrationTest {
 
   @Test
   void staleVersionGets409() throws Exception {
-    createMissingColumns(2027);
+    fixture.createMissingColumns(2027);
 
     send(post(DRAFT), "{\"version\":7}")
         .andExpect(status().isConflict())
@@ -349,43 +351,6 @@ class PublicationIT extends OracleIntegrationTest {
         .filter(question -> question.columnStatus() == ColumnStatus.PENDING_COLUMN)
         .map(QuestionFacts::column)
         .toList();
-  }
-
-  /** Crea en Oracle las columnas que faltan para que el año no tenga preguntas pendientes. */
-  private void createMissingColumns(int year) {
-    factsService.facts("EDIN", year).values().stream()
-        .filter(question -> question.columnStatus() == ColumnStatus.PENDING_COLUMN)
-        .filter(question -> !createdColumns.containsKey(question.column()))
-        .forEach(
-            question -> {
-              String table =
-                  SurveyPage.find(question.pageCode()).orElseThrow().chapter().tableName();
-              jdbc.execute(
-                  "ALTER TABLE " + table + " ADD (" + question.column() + " VARCHAR2(50))");
-              createdColumns.put(question.column(), table);
-              answerColumns.evict(table);
-            });
-  }
-
-  private void dropCreatedColumns() {
-    createdColumns.forEach(
-        (column, table) -> {
-          jdbc.execute("ALTER TABLE " + table + " DROP COLUMN " + column);
-          answerColumns.evict(table);
-        });
-    createdColumns.clear();
-  }
-
-  private void deleteHistoryCopies(String prefix) throws Exception {
-    Path history = Path.of(survey.rulesDir()).resolve("historial");
-    if (Files.isDirectory(history)) {
-      try (Stream<Path> files = Files.list(history)) {
-        for (Path file :
-            files.filter(f -> f.getFileName().toString().startsWith(prefix)).toList()) {
-          Files.deleteIfExists(file);
-        }
-      }
-    }
   }
 
   private ResultActions send(MockHttpServletRequestBuilder builder, String body) throws Exception {

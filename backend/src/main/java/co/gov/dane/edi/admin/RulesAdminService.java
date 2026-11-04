@@ -9,6 +9,7 @@ import co.gov.dane.edi.model.RespondentRules;
 import co.gov.dane.edi.model.SurveyPage;
 import co.gov.dane.edi.rules.AnalysisCodes;
 import co.gov.dane.edi.rules.AnalysisReport;
+import co.gov.dane.edi.rules.CaseResult;
 import co.gov.dane.edi.rules.CaseRunner;
 import co.gov.dane.edi.rules.EffectiveRulesService;
 import co.gov.dane.edi.rules.FieldValidation;
@@ -38,8 +39,9 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Edición de reglas de salto, validaciones y casos de prueba de un año en borrador. Los cambios no
- * tocan las tablas FRM_*, solo el archivo de reglas, por eso no hay transacción de base de datos.
+ * Edición de reglas de salto, validaciones y casos de prueba de un año en borrador o, como
+ * corrección con motivo, de un año publicado. Los cambios no tocan las tablas FRM_*, solo el
+ * archivo de reglas, por eso no hay transacción de base de datos.
  *
  * <p>Cada cambio sigue el orden de {@code QuestionAdminService}: candado global de administración;
  * año en borrador y versión vigente; reglas candidatas y su análisis; y solo si no agregan errores
@@ -135,7 +137,13 @@ public class RulesAdminService {
   }
 
   public RulesEditResult saveSkip(
-      String survey, int year, String ruleId, SkipRule rule, int version, String user) {
+      String survey,
+      int year,
+      String ruleId,
+      SkipRule rule,
+      int version,
+      String user,
+      String reason) {
     if (!ruleId.equals(rule.id())) {
       throw new InvalidEditException("El id de la regla no coincide.");
     }
@@ -144,6 +152,7 @@ public class RulesAdminService {
         year,
         version,
         user,
+        reason,
         "editar-salto",
         List.of(ruleId),
         (current, legacy) -> {
@@ -159,12 +168,13 @@ public class RulesAdminService {
   }
 
   public RulesEditResult deleteSkip(
-      String survey, int year, String ruleId, int version, String user) {
+      String survey, int year, String ruleId, int version, String user, String reason) {
     return apply(
         survey,
         year,
         version,
         user,
+        reason,
         "borrar-salto",
         List.of(ruleId),
         (current, legacy) -> {
@@ -182,13 +192,15 @@ public class RulesAdminService {
       String column,
       FieldValidation validation,
       int version,
-      String user) {
+      String user,
+      String reason) {
     requireColumn(column);
     return apply(
         survey,
         year,
         version,
         user,
+        reason,
         "editar-validacion",
         List.of(column),
         (current, legacy) -> {
@@ -199,13 +211,14 @@ public class RulesAdminService {
   }
 
   public RulesEditResult deleteValidation(
-      String survey, int year, String column, int version, String user) {
+      String survey, int year, String column, int version, String user, String reason) {
     requireColumn(column);
     return apply(
         survey,
         year,
         version,
         user,
+        reason,
         "borrar-validacion",
         List.of(column),
         (current, legacy) -> {
@@ -219,7 +232,13 @@ public class RulesAdminService {
   }
 
   public RulesEditResult saveCase(
-      String survey, int year, String caseId, TestCase testCase, int version, String user) {
+      String survey,
+      int year,
+      String caseId,
+      TestCase testCase,
+      int version,
+      String user,
+      String reason) {
     if (!caseId.equals(testCase.id())) {
       throw new InvalidEditException("El id del caso no coincide.");
     }
@@ -230,6 +249,7 @@ public class RulesAdminService {
         year,
         version,
         user,
+        reason,
         "editar-caso",
         List.of(caseId),
         (current, legacy) -> {
@@ -244,12 +264,13 @@ public class RulesAdminService {
   }
 
   public RulesEditResult deleteCase(
-      String survey, int year, String caseId, int version, String user) {
+      String survey, int year, String caseId, int version, String user, String reason) {
     return apply(
         survey,
         year,
         version,
         user,
+        reason,
         "borrar-caso",
         List.of(caseId),
         (current, legacy) -> {
@@ -263,7 +284,7 @@ public class RulesAdminService {
 
   /** Reemplaza solo saltos, validaciones y casos: el estado y las tablas del año no se importan. */
   public RulesEditResult importRules(
-      String survey, int year, RuleSet imported, int version, String user) {
+      String survey, int year, RuleSet imported, int version, String user, String reason) {
     if (!survey.equals(imported.survey()) || year != imported.year()) {
       throw new InvalidEditException("El archivo no corresponde a la encuesta y año indicados.");
     }
@@ -281,6 +302,7 @@ public class RulesAdminService {
         year,
         version,
         user,
+        reason,
         "importar-reglas",
         List.of(),
         (current, legacy) ->
@@ -298,12 +320,16 @@ public class RulesAdminService {
       int year,
       int version,
       String user,
+      String reason,
       String operation,
       List<String> codes,
       CandidateBuilder build) {
     return locks.withAdminLock(
         () -> {
-          years.requireDraft(survey, year);
+          // Sobre un año publicado esto es una corrección: lleva motivo y su propia operación.
+          String storedReason = years.requireEditable(survey, year, EditKind.CORRECTION, reason);
+          String audited =
+              storedReason == null ? operation : EditKind.correctionOperation(operation);
           RuleSet current = years.requireYear(survey, year);
           if (current.version() != version) {
             throw new ConflictException(
@@ -326,13 +352,36 @@ public class RulesAdminService {
               throw new InvalidRulesException(new AnalysisReport(added, after.warnings()));
             }
           }
-          RuleSet saved = rulesFiles.save(candidate, version, user, operation, codes);
+          List<CaseResult> caseResults = CaseRunner.runAll(effectiveCandidate, facts);
+          if (storedReason != null) {
+            rejectCasesTurnedRed(CaseRunner.runAll(effectiveCurrent, facts), caseResults);
+          }
+          RuleSet saved = rulesFiles.save(candidate, version, user, audited, codes, storedReason);
           effectiveRules.evict();
-          return new RulesEditResult(
-              saved.version(),
-              after,
-              CaseRunner.runAll(EffectiveRulesService.merge(saved, legacy), facts));
+          return new RulesEditResult(saved.version(), after, caseResults);
         });
+  }
+
+  /**
+   * Una corrección no puede dejar en rojo un caso que pasaba: las reglas de un año publicado son
+   * las que sus pruebas daban por buenas. Los casos que queden por revisar no bloquean.
+   */
+  private static void rejectCasesTurnedRed(List<CaseResult> before, List<CaseResult> after) {
+    Set<String> passing =
+        before.stream()
+            .filter(result -> result.status() == CaseResult.Status.PASA)
+            .map(CaseResult::id)
+            .collect(Collectors.toSet());
+    List<String> turnedRed =
+        after.stream()
+            .filter(result -> result.status() == CaseResult.Status.FALLA)
+            .map(CaseResult::id)
+            .filter(passing::contains)
+            .toList();
+    if (!turnedRed.isEmpty()) {
+      throw new InvalidEditException(
+          "La corrección hace fallar casos de prueba: " + String.join(", ", turnedRed) + ".");
+    }
   }
 
   /**

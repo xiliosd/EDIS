@@ -136,7 +136,9 @@ public class PublicationService {
         passed,
         passed
             ? "El análisis no tiene errores."
-            : "El análisis tiene " + report.errors().size() + " errores.",
+            : report.errors().size() == 1
+                ? "El análisis tiene 1 error."
+                : "El análisis tiene " + report.errors().size() + " errores.",
         capped(report.errors().stream().map(Finding::element).toList()));
   }
 
@@ -152,7 +154,10 @@ public class PublicationService {
     } else if (results.isEmpty()) {
       detail = "No hay casos de prueba.";
     } else {
-      detail = "Los " + results.size() + " casos de prueba pasan.";
+      detail =
+          results.size() == 1
+              ? "El caso de prueba pasa."
+              : "Los " + results.size() + " casos de prueba pasan.";
     }
     return new ChecklistItem(CASOS_EN_VERDE, notGreen.isEmpty(), detail, capped(notGreen));
   }
@@ -168,7 +173,8 @@ public class PublicationService {
         pending.isEmpty(),
         pending.isEmpty()
             ? "Todas las preguntas activas tienen su columna."
-            : "Faltan " + pending.size() + " columnas; descargue el script.",
+            : (pending.size() == 1 ? "Falta 1 columna" : "Faltan " + pending.size() + " columnas")
+                + "; descargue el script.",
         capped(pending));
   }
 

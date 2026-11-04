@@ -5,6 +5,7 @@ import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
 import co.gov.dane.edi.service.error.ConflictException;
+import co.gov.dane.edi.service.error.InvalidEditException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.SurveyNotAvailableException;
 import java.util.List;
@@ -20,6 +21,8 @@ public class YearCatalogService {
   private static final Set<String> SURVEYS = Set.of("EDIN", "EDID");
   private static final int MIN_YEAR = 2020;
   private static final int MAX_YEAR = 2100;
+  private static final int MIN_REASON_LENGTH = 10;
+  private static final int MAX_REASON_LENGTH = 500;
 
   private final RulesFileRepository rulesFiles;
   private final SurveyProperties survey;
@@ -75,6 +78,32 @@ public class YearCatalogService {
       throw new ConflictException(
           "El cuestionario de " + year + " está publicado y no se puede editar.");
     }
+  }
+
+  /**
+   * Comprueba que el año admita un cambio de esa clase y devuelve el motivo normalizado. En un
+   * borrador cualquier clase pasa, el motivo se ignora y el resultado es nulo. En un año publicado
+   * solo pasan las correcciones y exigen un motivo de 10 a 500 caracteres (422); el cambio
+   * estructural recibe 409 aunque llegue con motivo.
+   */
+  public String requireEditable(String surveyCode, int year, EditKind kind, String reason) {
+    RuleSet rules = requireYear(surveyCode, year);
+    if (rules.effectiveState() == YearState.BORRADOR) {
+      return null;
+    }
+    if (kind == EditKind.STRUCTURAL) {
+      throw new ConflictException(
+          "El cuestionario de "
+              + year
+              + " está publicado: solo se permiten correcciones de textos, saltos y"
+              + " validaciones.");
+    }
+    String trimmed = reason == null ? "" : reason.strip();
+    if (trimmed.length() < MIN_REASON_LENGTH || trimmed.length() > MAX_REASON_LENGTH) {
+      throw new InvalidEditException(
+          "motivo", "Indique el motivo de la corrección (entre 10 y 500 caracteres).");
+    }
+    return trimmed;
   }
 
   /** Puerta del encuestado: el año activo en borrador no se sirve. */

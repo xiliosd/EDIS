@@ -58,7 +58,7 @@ public class AnswerTableMappingService {
   /** Reemplaza el mapeo del año; los mensajes nunca repiten el nombre recibido. */
   public TablesResult saveTables(
       String survey, int year, Map<String, String> requested, int version, String user) {
-    years.requireDraft(survey, year);
+    years.requireEditable(survey, year, EditKind.STRUCTURAL, null);
     Map<String, String> mapping = new TreeMap<>();
     List<String> missing = new ArrayList<>();
     for (Map.Entry<String, String> entry : requested.entrySet()) {
@@ -91,7 +91,7 @@ public class AnswerTableMappingService {
     }
     return locks.withAdminLock(
         () -> {
-          years.requireDraft(survey, year);
+          years.requireEditable(survey, year, EditKind.STRUCTURAL, null);
           RuleSet rules = years.requireYear(survey, year);
           if (rules.version() != version) {
             throw new ConflictException(

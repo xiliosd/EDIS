@@ -293,14 +293,19 @@ class QuestionEditIT extends OracleIntegrationTest {
   }
 
   @Test
-  void publishedYearIsReadOnly() throws Exception {
+  void publishedYearRejectsEditsWithoutReasonAndStructuralChanges() throws Exception {
     edit(PUBLISHED + "/entries/" + C01A + "/text", "{\"text\":\"Intento\",\"version\":1}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.detail")
+                .value("Indique el motivo de la corrección (entre 10 y 500 caracteres)."));
+    reorder(PUBLISHED + "/pages/C1/order", "[" + C01B + "," + C01A + "]", 1)
         .andExpect(status().isConflict())
         .andExpect(
             jsonPath("$.detail")
-                .value("El cuestionario de 2026 está publicado y no se puede editar."));
-    reorder(PUBLISHED + "/pages/C1/order", "[" + C01B + "," + C01A + "]", 1)
-        .andExpect(status().isConflict());
+                .value(
+                    "El cuestionario de 2026 está publicado: solo se permiten correcciones de"
+                        + " textos, saltos y validaciones."));
     assertThat(textOfQuestion(201)).isEqualTo("&iquest;Pregunta ficticia C01A?");
   }
 

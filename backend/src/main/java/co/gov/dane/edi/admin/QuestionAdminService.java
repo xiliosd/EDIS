@@ -106,9 +106,15 @@ public class QuestionAdminService {
   }
 
   public AdminEditResult editQuestionText(
-      String survey, int year, long capProyId, String text, int version, String user) {
+      String survey,
+      int year,
+      long capProyId,
+      String text,
+      int version,
+      String user,
+      String reason) {
     String plain = normalize(text);
-    years.requireDraft(survey, year);
+    years.requireEditable(survey, year, EditKind.CORRECTION, reason);
     CapProyRef ref = requireCapProy(capProyId, survey, year);
     String yearText = String.valueOf(year);
     return apply(
@@ -117,6 +123,8 @@ public class QuestionAdminService {
         version,
         user,
         "editar-texto",
+        EditKind.CORRECTION,
+        reason,
         requirePage(ref.pageCode()),
         () -> {
           long codPre = writes.copyQuestionForYear(capProyId, survey, yearText);
@@ -131,9 +139,9 @@ public class QuestionAdminService {
   }
 
   public AdminEditResult editHeader(
-      String survey, int year, long codEnc, String text, int version, String user) {
+      String survey, int year, long codEnc, String text, int version, String user, String reason) {
     String plain = normalize(text);
-    years.requireDraft(survey, year);
+    years.requireEditable(survey, year, EditKind.CORRECTION, reason);
     String yearText = String.valueOf(year);
     long capProyId =
         lookup
@@ -146,6 +154,8 @@ public class QuestionAdminService {
         version,
         user,
         "editar-encabezado",
+        EditKind.CORRECTION,
+        reason,
         requirePage(ref.pageCode()),
         () -> {
           writes.updateHeader(codEnc, survey, yearText, plain);
@@ -155,9 +165,9 @@ public class QuestionAdminService {
   }
 
   public AdminEditResult editHelp(
-      String survey, int year, long codAyu, String text, int version, String user) {
+      String survey, int year, long codAyu, String text, int version, String user, String reason) {
     String plain = normalize(text);
-    years.requireDraft(survey, year);
+    years.requireEditable(survey, year, EditKind.CORRECTION, reason);
     long capProyId =
         lookup
             .capProyOfHelp(codAyu)
@@ -169,6 +179,8 @@ public class QuestionAdminService {
         version,
         user,
         "editar-ayuda",
+        EditKind.CORRECTION,
+        reason,
         requirePage(ref.pageCode()),
         () -> {
           writes.updateHelp(codAyu, survey, String.valueOf(year), plain);
@@ -180,7 +192,7 @@ public class QuestionAdminService {
   public AdminEditResult reorderPage(
       String survey, int year, String pageCode, List<Long> capProyIds, int version, String user) {
     SurveyPage page = requirePage(pageCode);
-    years.requireDraft(survey, year);
+    years.requireEditable(survey, year, EditKind.STRUCTURAL, null);
     String yearText = String.valueOf(year);
     return apply(
         survey,
@@ -188,6 +200,8 @@ public class QuestionAdminService {
         version,
         user,
         "reordenar",
+        EditKind.STRUCTURAL,
+        null,
         page,
         () -> {
           List<PageRow> rows = questionnaire.pageRows(page, survey, year);
@@ -243,7 +257,7 @@ public class QuestionAdminService {
   public AdminEditResult addQuestion(
       String survey, int year, String pageCode, NewQuestionRequest request, String user) {
     SurveyPage page = requirePage(pageCode);
-    years.requireDraft(survey, year);
+    years.requireEditable(survey, year, EditKind.STRUCTURAL, null);
     String plain = normalize(request.text());
     String numeral = validateNewQuestion(request);
     String code = request.columnCode().strip();
@@ -254,6 +268,8 @@ public class QuestionAdminService {
         request.version(),
         user,
         "agregar-pregunta",
+        EditKind.STRUCTURAL,
+        null,
         page,
         () -> insertQuestion(survey, year, page, request, numeral, plain),
         false,
@@ -267,7 +283,7 @@ public class QuestionAdminService {
   /** Quita la pregunta del año (solo su periodo); rechaza si alguna regla vigente la usa. */
   public AdminEditResult deactivateQuestion(
       String survey, int year, long capProyId, int version, String user) {
-    years.requireDraft(survey, year);
+    years.requireEditable(survey, year, EditKind.STRUCTURAL, null);
     CapProyRef ref = requireCapProy(capProyId, survey, year);
     return apply(
         survey,
@@ -275,6 +291,8 @@ public class QuestionAdminService {
         version,
         user,
         "desactivar-pregunta",
+        EditKind.STRUCTURAL,
+        null,
         requirePage(ref.pageCode()),
         () -> {
           Optional<String> column = ColumnCodeResolver.fromNumeral(ref.numeral());
@@ -537,11 +555,23 @@ public class QuestionAdminService {
       int version,
       String user,
       String operation,
+      EditKind kind,
+      String reason,
       SurveyPage page,
       Supplier<List<String>> frmWrites,
       boolean warnAboutSkips) {
     return apply(
-        survey, year, version, user, operation, page, frmWrites, warnAboutSkips, rules -> rules);
+        survey,
+        year,
+        version,
+        user,
+        operation,
+        kind,
+        reason,
+        page,
+        frmWrites,
+        warnAboutSkips,
+        rules -> rules);
   }
 
   /** {@code fileChange} ajusta las reglas del año que se guardan junto con las escrituras FRM_*. */
@@ -551,6 +581,8 @@ public class QuestionAdminService {
       int version,
       String user,
       String operation,
+      EditKind kind,
+      String reason,
       SurveyPage page,
       Supplier<List<String>> frmWrites,
       boolean warnAboutSkips,
@@ -561,7 +593,11 @@ public class QuestionAdminService {
         () -> {
           RuleSet saved;
           try {
-            years.requireDraft(survey, year);
+            // Sobre un año publicado la operación es una corrección y lleva el motivo, que solo se
+            // guarda en el archivo de reglas (nunca en la auditoría ni en los registros).
+            String storedReason = years.requireEditable(survey, year, kind, reason);
+            String audited =
+                storedReason == null ? operation : EditKind.correctionOperation(operation);
             RuleSet rules = years.requireYear(survey, year);
             if (rules.version() != version) {
               throw new ConflictException(
@@ -572,7 +608,7 @@ public class QuestionAdminService {
                     status -> {
                       List<String> codes = frmWrites.get();
                       return rulesFiles.save(
-                          fileChange.apply(rules), version, user, operation, codes);
+                          fileChange.apply(rules), version, user, audited, codes, storedReason);
                     });
           } catch (NoSuchElementException exception) {
             throw new ResourceNotFoundException("El registro que intenta editar no existe.");

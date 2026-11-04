@@ -42,6 +42,10 @@ public class RulesAdminController {
 
   private static final String PROBLEM = "application/problem+json";
 
+  private static final String REASON_DESCRIPTION =
+      "Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la"
+          + " URL: no escriba datos personales.";
+
   private final RulesAdminService rules;
   private final SessionTokenService tokens;
 
@@ -98,7 +102,8 @@ public class RulesAdminController {
       @PathVariable String ruleId,
       @Valid @RequestBody SkipRuleRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.saveSkip(survey, year, ruleId, request.rule(), request.version(), user(jwt));
+    return rules.saveSkip(
+        survey, year, ruleId, request.rule(), request.version(), user(jwt), request.motivo());
   }
 
   @Operation(
@@ -126,8 +131,10 @@ public class RulesAdminController {
       @PathVariable("anio") int year,
       @PathVariable String ruleId,
       @RequestParam int version,
+      @Parameter(description = REASON_DESCRIPTION) @RequestParam(name = "motivo", required = false)
+          String reason,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.deleteSkip(survey, year, ruleId, version, user(jwt));
+    return rules.deleteSkip(survey, year, ruleId, version, user(jwt), reason);
   }
 
   @Operation(
@@ -153,7 +160,7 @@ public class RulesAdminController {
       @Valid @RequestBody ValidationRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
     return rules.saveValidation(
-        survey, year, column, request.validation(), request.version(), user(jwt));
+        survey, year, column, request.validation(), request.version(), user(jwt), request.motivo());
   }
 
   @Operation(operationId = "rulesDeleteValidation", summary = "Borrar la validación de una columna")
@@ -174,8 +181,10 @@ public class RulesAdminController {
       @PathVariable("anio") int year,
       @PathVariable String column,
       @RequestParam int version,
+      @Parameter(description = REASON_DESCRIPTION) @RequestParam(name = "motivo", required = false)
+          String reason,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.deleteValidation(survey, year, column, version, user(jwt));
+    return rules.deleteValidation(survey, year, column, version, user(jwt), reason);
   }
 
   @Operation(
@@ -200,7 +209,8 @@ public class RulesAdminController {
       @PathVariable String caseId,
       @Valid @RequestBody TestCaseRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.saveCase(survey, year, caseId, request.testCase(), request.version(), user(jwt));
+    return rules.saveCase(
+        survey, year, caseId, request.testCase(), request.version(), user(jwt), request.motivo());
   }
 
   @Operation(operationId = "rulesDeleteCase", summary = "Borrar un caso de prueba")
@@ -221,8 +231,10 @@ public class RulesAdminController {
       @PathVariable("anio") int year,
       @PathVariable String caseId,
       @RequestParam int version,
+      @Parameter(description = REASON_DESCRIPTION) @RequestParam(name = "motivo", required = false)
+          String reason,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.deleteCase(survey, year, caseId, version, user(jwt));
+    return rules.deleteCase(survey, year, caseId, version, user(jwt), reason);
   }
 
   @Operation(
@@ -285,7 +297,8 @@ public class RulesAdminController {
       @PathVariable("anio") int year,
       @Valid @RequestBody ImportRulesRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.importRules(survey, year, request.rules(), request.version(), user(jwt));
+    return rules.importRules(
+        survey, year, request.rules(), request.version(), user(jwt), request.motivo());
   }
 
   private String user(Jwt jwt) {

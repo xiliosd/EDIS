@@ -629,6 +629,13 @@ paths:
         schema:
           type: integer
           format: int32
+      - description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
+          \ en un año publicado. Va en la URL: no escriba datos personales."
+        in: query
+        name: motivo
+        required: false
+        schema:
+          type: string
       responses:
         "200":
           content:
@@ -812,6 +819,13 @@ paths:
         schema:
           type: integer
           format: int32
+      - description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
+          \ en un año publicado. Va en la URL: no escriba datos personales."
+        in: query
+        name: motivo
+        required: false
+        schema:
+          type: string
       responses:
         "200":
           content:
@@ -923,6 +937,13 @@ paths:
         schema:
           type: integer
           format: int32
+      - description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
+          \ en un año publicado. Va en la URL: no escriba datos personales."
+        in: query
+        name: motivo
+        required: false
+        schema:
+          type: string
       responses:
         "200":
           content:
@@ -1759,6 +1780,8 @@ components:
     EditTextRequest:
       type: object
       properties:
+        motivo:
+          type: string
         text:
           type: string
           maxLength: 4000
@@ -1822,6 +1845,8 @@ components:
     ImportRulesRequest:
       type: object
       properties:
+        motivo:
+          type: string
         rules:
           $ref: "#/components/schemas/RuleSet"
         version:
@@ -2263,6 +2288,8 @@ components:
     SkipRuleRequest:
       type: object
       properties:
+        motivo:
+          type: string
         rule:
           $ref: "#/components/schemas/SkipRule"
         version:
@@ -2331,6 +2358,8 @@ components:
     TestCaseRequest:
       type: object
       properties:
+        motivo:
+          type: string
         testCase:
           $ref: "#/components/schemas/TestCase"
         version:
@@ -2342,6 +2371,8 @@ components:
     ValidationRequest:
       type: object
       properties:
+        motivo:
+          type: string
         validation:
           $ref: "#/components/schemas/FieldValidation"
         version:

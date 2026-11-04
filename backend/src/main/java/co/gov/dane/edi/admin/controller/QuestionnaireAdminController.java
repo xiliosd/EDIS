@@ -131,7 +131,7 @@ public class QuestionnaireAdminController {
       @Valid @RequestBody EditTextRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
     return edits.editQuestionText(
-        survey, year, capProyId, request.text(), request.version(), user(jwt));
+        survey, year, capProyId, request.text(), request.version(), user(jwt), request.motivo());
   }
 
   @Operation(summary = "Editar un encabezado de un año en borrador")
@@ -171,7 +171,8 @@ public class QuestionnaireAdminController {
       @PathVariable long codEnc,
       @Valid @RequestBody EditTextRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return edits.editHeader(survey, year, codEnc, request.text(), request.version(), user(jwt));
+    return edits.editHeader(
+        survey, year, codEnc, request.text(), request.version(), user(jwt), request.motivo());
   }
 
   @Operation(summary = "Editar la ayuda de una pregunta de un año en borrador")
@@ -211,7 +212,8 @@ public class QuestionnaireAdminController {
       @PathVariable long codAyu,
       @Valid @RequestBody EditTextRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return edits.editHelp(survey, year, codAyu, request.text(), request.version(), user(jwt));
+    return edits.editHelp(
+        survey, year, codAyu, request.text(), request.version(), user(jwt), request.motivo());
   }
 
   @Operation(summary = "Reordenar las preguntas de una página de un año en borrador")
