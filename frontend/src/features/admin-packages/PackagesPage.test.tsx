@@ -294,4 +294,86 @@ describe('PackagesPage', () => {
       'El paquete es anterior a la versión de este ambiente.',
     );
   });
+
+  it('descarga el paquete de corrección con tipo=correccion', async () => {
+    serve();
+    const download = vi.spyOn(downloadFile, 'downloadBlobFile').mockImplementation(() => {});
+    let tipo = '';
+    server.use(
+      http.get(`${BASE_API}/package`, ({ request }) => {
+        tipo = new URL(request.url).searchParams.get('tipo') ?? '';
+        return new HttpResponse('zip', { headers: { 'Content-Type': 'application/zip' } });
+      }),
+    );
+    await openPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Descargar paquete de corrección' }));
+
+    await waitFor(() => expect(download).toHaveBeenCalled());
+    expect(tipo).toBe('correccion');
+    expect(download.mock.calls[0][0]).toBe('paquete-EDIN-2027-correccion.zip');
+  });
+
+  it('lleva el foco al error si falla la importación confirmada con la vista previa visible', async () => {
+    serve();
+    server.use(
+      http.post(`${BASE_API}/package/import`, ({ request }) =>
+        new URL(request.url).searchParams.get('confirmar') === 'true'
+          ? HttpResponse.json(
+              {
+                title: 'El paquete no pasa la revisión',
+                detail: 'Las filas FRM_* no coinciden.',
+                differences: ['FRM_PREGUNTA: falta C30A.'],
+              },
+              { status: 422, headers: PROBLEM },
+            )
+          : HttpResponse.json(PREVIEW),
+      ),
+    );
+    await openPage();
+    await verifyPackage();
+    await screen.findByRole('region', { name: 'Resultado de la verificación' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Importar' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Confirmar importación',
+      }),
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('FRM_PREGUNTA: falta C30A.');
+    await waitFor(() => expect(alert).toHaveFocus());
+  });
+
+  it('lleva el foco a la lista de publicación si falla una descarga con la vista previa visible', async () => {
+    serve();
+    server.use(
+      http.post(`${BASE_API}/package/import`, () => HttpResponse.json(PREVIEW)),
+      http.get(`${BASE_API}/package`, () =>
+        HttpResponse.json(
+          {
+            title: 'Lista de publicación incompleta',
+            detail: 'El año ya no pasa la lista de publicación.',
+            checklist: {
+              version: 5,
+              ready: false,
+              items: [{ code: 'SIN_ERRORES', passed: false, detail: 'El análisis tiene 1 error.' }],
+            },
+          },
+          { status: 422, headers: PROBLEM },
+        ),
+      ),
+    );
+    await openPage();
+    await verifyPackage();
+    await screen.findByRole('region', { name: 'Resultado de la verificación' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Descargar paquete del año' }));
+
+    const summary = await screen.findByRole('region', {
+      name: 'Resumen de la lista de publicación',
+    });
+    await waitFor(() => expect(summary).toHaveFocus());
+  });
 });

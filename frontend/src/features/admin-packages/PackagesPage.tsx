@@ -24,6 +24,8 @@ import {
   type PackageKind,
 } from './packages-api';
 
+type FocusTarget = 'preview' | 'importError' | 'checklist' | 'downloadError' | 'fileError';
+
 const SIZE_ERROR = 'El paquete supera 5 MB.';
 const NOT_ZIP_ERROR = 'El paquete debe ser un archivo .zip.';
 
@@ -53,7 +55,13 @@ export function PackagesPage() {
   const [confirming, setConfirming] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   // Cada resultado (verificación, error) lleva el foco a su resumen (WCAG 2.4.3).
-  const [focusResult, setFocusResult] = useState(0);
+  // El destino lo fija cada resultado; `count` repite el foco si el destino se repite.
+  const [focusRequest, setFocusRequest] = useState<{ target: FocusTarget; count: number }>({
+    target: 'preview',
+    count: 0,
+  });
+  const requestFocus = (target: FocusTarget) =>
+    setFocusRequest((previous) => ({ target, count: previous.count + 1 }));
   const resultRef = useRef<HTMLElement>(null);
   const importErrorRef = useRef<HTMLDivElement>(null);
   const downloadErrorRef = useRef<HTMLParagraphElement>(null);
@@ -61,17 +69,18 @@ export function PackagesPage() {
   const fileErrorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    if (focusResult === 0) {
+    if (focusRequest.count === 0) {
       return;
     }
-    (
-      resultRef.current ??
-      importErrorRef.current ??
-      checklistRef.current ??
-      downloadErrorRef.current ??
-      fileErrorRef.current
-    )?.focus();
-  }, [focusResult]);
+    const targets: Record<FocusTarget, HTMLElement | null> = {
+      preview: resultRef.current,
+      importError: importErrorRef.current,
+      checklist: checklistRef.current,
+      downloadError: downloadErrorRef.current,
+      fileError: fileErrorRef.current,
+    };
+    targets[focusRequest.target]?.focus();
+  }, [focusRequest]);
 
   const published = ruleSetQuery.data?.estado === 'publicado';
   const publishedVersion = ruleSetQuery.data?.publicacion?.version;
@@ -94,10 +103,11 @@ export function PackagesPage() {
     onError: (caught) => {
       if (caught instanceof ApiError && caught.status === 422 && caught.checklist) {
         setBlockedChecklist(caught.checklist);
+        requestFocus('checklist');
       } else {
         setDownloadError(errorMessage(caught));
+        requestFocus('downloadError');
       }
-      setFocusResult((count) => count + 1);
     },
   });
 
@@ -110,11 +120,11 @@ export function PackagesPage() {
     },
     onSuccess: (result) => {
       setPreview(result);
-      setFocusResult((count) => count + 1);
+      requestFocus('preview');
     },
     onError: (caught) => {
       setImportError(caught instanceof ApiError ? caught : errorMessage(caught));
-      setFocusResult((count) => count + 1);
+      requestFocus('importError');
     },
   });
 
@@ -129,7 +139,7 @@ export function PackagesPage() {
     },
     onError: (caught) => {
       setImportError(caught instanceof ApiError ? caught : errorMessage(caught));
-      setFocusResult((count) => count + 1);
+      requestFocus('importError');
     },
   });
 

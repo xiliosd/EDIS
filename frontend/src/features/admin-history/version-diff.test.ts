@@ -101,4 +101,15 @@ describe('versionDiff', () => {
       ['C4', 'agregada'],
     ]);
   });
+
+  it('muestra el JSON de un salto cambiado cuando su descripción en texto no cambia', () => {
+    const older: RuleSet = { ...empty, saltos: [{ ...skip('s1', '1'), descripcion: 'Uno' }] };
+    const newer: RuleSet = { ...empty, saltos: [{ ...skip('s1', '1'), descripcion: 'Dos' }] };
+
+    const [change] = versionDiff(older, newer).skips;
+
+    expect(change.kind).toBe('cambiada');
+    expect(change.before).toContain('"descripcion":"Uno"');
+    expect(change.after).toContain('"descripcion":"Dos"');
+  });
 });

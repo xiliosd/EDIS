@@ -62,13 +62,37 @@ function byId<T extends { id?: string }>(items: T[] | undefined): Map<string, T>
   return new Map((items ?? []).map((item) => [item.id ?? '', item]));
 }
 
+/**
+ * Un salto puede cambiar en campos que su descripción no muestra (p. ej. el texto libre):
+ * si el texto de antes y después es igual, se muestra el JSON para que el cambio sea visible.
+ */
+function markInvisibleChanges(
+  changes: Change[],
+  older: Map<string, unknown>,
+  newer: Map<string, unknown>,
+): Change[] {
+  return changes.map((change) =>
+    change.kind === 'cambiada' && change.before === change.after
+      ? {
+          ...change,
+          before: stableJson(older.get(change.id)),
+          after: stableJson(newer.get(change.id)),
+        }
+      : change,
+  );
+}
+
 /** Diferencias entre dos versiones del archivo de reglas, de la más antigua a la más nueva. */
 export function versionDiff(older: RuleSet, newer: RuleSet): VersionDiff {
   // Sin catálogo de preguntas los valores se muestran tal cual, lo que basta para comparar.
   const noQuestions = new Map();
   return {
-    skips: compareByKey(byId(older.saltos), byId(newer.saltos), (rule) =>
-      describeRule(rule, noQuestions),
+    skips: markInvisibleChanges(
+      compareByKey(byId(older.saltos), byId(newer.saltos), (rule) =>
+        describeRule(rule, noQuestions),
+      ),
+      byId(older.saltos),
+      byId(newer.saltos),
     ),
     validations: compareByKey(
       new Map(Object.entries(older.validaciones ?? {})),
