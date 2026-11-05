@@ -4,9 +4,11 @@ import co.gov.dane.edi.admin.ColumnScriptService.ColumnAddition;
 import co.gov.dane.edi.admin.ColumnScriptService.ManualColumn;
 import co.gov.dane.edi.admin.ColumnScriptService.TableCopy;
 import co.gov.dane.edi.admin.dto.PackageManifest;
+import co.gov.dane.edi.admin.dto.PublicationChecklist;
 import co.gov.dane.edi.admin.dto.YearSummary;
 import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.SurveyPage;
+import co.gov.dane.edi.rules.EffectiveRulesService;
 import co.gov.dane.edi.rules.NewColumn;
 import co.gov.dane.edi.rules.QuestionFacts;
 import co.gov.dane.edi.rules.RuleSet;
@@ -39,6 +41,8 @@ public class PromotionPackageService {
 
   static final String NOT_PUBLISHED = "Solo se generan paquetes de un año publicado.";
   static final String NO_CORRECTIONS = "No hay correcciones posteriores a la publicación.";
+  static final String CHECKLIST_FAILS =
+      "El año no pasa la lista de publicación: corríjalo antes de generar el paquete.";
   private static final String OPERATION = "generar-paquete";
 
   /** El ZIP y el nombre con que se descarga: {@code <ENC>-<AAAA>-v<N>-<tipo>.zip}. */
@@ -50,6 +54,8 @@ public class PromotionPackageService {
   private final ColumnScriptService columnScripts;
   private final QuestionFactsService factsService;
   private final AnswerTableResolver tables;
+  private final PublicationService publication;
+  private final EffectiveRulesService effectiveRules;
   private final AdminAudit audit;
   private final SaveLocks locks;
   private final JsonMapper jsonMapper;
@@ -62,6 +68,8 @@ public class PromotionPackageService {
       ColumnScriptService columnScripts,
       QuestionFactsService factsService,
       AnswerTableResolver tables,
+      PublicationService publication,
+      EffectiveRulesService effectiveRules,
       AdminAudit audit,
       SaveLocks locks,
       JsonMapper jsonMapper,
@@ -72,6 +80,8 @@ public class PromotionPackageService {
     this.columnScripts = columnScripts;
     this.factsService = factsService;
     this.tables = tables;
+    this.publication = publication;
+    this.effectiveRules = effectiveRules;
     this.audit = audit;
     this.locks = locks;
     this.jsonMapper = jsonMapper;
@@ -94,9 +104,15 @@ public class PromotionPackageService {
                   || rules.version() <= rules.publication().version())) {
             throw new ConflictException(NO_CORRECTIONS);
           }
+          Map<String, QuestionFacts> facts = factsService.facts(survey, year);
+          // Producción corre la misma lista al importar: un paquete que no la pasa en QA no sirve.
+          PublicationChecklist checklist =
+              publication.checklistFor(rules, facts, effectiveRules.legacySkips(survey, year));
+          if (!checklist.ready()) {
+            throw new PublicationBlockedException(CHECKLIST_FAILS, checklist);
+          }
           FrmSnapshot snapshot = snapshots.snapshot(survey, year);
           String characterSet = snapshots.characterSet();
-          Map<String, QuestionFacts> facts = factsService.facts(survey, year);
 
           Map<String, byte[]> files = new LinkedHashMap<>();
           files.put(PromotionPackageFormat.RULES, PromotionPackageFormat.json(jsonMapper, rules));

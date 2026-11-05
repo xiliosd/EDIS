@@ -82,6 +82,11 @@ public class PackageAdminController {
       description = "El año no está publicado o no hay correcciones posteriores a la publicación",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description = "El año publicado ya no pasa la lista de publicación (propiedad checklist)",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
   @GetMapping(produces = {ZIP, PROBLEM})
   public ResponseEntity<byte[]> download(
       @PathVariable("encuesta") String survey,

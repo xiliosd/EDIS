@@ -352,6 +352,7 @@ docs/diagramas/secuencia-publicar.md, secuencia-promover.md; README, CHANGELOG, 
   - **`GET …/{encuesta}/{anio}/package?tipo=anio|correccion`** returns `application/zip`, named `<ENC>-<AAAA>-v<N>-<tipo>.zip`, with exactly the four entries `reglas.json`, `frm.sql`, `columnas.sql` and `manifiesto.json`.
     - It requires a published year, or 409 "Solo se generan paquetes de un año publicado.".
     - `correccion` additionally requires `version > publicacion.version`, or 409 "No hay correcciones posteriores a la publicación.".
+    - After those checks, the year must still pass the publication checklist (the same one the import runs), or 422 "El año no pasa la lista de publicación: corríjalo antes de generar el paquete." with the `checklist` property. A case left `porRevisar` by a correction therefore blocks the package in QA instead of at import in production.
     - `columnas.sql` holds the 3a column script plus `CREATE TABLE` for missing mapped tables. It is empty with a comment when nothing is missing.
     - The audit operation is `generar-paquete`.
   - **`POST …/{encuesta}/{anio}/package/import`** is multipart with a `archivo` part and `confirmar=false|true`. The limits are 5 MB for the request, with 413 "El paquete supera 5 MB.", and 20 MB uncompressed in total. The import runs these checks in this order, each failing with 422 and a Spanish message plus a `differences` list:

@@ -89,7 +89,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(PublicationBlockedException.class)
   ProblemDetail handlePublicationBlocked(PublicationBlockedException exception) {
     ProblemDetail body =
-        problem(HttpStatus.UNPROCESSABLE_CONTENT, "No se puede publicar", exception.getMessage());
+        problem(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "Lista de publicación incompleta",
+            exception.getMessage());
     body.setProperty("checklist", exception.checklist());
     return body;
   }

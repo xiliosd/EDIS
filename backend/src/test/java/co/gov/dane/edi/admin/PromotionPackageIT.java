@@ -14,6 +14,7 @@ import co.gov.dane.edi.repository.AnswerColumnRepository;
 import co.gov.dane.edi.rules.NewColumn;
 import co.gov.dane.edi.rules.RuleSet;
 import co.gov.dane.edi.rules.RulesFileRepository;
+import co.gov.dane.edi.rules.TestCase;
 import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
@@ -235,6 +236,35 @@ class PromotionPackageIT extends OracleIntegrationTest {
       send(get(PACKAGE).param("tipo", kind))
           .andExpect(status().isConflict())
           .andExpect(jsonPath("$.detail").value("Solo se generan paquetes de un año publicado."));
+    }
+  }
+
+  /**
+   * Un año publicado que ya no pasa la lista (aquí un caso quedó por revisar) no genera paquete:
+   * producción lo rechazaría al importarlo, y es mejor saberlo en QA.
+   */
+  @Test
+  void publishedYearFailingTheChecklistHasNoPackage() throws Exception {
+    fixture.installPublished("fixture");
+    RuleSet published =
+        rulesFiles.load(PublishedYearFixture.SURVEY_CODE, PublishedYearFixture.YEAR);
+    assertThat(published.cases()).isNotEmpty();
+    List<TestCase> cases = new ArrayList<>(published.cases());
+    cases.set(0, cases.get(0).withNeedsReview(true));
+    rulesFiles.save(
+        published.withCases(cases), published.version(), "fixture", "editar-caso", List.of());
+
+    for (String kind : List.of("anio", "correccion")) {
+      send(get(PACKAGE).param("tipo", kind))
+          .andExpect(status().isUnprocessableContent())
+          .andExpect(jsonPath("$.title").value("Lista de publicación incompleta"))
+          .andExpect(jsonPath("$.detail").value(PromotionPackageService.CHECKLIST_FAILS))
+          .andExpect(jsonPath("$.checklist.ready").value(false))
+          .andExpect(
+              jsonPath("$.checklist.items[?(@.code == 'CASOS_EN_VERDE')].passed").value(false))
+          .andExpect(
+              jsonPath("$.checklist.items[?(@.code == 'CASOS_EN_VERDE')].elements[0]")
+                  .value(cases.get(0).id()));
     }
   }
 
