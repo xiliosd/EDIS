@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -95,7 +95,12 @@ describe('PackagesPage', () => {
     server.use(
       http.get(`${BASE_API}/package`, ({ request }) => {
         tipo = new URL(request.url).searchParams.get('tipo') ?? '';
-        return new HttpResponse('zip', { headers: { 'Content-Type': 'application/zip' } });
+        return new HttpResponse('zip', {
+          headers: {
+            'Content-Type': 'application/zip',
+            'Content-Disposition': 'attachment; filename="EDIN-2027-v4-anio.zip"',
+          },
+        });
       }),
     );
     await openPage();
@@ -104,6 +109,23 @@ describe('PackagesPage', () => {
 
     await waitFor(() => expect(download).toHaveBeenCalled());
     expect(tipo).toBe('anio');
+    expect(download.mock.calls[0][0]).toBe('EDIN-2027-v4-anio.zip');
+  });
+
+  it('usa un nombre propio si el servidor no manda Content-Disposition', async () => {
+    serve();
+    const download = vi.spyOn(downloadFile, 'downloadBlobFile').mockImplementation(() => {});
+    server.use(
+      http.get(
+        `${BASE_API}/package`,
+        () => new HttpResponse('zip', { headers: { 'Content-Type': 'application/zip' } }),
+      ),
+    );
+    await openPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Descargar paquete del año' }));
+
+    await waitFor(() => expect(download).toHaveBeenCalled());
     expect(download.mock.calls[0][0]).toBe('paquete-EDIN-2027-anio.zip');
   });
 
@@ -172,6 +194,20 @@ describe('PackagesPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('El paquete supera 5 MB.');
     expect(screen.getByRole('button', { name: 'Verificar' })).toBeDisabled();
     expect(called).toBe(false);
+  });
+
+  it('lleva el foco al error cuando el archivo es demasiado grande o no es .zip', async () => {
+    serve();
+    await openPage();
+    const input = screen.getByLabelText(FILE_LABEL);
+
+    fireEvent.change(input, { target: { files: [zipFile('grande.zip', 5 * 1024 * 1024 + 1)] } });
+    await waitFor(() => expect(screen.getByText('El paquete supera 5 MB.')).toHaveFocus());
+
+    fireEvent.change(input, { target: { files: [zipFile('paquete.txt')] } });
+    await waitFor(() =>
+      expect(screen.getByText('El paquete debe ser un archivo .zip.')).toHaveFocus(),
+    );
   });
 
   it('exige verificar antes de importar', async () => {
@@ -375,5 +411,32 @@ describe('PackagesPage', () => {
       name: 'Resumen de la lista de publicación',
     });
     await waitFor(() => expect(summary).toHaveFocus());
+  });
+
+  it('muestra una nota neutra y deja la importación si el año aún no existe aquí', async () => {
+    loginAsAdmin();
+    server.use(
+      http.get(`${BASE_API}/history`, () =>
+        HttpResponse.json(
+          { title: 'No existe', detail: 'El año solicitado no existe.' },
+          { status: 404, headers: PROBLEM },
+        ),
+      ),
+      http.get(`${BASE_API}/rules/export`, () =>
+        HttpResponse.json(
+          { title: 'No existe', detail: 'El año solicitado no existe.' },
+          { status: 404, headers: PROBLEM },
+        ),
+      ),
+    );
+    renderApp(PAGE_URL);
+
+    expect(
+      await screen.findByText('Este ambiente aún no tiene el año 2027; importe su paquete.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('El año solicitado no existe.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Descargar paquete del año' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).toBeNull();
+    expect(screen.getByLabelText(FILE_LABEL)).toBeEnabled();
   });
 });

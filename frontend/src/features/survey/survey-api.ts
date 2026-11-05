@@ -1,4 +1,4 @@
-import { apiClient, readCookie } from '../../services/api-client';
+import { apiClient, ensureCsrfToken } from '../../services/api-client';
 import { unwrap } from '../../services/api-error';
 import type { components } from '../../services/api-schema';
 
@@ -28,13 +28,6 @@ export function fetchPage(pageCode: string) {
 
 export function fetchRules() {
   return unwrap(apiClient.GET('/api/v1/survey/rules'));
-}
-
-// La cookie XSRF-TOKEN puede faltar si el navegador la borró; se pide antes de escribir.
-async function ensureCsrfToken(): Promise<void> {
-  if (!readCookie('XSRF-TOKEN')) {
-    await unwrap(apiClient.GET('/api/v1/auth/csrf'));
-  }
 }
 
 export async function savePageAnswers(

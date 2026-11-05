@@ -150,7 +150,7 @@ test('el administrador publica un año, lo corrige y descarga e importa su paque
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Descargar paquete de corrección' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe(`paquete-${SURVEY}-${year}-correccion.zip`);
+  expect(download.suggestedFilename()).toMatch(/^EDIN-\d{4}-v\d+-correccion\.zip$/);
   const packagePath = testInfo.outputPath(download.suggestedFilename());
   await download.saveAs(packagePath);
   expect((await readFile(packagePath)).subarray(0, 2).toString('latin1')).toBe('PK');

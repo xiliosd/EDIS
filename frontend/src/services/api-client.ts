@@ -1,4 +1,5 @@
 import createClient, { type Middleware } from 'openapi-fetch';
+import { unwrap } from './api-error';
 import type { paths } from './api-schema';
 
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN';
@@ -44,3 +45,10 @@ export const apiClient = createClient<paths>({
   fetch: (request) => globalThis.fetch(request),
 });
 apiClient.use(csrfMiddleware);
+
+// La cookie XSRF-TOKEN puede faltar si el navegador la borró; se pide antes de escribir.
+export async function ensureCsrfToken(): Promise<void> {
+  if (!readCookie(CSRF_COOKIE_NAME)) {
+    await unwrap(apiClient.GET('/api/v1/auth/csrf'));
+  }
+}

@@ -1,4 +1,4 @@
-import { apiClient, readCookie } from '../../services/api-client';
+import { apiClient, ensureCsrfToken } from '../../services/api-client';
 import { unwrap } from '../../services/api-error';
 import type { components } from '../../services/api-schema';
 import { fetchRulesExport, type RuleSet } from '../admin-rules/rules-api';
@@ -13,13 +13,6 @@ export function checklistQueryKey(survey: string, year: number) {
 
 export function ruleSetQueryKey(survey: string, year: number) {
   return ['admin', 'publication', survey, year, 'rule-set'] as const;
-}
-
-// La cookie XSRF-TOKEN puede faltar si el navegador la borró; se pide antes de escribir.
-async function ensureCsrfToken(): Promise<void> {
-  if (!readCookie('XSRF-TOKEN')) {
-    await unwrap(apiClient.GET('/api/v1/auth/csrf'));
-  }
 }
 
 export function fetchChecklist(survey: string, year: number): Promise<PublicationChecklist> {

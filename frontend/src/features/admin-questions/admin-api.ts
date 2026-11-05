@@ -1,4 +1,4 @@
-import { apiClient, readCookie } from '../../services/api-client';
+import { apiClient, ensureCsrfToken } from '../../services/api-client';
 import { unwrap } from '../../services/api-error';
 import type { components } from '../../services/api-schema';
 
@@ -19,13 +19,6 @@ export function yearsQueryKey(survey: string) {
 
 export function questionnaireQueryKey(survey: string, year: number) {
   return ['admin', 'questionnaire', survey, year] as const;
-}
-
-// La cookie XSRF-TOKEN puede faltar si el navegador la borró; se pide antes de escribir.
-async function ensureCsrfToken(): Promise<void> {
-  if (!readCookie('XSRF-TOKEN')) {
-    await unwrap(apiClient.GET('/api/v1/auth/csrf'));
-  }
 }
 
 export function fetchYears(survey: string) {

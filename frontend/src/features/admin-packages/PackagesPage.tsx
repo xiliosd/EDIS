@@ -90,7 +90,10 @@ export function PackagesPage() {
     publishedVersion !== undefined &&
     (historyQuery.data?.version ?? 0) > publishedVersion;
   const loading = historyQuery.isPending || ruleSetQuery.isPending;
-  const loadFailed = historyQuery.isError || ruleSetQuery.isError;
+  // Un año nuevo en producción aún no tiene archivo de reglas: no es un fallo, es el caso de
+  // la promoción, y la importación del paquete lo crea.
+  const yearMissing = ruleSetQuery.error instanceof ApiError && ruleSetQuery.error.status === 404;
+  const loadFailed = (historyQuery.isError || ruleSetQuery.isError) && !yearMissing;
 
   const download = useMutation({
     mutationFn: (kind: PackageKind) => downloadPackage(encuesta, year, kind),
@@ -152,9 +155,11 @@ export function PackagesPage() {
     if (chosen && chosen.size > MAX_PACKAGE_BYTES) {
       setFile(null);
       setFileError(SIZE_ERROR);
+      requestFocus('fileError');
     } else if (chosen && !chosen.name.toLowerCase().endsWith('.zip')) {
       setFile(null);
       setFileError(NOT_ZIP_ERROR);
+      requestFocus('fileError');
     } else {
       setFile(chosen);
       setFileError(null);
@@ -199,56 +204,64 @@ export function PackagesPage() {
         />
       )}
 
+      {yearMissing && (
+        <p className="mt-6 rounded-xl border border-ink-muted/40 bg-surface p-4">
+          Este ambiente aún no tiene el año {year}; importe su paquete.
+        </p>
+      )}
+
       <p role="status" aria-live="polite" className="mt-4">
         {statusMessage}
       </p>
 
-      <section aria-labelledby="titulo-descargar" className="mt-6">
-        <h2 id="titulo-descargar" className="text-xl font-semibold">
-          Descargar
-        </h2>
-        <p className="mt-2 text-ink-muted">
-          El paquete lleva manifiesto.json, reglas.json, frm.sql y columnas.sql. Solo se genera de
-          un año publicado.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-3">
-          <Button disabled={!published || busy} onClick={() => download.mutate('anio')}>
-            Descargar paquete del año
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!hasCorrections || busy}
-            onClick={() => download.mutate('correccion')}
-          >
-            Descargar paquete de corrección
-          </Button>
-        </div>
-        {!loading && !loadFailed && !published && (
-          <p className="mt-2 text-ink-muted">Publique el año para generar sus paquetes.</p>
-        )}
-        {published && !hasCorrections && (
-          <p className="mt-2 text-ink-muted">No hay correcciones posteriores a la publicación.</p>
-        )}
-        {downloadError && (
-          <p
-            ref={downloadErrorRef}
-            role="alert"
-            tabIndex={-1}
-            className="mt-4 rounded-xl border border-danger/40 bg-surface p-4 text-danger"
-          >
-            {downloadError}
+      {!yearMissing && (
+        <section aria-labelledby="titulo-descargar" className="mt-6">
+          <h2 id="titulo-descargar" className="text-xl font-semibold">
+            Descargar
+          </h2>
+          <p className="mt-2 text-ink-muted">
+            El paquete lleva manifiesto.json, reglas.json, frm.sql y columnas.sql. Solo se genera de
+            un año publicado.
           </p>
-        )}
-        {blockedChecklist && (
-          <ChecklistView
-            ref={checklistRef}
-            checklist={blockedChecklist}
-            survey={encuesta}
-            year={year}
-            warnings={[]}
-          />
-        )}
-      </section>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Button disabled={!published || busy} onClick={() => download.mutate('anio')}>
+              Descargar paquete del año
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!hasCorrections || busy}
+              onClick={() => download.mutate('correccion')}
+            >
+              Descargar paquete de corrección
+            </Button>
+          </div>
+          {!loading && !loadFailed && !published && (
+            <p className="mt-2 text-ink-muted">Publique el año para generar sus paquetes.</p>
+          )}
+          {published && !hasCorrections && (
+            <p className="mt-2 text-ink-muted">No hay correcciones posteriores a la publicación.</p>
+          )}
+          {downloadError && (
+            <p
+              ref={downloadErrorRef}
+              role="alert"
+              tabIndex={-1}
+              className="mt-4 rounded-xl border border-danger/40 bg-surface p-4 text-danger"
+            >
+              {downloadError}
+            </p>
+          )}
+          {blockedChecklist && (
+            <ChecklistView
+              ref={checklistRef}
+              checklist={blockedChecklist}
+              survey={encuesta}
+              year={year}
+              warnings={[]}
+            />
+          )}
+        </section>
+      )}
 
       <section aria-labelledby="titulo-importar" className="mt-10">
         <h2 id="titulo-importar" className="text-xl font-semibold">
@@ -271,7 +284,13 @@ export function PackagesPage() {
           />
         </div>
         {fileError && (
-          <p id={`${fileId}-error`} ref={fileErrorRef} role="alert" className="mt-2 text-danger">
+          <p
+            id={`${fileId}-error`}
+            ref={fileErrorRef}
+            role="alert"
+            tabIndex={-1}
+            className="mt-2 text-danger"
+          >
             {fileError}
           </p>
         )}
