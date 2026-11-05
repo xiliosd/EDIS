@@ -230,26 +230,28 @@ public class FrmWriteRepository {
   }
 
   /**
-   * Cambia la ayuda solo si su FRM_CAP_PROY pertenece únicamente a esta pareja (encuesta, año).
+   * Cambia la palabra enlazada (TEXTO) de la ayuda {@code codPreAyu} solo si su FRM_CAP_PROY
+   * pertenece únicamente a esta pareja (encuesta, año). COD_AYU, la referencia a la definición en
+   * GRAL_AYUDAS, no cambia.
    *
    * @throws NoSuchElementException si la ayuda no existe
    * @throws SharedRowException si la usa otro año o encuesta
    */
-  public void updateHelp(long codAyu, String project, String yearText, String text) {
+  public void updateHelp(long codPreAyu, String project, String yearText, String text) {
     Objects.requireNonNull(text);
     int year = Integer.parseInt(yearText);
     List<Optional<Long>> caps =
         jdbc.query(
-            "SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_AYU = ?",
+            "SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = ?",
             (set, rowNumber) -> Optional.ofNullable(nullableLong(set, 1)),
-            codAyu);
+            codPreAyu);
     if (caps.isEmpty()) {
-      throw new NoSuchElementException("No existe el registro de ayuda " + codAyu);
+      throw new NoSuchElementException("No existe el registro de ayuda " + codPreAyu);
     }
     requireCapProyOnlyForPair(caps.get(0).orElse(null), project, year);
     requireOne(
-        jdbc.update("UPDATE FRM_PRE_AYUDA SET TEXTO = ? WHERE COD_AYU = ?", text, codAyu),
-        "ayuda " + codAyu);
+        jdbc.update("UPDATE FRM_PRE_AYUDA SET TEXTO = ? WHERE COD_PRE_AYU = ?", text, codPreAyu),
+        "ayuda " + codPreAyu);
   }
 
   private long[] groupAndQuestionOf(long capProyId) {

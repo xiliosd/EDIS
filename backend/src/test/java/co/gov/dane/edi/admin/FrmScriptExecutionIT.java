@@ -128,8 +128,8 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
     long headerHelp = firstId(FrmTable.ENC_AYUDA);
     jdbc.update("UPDATE FRM_PREGUNTA SET PREGUNTA = 'Otro texto' WHERE COD_PRE = ?", question);
     jdbc.update("UPDATE FRM_ENCABEZADO SET ENCABEZADO = NULL WHERE COD_ENC = ?", header);
-    jdbc.update("UPDATE FRM_PRE_AYUDA SET TEXTO = 'Otra ayuda' WHERE COD_AYU = ?", help);
-    jdbc.update("UPDATE FRM_ENC_AYUDA SET TEXTO = 'Otra' WHERE COD_AYU = ?", headerHelp);
+    jdbc.update("UPDATE FRM_PRE_AYUDA SET TEXTO = 'Otra ayuda' WHERE COD_PRE_AYU = ?", help);
+    jdbc.update("UPDATE FRM_ENC_AYUDA SET TEXTO = 'Otra' WHERE COD_ENC_AYU = ?", headerHelp);
     // El repunte de la copia al escribir: el cap_proy apunta a otro grupo.
     jdbc.update(
         "UPDATE FRM_CAP_PROY SET COD_PRE_GRUPO = ? WHERE COD_CAP_PROY = ?",
@@ -143,6 +143,55 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
     Map<FrmTable, Long> afterCorrection = tableCounts();
     runner.run(correctionScript);
     assertThat(tableCounts()).isEqualTo(afterCorrection);
+    assertThat(snapshots.snapshot(PROJECT, YEAR)).isEqualTo(original);
+  }
+
+  /** COD_AYU es parte de la fila pero no corregible: otra definición es un id ocupado. */
+  @Test
+  void correctionPackageAbortsWhenHelpPointsToAnotherDefinition() throws SQLException {
+    String correctionScript = writer.write(original, PackageKind.CORRECCION, SOURCE_CHARSET);
+    long help = firstId(FrmTable.PRE_AYUDA);
+    jdbc.update("UPDATE FRM_PRE_AYUDA SET COD_AYU = 502 WHERE COD_PRE_AYU = ?", help);
+    deleteRow(FrmTable.PREGUNTA, DraftYearFixture.H1_GROUP_2_FIRST);
+    Map<FrmTable, Long> before = tableCounts();
+
+    assertThatThrownBy(() -> runner.run(correctionScript))
+        .isInstanceOf(SQLException.class)
+        .hasMessageContaining("ORA-20001")
+        .hasMessageContaining("Id ocupado: FRM_PRE_AYUDA COD_PRE_AYU=" + help);
+    assertThat(tableCounts()).isEqualTo(before);
+  }
+
+  /**
+   * GRAL_AYUDAS no viaja en el paquete: si en el destino falta la definición de una ayuda, el
+   * script aborta con ORA-20003 antes de escribir nada.
+   */
+  @Test
+  void missingHelpDefinitionStopsBeforeAnyInsert() throws SQLException {
+    String yearScript = writer.write(original, PackageKind.ANIO, SOURCE_CHARSET);
+    Map<String, Object> definition =
+        jdbc.queryForMap(
+            "SELECT PROY, COD, TITULO, DESCRIPCION, ANIO FROM GRAL_AYUDAS WHERE COD = 501");
+    deleteOwnRows(original);
+    jdbc.update("DELETE FROM GRAL_AYUDAS WHERE COD = 501");
+    try {
+      Map<FrmTable, Long> before = tableCounts();
+
+      assertThatThrownBy(() -> runner.run(yearScript))
+          .isInstanceOf(SQLException.class)
+          .hasMessageContaining("ORA-20003")
+          .hasMessageContaining("Falta la definicion COD_AYU 501 en GRAL_AYUDAS");
+      assertThat(tableCounts()).isEqualTo(before);
+    } finally {
+      jdbc.update(
+          "INSERT INTO GRAL_AYUDAS (PROY, COD, TITULO, DESCRIPCION, ANIO) VALUES (?, ?, ?, ?, ?)",
+          definition.get("PROY"),
+          definition.get("COD"),
+          definition.get("TITULO"),
+          definition.get("DESCRIPCION"),
+          definition.get("ANIO"));
+    }
+    runner.run(yearScript);
     assertThat(snapshots.snapshot(PROJECT, YEAR)).isEqualTo(original);
   }
 

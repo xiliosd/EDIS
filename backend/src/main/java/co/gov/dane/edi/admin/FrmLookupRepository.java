@@ -46,8 +46,9 @@ public class FrmLookupRepository {
         "SELECT COD_CAP_PROY FROM FRM_ENCABEZADO WHERE COD_ENC = ? AND ANIO = ?", codEnc, yearText);
   }
 
-  public Optional<Long> capProyOfHelp(long codAyu) {
-    return first("SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_AYU = ?", codAyu);
+  /** FRM_CAP_PROY de la ayuda de pregunta, por su clave COD_PRE_AYU (no por COD_AYU). */
+  public Optional<Long> capProyOfHelp(long codPreAyu) {
+    return first("SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = ?", codPreAyu);
   }
 
   /** Número de GRUPO (bloque de orden) de cada FRM_CAP_PROY indicado. */

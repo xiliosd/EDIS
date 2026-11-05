@@ -92,7 +92,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codAyu}": {
+    "/api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codPreAyu}": {
         parameters: {
             query?: never;
             header?: never;
@@ -100,7 +100,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Editar la ayuda de una pregunta de un año (corrección con motivo si está publicado) */
+        /** Editar la palabra enlazada a la ayuda de una pregunta de un año, por COD_PRE_AYU (corrección con motivo si está publicado; la definición en GRAL_AYUDAS no cambia) */
         put: operations["editHelp"];
         post?: never;
         delete?: never;
@@ -704,7 +704,14 @@ export interface components {
         AdminHelp: {
             /** Format: int64 */
             codAyu?: number;
+            /** Format: int64 */
+            codPreAyu?: number;
+            definition?: components["schemas"]["AdminHelpDefinition"];
             text?: string;
+        };
+        AdminHelpDefinition: {
+            excerpt?: string;
+            title?: string;
         };
         AdminPage: {
             chapterCode?: string;
@@ -1401,7 +1408,7 @@ export interface operations {
             path: {
                 encuesta: string;
                 anio: number;
-                codAyu: number;
+                codPreAyu: number;
             };
             cookie?: never;
         };

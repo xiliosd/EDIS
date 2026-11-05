@@ -108,15 +108,18 @@ public final class DraftYearFixture {
     return after.get(before.indexOf(codEnc2026));
   }
 
-  /** COD_AYU de 2027 copiado de una ayuda de pregunta de 2026. */
-  public long draftHelp(long codAyu2026) {
+  /** COD_PRE_AYU de 2027 copiado de una ayuda de pregunta de 2026. */
+  public long draftHelp(long codPreAyu2026) {
     long capProy2026 =
         jdbc.queryForObject(
-            "SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_AYU = ?", Long.class, codAyu2026);
-    String sql = "SELECT COD_AYU FROM FRM_PRE_AYUDA WHERE COD_CAP_PROY = ? ORDER BY COD_AYU";
+            "SELECT COD_CAP_PROY FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = ?",
+            Long.class,
+            codPreAyu2026);
+    String sql =
+        "SELECT COD_PRE_AYU FROM FRM_PRE_AYUDA WHERE COD_CAP_PROY = ? ORDER BY COD_PRE_AYU";
     List<Long> before = jdbc.queryForList(sql, Long.class, capProy2026);
     List<Long> after = jdbc.queryForList(sql, Long.class, draftCapProy(capProy2026));
-    return after.get(before.indexOf(codAyu2026));
+    return after.get(before.indexOf(codPreAyu2026));
   }
 
   /** Pregunta propia (pregunta, grupo, cap_proy y periodo con el mismo id) de H1 en 2027. */

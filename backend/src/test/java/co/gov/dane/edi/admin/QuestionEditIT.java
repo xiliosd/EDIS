@@ -114,8 +114,14 @@ class QuestionEditIT extends OracleIntegrationTest {
                 "SELECT ENCABEZADO FROM FRM_ENCABEZADO WHERE COD_ENC = 1", String.class))
         .isEqualTo("Ubicaci&oacute;n laboral");
     assertThat(
-            jdbc.queryForObject("SELECT TEXTO FROM FRM_PRE_AYUDA WHERE COD_AYU = 1", String.class))
-        .isEqualTo("Ayuda ficticia de la página B1");
+            jdbc.queryForObject(
+                "SELECT TEXTO FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = 1", String.class))
+        .isEqualTo("desempeña");
+    // Solo cambia la palabra enlazada: la referencia a la definición sigue igual.
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COD_AYU FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = ?", Long.class, help))
+        .isEqualTo(501L);
   }
 
   @Test

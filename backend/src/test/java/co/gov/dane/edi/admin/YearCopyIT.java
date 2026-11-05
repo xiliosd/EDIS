@@ -156,6 +156,24 @@ class YearCopyIT extends OracleIntegrationTest {
                 "FRM_ENC_AYUDA A JOIN FRM_ENCABEZADO E ON E.COD_ENC = A.COD_ENC"
                     + " WHERE E.ANIO = '2027'"))
         .isEqualTo(1);
+    // Ayudas: COD_PRE_AYU / COD_ENC_AYU nuevos, la misma definición (COD_AYU) y la misma palabra;
+    // GRAL_AYUDAS no se copia ni se toca.
+    assertThat(helpsOf("C.ANIO = '2027'"))
+        .isEqualTo(helpsOf("C.ANIO <> '2027' AND P.PROY = 'EDIN' AND P.ANIO = 2026"))
+        .isNotEmpty();
+    assertThat(
+            count(
+                "FRM_PRE_AYUDA A JOIN FRM_CAP_PROY C ON C.COD_CAP_PROY = A.COD_CAP_PROY"
+                    + " WHERE C.ANIO = '2027' AND A.COD_PRE_AYU <= 9"))
+        .isZero();
+    assertThat(
+            jdbc.queryForList(
+                "SELECT A.COD_ENC_AYU || ':' || A.COD_AYU || ':' || A.TEXTO FROM FRM_ENC_AYUDA A"
+                    + " JOIN FRM_ENCABEZADO E ON E.COD_ENC = A.COD_ENC WHERE E.ANIO = '2027'",
+                String.class))
+        .singleElement()
+        .satisfies(row -> assertThat(row).endsWith(":510:laboral").doesNotStartWith("1:"));
+    assertThat(count("GRAL_AYUDAS")).isEqualTo(10);
     assertThat(
             count(
                 "FRM_SALTO S JOIN FRM_CAP_PROY C ON C.COD_CAP_PROY = S.COD_CAP_PROY"
@@ -176,6 +194,18 @@ class YearCopyIT extends OracleIntegrationTest {
     assertThat(output.getAll())
         .contains(
             "operacion=crear-anio", "encuesta=EDIN", "anio=2027", "codigos=[2027, desde-2026]");
+  }
+
+  /** COD_AYU y TEXTO de las ayudas de pregunta del filtro, en el orden de COD_PRE_AYU. */
+  private List<String> helpsOf(String filter) {
+    return jdbc.queryForList(
+        "SELECT A.COD_AYU || ':' || A.TEXTO FROM FRM_PRE_AYUDA A"
+            + " JOIN FRM_CAP_PROY C ON C.COD_CAP_PROY = A.COD_CAP_PROY"
+            + " JOIN FRM_CAP_PERIODO P ON P.COD_CAP_PROY = C.COD_CAP_PROY"
+            + " WHERE "
+            + filter
+            + " ORDER BY A.COD_PRE_AYU",
+        String.class);
   }
 
   @Test

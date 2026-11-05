@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Fotografía de las filas FRM_* de un año: la clausura que parte de FRM_CAP_PERIODO. Las filas van
@@ -47,6 +48,21 @@ public record FrmSnapshot(String project, int year, Map<FrmTable, List<Map<Strin
                     .map(row -> Collections.unmodifiableMap(new LinkedHashMap<>(row)))
                     .toList()));
     rows = Collections.unmodifiableMap(copy);
+  }
+
+  /**
+   * COD_AYU distintos (ordenados) de las ayudas de pregunta y de encabezado: las definiciones de
+   * GRAL_AYUDAS que el año necesita en la base de destino. GRAL_AYUDAS no viaja en el paquete.
+   */
+  public List<Long> helpDefinitionCodes() {
+    return Stream.of(FrmTable.PRE_AYUDA, FrmTable.ENC_AYUDA)
+        .flatMap(table -> rows.getOrDefault(table, List.of()).stream())
+        .map(row -> row.get("COD_AYU"))
+        .filter(BigDecimal.class::isInstance)
+        .map(code -> ((BigDecimal) code).longValueExact())
+        .distinct()
+        .sorted()
+        .toList();
   }
 
   /** Si algún texto tiene caracteres fuera de ASCII: dependen del juego de caracteres. */

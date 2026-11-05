@@ -46,7 +46,12 @@ export const PAGE_C1: AdminPage = {
       text: '¿En 2027 trabajó en la entidad?',
       rawText: '¿En 200X trabajó en la entidad?',
       headers: [{ codEnc: 501, kind: 'HEADING', text: 'Ambiente laboral' }],
-      help: { codAyu: 701, text: 'Responda según el último año.' },
+      help: {
+        codPreAyu: 701,
+        codAyu: 9001,
+        text: 'último año',
+        definition: { title: 'Último año', excerpt: 'Año calendario anterior al de la encuesta.' },
+      },
       referencedByRules: ['salto-c05'],
     }),
     entry({ capProyId: 102, numeral: 'C06', columnCode: 'C06', text: 'Segunda pregunta' }),

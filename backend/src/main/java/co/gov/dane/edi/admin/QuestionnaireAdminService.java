@@ -4,6 +4,7 @@ import co.gov.dane.edi.admin.AnswerTableResolver.ResolvedTable;
 import co.gov.dane.edi.admin.dto.AdminEntry;
 import co.gov.dane.edi.admin.dto.AdminHeader;
 import co.gov.dane.edi.admin.dto.AdminHelp;
+import co.gov.dane.edi.admin.dto.AdminHelpDefinition;
 import co.gov.dane.edi.admin.dto.AdminPage;
 import co.gov.dane.edi.admin.dto.AdminQuestionnaireView;
 import co.gov.dane.edi.model.AnswerSpec;
@@ -30,6 +31,9 @@ import org.springframework.stereotype.Service;
 /** Arma el árbol de lectura del cuestionario de cualquier encuesta y año. */
 @Service
 public class QuestionnaireAdminService {
+
+  /** Caracteres del extracto de la definición (GRAL_AYUDAS.DESCRIPCION llega a 3000 bytes). */
+  static final int HELP_EXCERPT_LENGTH = 200;
 
   private final YearCatalogService years;
   private final QuestionnaireService questionnaire;
@@ -151,12 +155,32 @@ public class QuestionnaireAdminService {
             answer == null ? null : answer.columnStatus(),
             built.row().optionGroup(),
             entryHeaders,
-            entryHelp == null
-                ? null
-                : new AdminHelp(
-                    entryHelp.codAyu(), QuestionTextSanitizer.toPlainText(entryHelp.text())),
+            entryHelp == null ? null : toPlainHelp(entryHelp),
             List.of());
     return admin.withReferencedByRules(referencingRules(admin, rules));
+  }
+
+  /** La palabra enlazada y la definición, en texto plano para el editor. */
+  static AdminHelp toPlainHelp(AdminHelp help) {
+    AdminHelpDefinition definition = help.definition();
+    return new AdminHelp(
+        help.codPreAyu(),
+        help.codAyu(),
+        QuestionTextSanitizer.toPlainText(help.text()),
+        definition == null
+            ? null
+            : new AdminHelpDefinition(
+                QuestionTextSanitizer.toPlainText(definition.title()),
+                excerpt(QuestionTextSanitizer.toPlainText(definition.excerpt()))));
+  }
+
+  /** Comienzo de la definición: solo da contexto, la definición completa no se edita aquí. */
+  static String excerpt(String text) {
+    if (text.codePointCount(0, text.length()) <= HELP_EXCERPT_LENGTH) {
+      return text;
+    }
+    int end = text.offsetByCodePoints(0, HELP_EXCERPT_LENGTH);
+    return text.substring(0, end).stripTrailing() + "…";
   }
 
   private static List<String> referencingRules(AdminEntry entry, RuleSet rules) {

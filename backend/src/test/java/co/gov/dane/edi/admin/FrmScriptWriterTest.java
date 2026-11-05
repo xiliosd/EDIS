@@ -139,7 +139,7 @@ class FrmScriptWriterTest {
   @Test
   void rendersNullsNumbersAndDependencyOrder() {
     Map<FrmTable, List<Map<String, Object>>> rows = emptyRows();
-    rows.put(FrmTable.ENC_AYUDA, List.of(row(FrmTable.ENC_AYUDA, 1, 3, null)));
+    rows.put(FrmTable.ENC_AYUDA, List.of(row(FrmTable.ENC_AYUDA, 1, 3, 501, null)));
     rows.put(
         FrmTable.PREGUNTA, List.of(row(FrmTable.PREGUNTA, new BigDecimal("10.000"), "P", "L")));
     FrmSnapshot snapshot = new FrmSnapshot("EDIN", 2027, rows);
@@ -148,7 +148,7 @@ class FrmScriptWriterTest {
 
     assertThat(script).contains("WHERE COD_PRE = 10;").contains("  V_TEXTO VARCHAR2(4000 BYTE);\n");
     assertThat(script).doesNotContain("V_TEXTO := ");
-    assertThat(script).contains("VALUES (1, V_COD_ENC, V_TEXTO);");
+    assertThat(script).contains("VALUES (1, V_COD_ENC, V_COD_AYU, V_TEXTO);");
     assertThat(script.indexOf("FRM_PREGUNTA")).isLessThan(script.indexOf("INSERT INTO FRM_ENC"));
     assertThat(script).contains("-- Encuesta: EDIN").contains("-- Anio: 2027");
     assertThat(script).contains("FRM_PREGUNTA: 1").contains("FRM_ENC_AYUDA: 1");
@@ -181,7 +181,7 @@ class FrmScriptWriterTest {
   @Test
   void nonAsciiTextIsGuardedByACharacterSetCheckBeforeAnyInsert() {
     FrmSnapshot snapshot =
-        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 9, 101, "Atención"));
+        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 9, 101, 501, "Atención"));
 
     String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
 
@@ -197,7 +197,7 @@ class FrmScriptWriterTest {
     assertThat(FrmScriptWriter.checksCharacterSet(script)).isTrue();
     assertThat(snapshot.hasNonAsciiText()).isTrue();
     FrmSnapshot ascii =
-        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 9, 101, "ASCII\n' \\ ~"));
+        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 9, 101, 501, "ASCII\n' \\ ~"));
     assertThat(ascii.hasNonAsciiText()).isFalse();
   }
 
@@ -208,12 +208,63 @@ class FrmScriptWriterTest {
     FrmSnapshot snapshot =
         snapshotWith(
             FrmTable.PRE_AYUDA,
-            row(FrmTable.PRE_AYUDA, 9, 101, "x\n" + comment + "\nRAISE_APPLICATION_ERROR(-20002"));
+            row(
+                FrmTable.PRE_AYUDA,
+                9,
+                101,
+                501,
+                "x\n" + comment + "\nRAISE_APPLICATION_ERROR(-20002"));
 
     String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
 
     assertThat(script).contains(comment);
     assertThat(FrmScriptWriter.checksCharacterSet(script)).isFalse();
+  }
+
+  @Test
+  void helpDefinitionsAreCheckedBeforeAnyInsert() {
+    Map<FrmTable, List<Map<String, Object>>> rows = emptyRows();
+    rows.put(
+        FrmTable.PRE_AYUDA,
+        List.of(
+            row(FrmTable.PRE_AYUDA, 9, 101, 503, "palabra"),
+            row(FrmTable.PRE_AYUDA, 10, 102, 501, "otra"),
+            row(FrmTable.PRE_AYUDA, 11, 103, 503, "repetida")));
+    rows.put(FrmTable.ENC_AYUDA, List.of(row(FrmTable.ENC_AYUDA, 1, 3, 502, "encabezado")));
+    FrmSnapshot snapshot = new FrmSnapshot("EDIN", 2027, rows);
+
+    String script = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
+
+    assertThat(snapshot.helpDefinitionCodes()).containsExactly(501L, 502L, 503L);
+    int check = script.indexOf("-- Verificacion de las definiciones de ayuda en GRAL_AYUDAS\n");
+    assertThat(check).isPositive();
+    assertThat(check).isLessThan(script.indexOf("INSERT INTO"));
+    assertThat(script)
+        .contains("SELECT COUNT(*) INTO DEFINITIONS FROM GRAL_AYUDAS WHERE COD = 501;")
+        .contains("'Falta la definicion COD_AYU 503 en GRAL_AYUDAS'");
+    assertThat(script.split("WHERE COD = 503;", -1)).hasSize(2);
+    assertThat(script.lines()).allMatch(line -> line.chars().allMatch(c -> c < 0x80));
+  }
+
+  @Test
+  void scriptWithoutHelpsDoesNotTouchHelpDefinitions() {
+    FrmSnapshot snapshot = snapshotWith(FrmTable.PREGUNTA, row(FrmTable.PREGUNTA, 7, "Texto", "L"));
+
+    assertThat(writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET))
+        .doesNotContain("GRAL_AYUDAS WHERE");
+  }
+
+  /** La corrección solo actualiza la palabra enlazada; COD_AYU distinto aborta como id ocupado. */
+  @Test
+  void correctionOfAHelpUpdatesOnlyTheLinkedWord() {
+    FrmSnapshot snapshot =
+        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 9, 101, 501, "palabra"));
+
+    String correction = writer.write(snapshot, PackageKind.CORRECCION, SOURCE_CHARSET);
+
+    assertThat(correction).contains("UPDATE FRM_PRE_AYUDA SET TEXTO = V_TEXTO\n");
+    assertThat(correction)
+        .contains("AND (COD_AYU = V_COD_AYU OR (COD_AYU IS NULL AND V_COD_AYU IS NULL))");
   }
 
   @Test

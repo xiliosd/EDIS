@@ -53,7 +53,8 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>que el ZIP traiga exactamente las cuatro entradas, sin rutas ni repetidas;
  *   <li>que cada archivo tenga el SHA-256 del manifiesto;
  *   <li>que {@code reglas.json} sea válido, publicado y de la encuesta, año y versión del paquete;
- *   <li>que las filas FRM_* de esta base den las filas y sumas del manifiesto, y
+ *   <li>que las filas FRM_* de esta base den las filas y sumas del manifiesto y que cada COD_AYU de
+ *       sus ayudas tenga definición en GRAL_AYUDAS, y
  *   <li>que existan las tablas y columnas de respuesta (estos dos se informan juntos);
  *   <li>que la versión sea posterior a la de este ambiente, o la misma con el mismo contenido.
  * </ol>
@@ -333,8 +334,8 @@ public class PackageImportService {
       String survey,
       int year) {
     List<String> differences = new ArrayList<>();
-    Map<String, TableSum> actual =
-        PromotionPackageFormat.tableSums(snapshots.snapshot(survey, year));
+    FrmSnapshot snapshot = snapshots.snapshot(survey, year);
+    Map<String, TableSum> actual = PromotionPackageFormat.tableSums(snapshot);
     actual.forEach(
         (table, sum) -> {
           TableSum expected = manifest.tables().get(table);
@@ -354,6 +355,10 @@ public class PackageImportService {
         });
     if (!actual.keySet().containsAll(manifest.tables().keySet())) {
       differences.add("El manifiesto trae tablas que no son del paquete.");
+    }
+    // GRAL_AYUDAS no viaja en el paquete: cada ayuda del año necesita su definición aquí.
+    for (Long code : snapshots.missingHelpDefinitions(snapshot.helpDefinitionCodes())) {
+      differences.add("Falta la definición COD_AYU " + code + " en GRAL_AYUDAS.");
     }
     Set<String> validTables = new HashSet<>();
     for (Chapter chapter : Chapter.values()) {

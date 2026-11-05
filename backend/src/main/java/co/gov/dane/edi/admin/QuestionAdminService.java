@@ -164,13 +164,23 @@ public class QuestionAdminService {
         false);
   }
 
+  /**
+   * Cambia la palabra o frase enlazada de una ayuda (FRM_PRE_AYUDA.TEXTO), identificada por
+   * COD_PRE_AYU. La definición (GRAL_AYUDAS) no se edita aquí.
+   */
   public AdminEditResult editHelp(
-      String survey, int year, long codAyu, String text, int version, String user, String reason) {
+      String survey,
+      int year,
+      long codPreAyu,
+      String text,
+      int version,
+      String user,
+      String reason) {
     String plain = normalize(text);
     years.requireEditable(survey, year, EditKind.CORRECTION, reason);
     long capProyId =
         lookup
-            .capProyOfHelp(codAyu)
+            .capProyOfHelp(codPreAyu)
             .orElseThrow(() -> new ResourceNotFoundException("La ayuda no existe."));
     CapProyRef ref = requireCapProy(capProyId, survey, year);
     return apply(
@@ -183,8 +193,8 @@ public class QuestionAdminService {
         reason,
         requirePage(ref.pageCode()),
         () -> {
-          writes.updateHelp(codAyu, survey, String.valueOf(year), plain);
-          return List.of(codeOf(ref), "ayu-" + codAyu);
+          writes.updateHelp(codPreAyu, survey, String.valueOf(year), plain);
+          return List.of(codeOf(ref), "ayu-" + codPreAyu);
         },
         false);
   }

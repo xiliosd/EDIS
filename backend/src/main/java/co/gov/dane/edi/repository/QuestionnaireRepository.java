@@ -2,6 +2,7 @@ package co.gov.dane.edi.repository;
 
 import co.gov.dane.edi.admin.dto.AdminHeader;
 import co.gov.dane.edi.admin.dto.AdminHelp;
+import co.gov.dane.edi.admin.dto.AdminHelpDefinition;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.HeaderKind;
@@ -52,12 +53,15 @@ public class QuestionnaireRepository {
        ORDER BY COD_CAP_PROY, TIPO DESC, COD_ENC
       """;
 
+  // COD es único en toda GRAL_AYUDAS (aunque tenga PROY y ANIO): se une solo por COD.
   private static final String HELP =
       """
-      SELECT COD_AYU, COD_CAP_PROY, TEXTO
-        FROM FRM_PRE_AYUDA
-       WHERE COD_CAP_PROY IN (:entryIds)
-       ORDER BY COD_CAP_PROY, COD_AYU
+      SELECT A.COD_PRE_AYU, A.COD_CAP_PROY, A.COD_AYU, A.TEXTO,
+             D.COD AS DEFINICION, D.TITULO, D.DESCRIPCION
+        FROM FRM_PRE_AYUDA A
+        LEFT JOIN GRAL_AYUDAS D ON D.COD = A.COD_AYU
+       WHERE A.COD_CAP_PROY IN (:entryIds)
+       ORDER BY A.COD_CAP_PROY, A.COD_PRE_AYU
       """;
 
   private static final String RAW_TEXTS =
@@ -165,7 +169,10 @@ public class QuestionnaireRepository {
     return headers;
   }
 
-  /** Primera ayuda de cada pregunta (FRM_PRE_AYUDA); texto tal como está en la base. */
+  /**
+   * Primera ayuda de cada pregunta (FRM_PRE_AYUDA) con su definición de GRAL_AYUDAS si existe;
+   * textos tal como están en la base.
+   */
   public Map<Long, AdminHelp> findHelp(Collection<Long> entryIds) {
     Map<Long, AdminHelp> help = new LinkedHashMap<>();
     if (entryIds.isEmpty()) {
@@ -177,7 +184,14 @@ public class QuestionnaireRepository {
         row -> {
           help.putIfAbsent(
               row.getLong("COD_CAP_PROY"),
-              new AdminHelp(row.getLong("COD_AYU"), row.getString("TEXTO")));
+              new AdminHelp(
+                  row.getLong("COD_PRE_AYU"),
+                  row.getObject("COD_AYU") == null ? null : row.getLong("COD_AYU"),
+                  row.getString("TEXTO"),
+                  row.getObject("DEFINICION") == null
+                      ? null
+                      : new AdminHelpDefinition(
+                          row.getString("TITULO"), row.getString("DESCRIPCION"))));
         });
     return help;
   }

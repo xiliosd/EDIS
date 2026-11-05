@@ -91,8 +91,8 @@ class DevDataIT extends OracleIntegrationTest {
             Map.entry("FRM_RTA_GRUPO", List.of("COD_GRUPO", "GRUPO", "ORDEN", "VALOR", "COD_RTA")),
             Map.entry(
                 "FRM_ENCABEZADO", List.of("COD_ENC", "COD_CAP_PROY", "TIPO", "ENCABEZADO", "ANIO")),
-            Map.entry("FRM_PRE_AYUDA", List.of("COD_AYU", "COD_CAP_PROY", "TEXTO")),
-            Map.entry("FRM_ENC_AYUDA", List.of("COD_AYU", "COD_ENC", "TEXTO")));
+            Map.entry("FRM_PRE_AYUDA", List.of("COD_PRE_AYU", "COD_CAP_PROY", "COD_AYU", "TEXTO")),
+            Map.entry("FRM_ENC_AYUDA", List.of("COD_ENC_AYU", "COD_ENC", "COD_AYU", "TEXTO")));
     Map<String, String> primaryKeys =
         Map.ofEntries(
             Map.entry("FRM_PREGUNTA", "COD_PRE"),
@@ -103,8 +103,8 @@ class DevDataIT extends OracleIntegrationTest {
             Map.entry("FRM_SALTO", "COD_SAL"),
             Map.entry("FRM_RTA_GRUPO", "COD_GRUPO"),
             Map.entry("FRM_ENCABEZADO", "COD_ENC"),
-            Map.entry("FRM_PRE_AYUDA", "COD_AYU"),
-            Map.entry("FRM_ENC_AYUDA", "COD_AYU"));
+            Map.entry("FRM_PRE_AYUDA", "COD_PRE_AYU"),
+            Map.entry("FRM_ENC_AYUDA", "COD_ENC_AYU"));
     expected.forEach(
         (table, columns) -> {
           assertThat(columnsOf(table))
@@ -120,6 +120,25 @@ class DevDataIT extends OracleIntegrationTest {
   @Test
   void answerCatalogHasNoValueColumn() {
     assertThat(columnsOf("FRM_RESPUESTA")).containsExactlyInAnyOrder("COD_RTA", "RESPUESTA");
+  }
+
+  // Único DDL completo del respaldo real.
+  @Test
+  void helpDefinitionsTableHasTheRealColumns() {
+    assertThat(columnsOf("GRAL_AYUDAS"))
+        .containsExactlyInAnyOrder("PROY", "COD", "TITULO", "DESCRIPCION", "ANIO");
+  }
+
+  @Test
+  void everyHelpPointsToAnExistingDefinition() {
+    Integer orphans =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM (SELECT COD_AYU FROM FRM_PRE_AYUDA UNION ALL"
+                + " SELECT COD_AYU FROM FRM_ENC_AYUDA) A"
+                + " WHERE NOT EXISTS (SELECT 1 FROM GRAL_AYUDAS D WHERE D.COD = A.COD_AYU)",
+            Map.of(),
+            Integer.class);
+    assertThat(orphans).isZero();
   }
 
   @Test

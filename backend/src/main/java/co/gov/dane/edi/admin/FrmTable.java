@@ -6,10 +6,11 @@ import java.util.List;
  * Tablas FRM_* con identificador propio. Los nombres de tabla y columna que llegan al SQL salen
  * solo de este enum, nunca de una entrada externa.
  *
- * <p>{@link #columns()} son las columnas reales de {@code db/dev/schema.sql} (el id primero): solo
- * esas entran en la fotografía del año y en {@code frm.sql}. {@link #correctableColumns()} son las
- * que una corrección sobre un año publicado puede cambiar en una fila existente: los textos y el
- * repunte de FRM_CAP_PROY que hace la copia al escribir.
+ * <p>{@link #columns()} son las columnas reales (respaldo de DANE_DIRPEN, en {@code
+ * db/dev/schema.sql}) (el id primero): solo esas entran en la fotografía del año y en {@code
+ * frm.sql}. {@link #correctableColumns()} son las que una corrección sobre un año publicado puede
+ * cambiar en una fila existente: los textos y el repunte de FRM_CAP_PROY que hace la copia al
+ * escribir.
  */
 public enum FrmTable {
   PREGUNTA("FRM_PREGUNTA", List.of("COD_PRE", "PREGUNTA", "TIPO"), List.of("PREGUNTA")),
@@ -32,8 +33,14 @@ public enum FrmTable {
       "FRM_ENCABEZADO",
       List.of("COD_ENC", "COD_CAP_PROY", "TIPO", "ENCABEZADO", "ANIO"),
       List.of("ENCABEZADO")),
-  PRE_AYUDA("FRM_PRE_AYUDA", List.of("COD_AYU", "COD_CAP_PROY", "TEXTO"), List.of("TEXTO")),
-  ENC_AYUDA("FRM_ENC_AYUDA", List.of("COD_AYU", "COD_ENC", "TEXTO"), List.of("TEXTO"));
+  // COD_AYU es una referencia a GRAL_AYUDAS.COD (la definición): va en la fila, pero ni se genera
+  // ni se corrige; lo corregible es solo la palabra enlazada (TEXTO).
+  PRE_AYUDA(
+      "FRM_PRE_AYUDA",
+      List.of("COD_PRE_AYU", "COD_CAP_PROY", "COD_AYU", "TEXTO"),
+      List.of("TEXTO")),
+  ENC_AYUDA(
+      "FRM_ENC_AYUDA", List.of("COD_ENC_AYU", "COD_ENC", "COD_AYU", "TEXTO"), List.of("TEXTO"));
 
   private final String tableName;
   private final List<String> columns;

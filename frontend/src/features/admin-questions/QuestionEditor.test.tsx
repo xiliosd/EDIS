@@ -113,7 +113,12 @@ describe('QuestionEditor', () => {
           version: 6,
           page: pageWith({
             headers: [{ codEnc: 501, kind: 'HEADING', text: 'Clima' }],
-            help: { codAyu: 701, text: body.text },
+            help: {
+              codPreAyu: 701,
+              codAyu: 9001,
+              text: body.text,
+              definition: { title: 'Último año', excerpt: 'Año anterior.' },
+            },
           }),
           skipsTargetingEarlierQuestions: [],
         });
@@ -128,16 +133,47 @@ describe('QuestionEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
     expect(await screen.findByText('Clima')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Editar ayuda de C05' }));
-    await user.clear(screen.getByLabelText('Ayuda de C05'));
-    await user.type(screen.getByLabelText('Ayuda de C05'), 'Nueva ayuda');
+    await user.click(screen.getByRole('button', { name: 'Editar palabra enlazada de C05' }));
+    await user.clear(screen.getByLabelText('Palabra enlazada a la ayuda de C05'));
+    await user.type(screen.getByLabelText('Palabra enlazada a la ayuda de C05'), 'año');
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
-    expect(await screen.findByText('Nueva ayuda')).toBeInTheDocument();
+    expect(await screen.findByText('año')).toBeInTheDocument();
 
     expect(calls).toEqual([
       { url: 'header', body: { text: 'Clima', version: 4 } },
-      { url: 'help', body: { text: 'Nueva ayuda', version: 5 } },
+      { url: 'help', body: { text: 'año', version: 5 } },
     ]);
+  });
+
+  it('muestraLaDefinicionDeLaAyudaSoloLectura', async () => {
+    serveTree();
+    renderApp(TREE_URL);
+
+    const definition = await screen.findByRole('group', { name: 'Definición de la ayuda de C05' });
+    expect(definition).toHaveTextContent('Último año');
+    expect(definition).toHaveTextContent('Año calendario anterior al de la encuesta.');
+    expect(definition).toHaveTextContent('COD_AYU 9001');
+    expect(screen.queryByRole('button', { name: /Editar definición/ })).toBeNull();
+  });
+
+  it('avisaCuandoLaAyudaNoTieneDefinicion', async () => {
+    serveTree(
+      draftView({
+        pages: [
+          pageWith({
+            help: { codPreAyu: 701, codAyu: 9002, text: 'último año', definition: undefined },
+          }),
+        ],
+      }),
+    );
+    renderApp(TREE_URL);
+
+    const definition = await screen.findByRole('group', { name: 'Definición de la ayuda de C05' });
+    expect(definition).toHaveTextContent('Sin definición en GRAL_AYUDAS');
+    expect(definition).toHaveTextContent('COD_AYU 9002');
+    expect(
+      screen.getByRole('button', { name: 'Editar palabra enlazada de C05' }),
+    ).toBeInTheDocument();
   });
 
   async function deactivateC05RejectedWith(references: { rules: string[]; cases: string[] }) {
@@ -276,6 +312,8 @@ describe('QuestionEditor', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Editar texto de C05' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Editar ayuda de C05' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Editar palabra enlazada de C05' }),
+    ).toBeInTheDocument();
   });
 });

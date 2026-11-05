@@ -62,11 +62,11 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
         "INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO, ANIO)"
             + " VALUES (900031, 900031, 'E', 'Encabezado compartido', '2027')");
     jdbc.update(
-        "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO)"
-            + " VALUES (900031, 900031, 'Ayuda compartida')");
+        "INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)"
+            + " VALUES (900031, 900031, 501, 'Ayuda compartida')");
     jdbc.update(
-        "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO)"
-            + " VALUES (900001, 900001, 'Ayuda')");
+        "INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)"
+            + " VALUES (900001, 900001, 501, 'Ayuda')");
   }
 
   @AfterEach
@@ -210,8 +210,12 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
         .isEqualTo("Nuevo encabezado");
     assertThat(
             jdbc.queryForObject(
-                "SELECT TEXTO FROM FRM_PRE_AYUDA WHERE COD_AYU = 900001", String.class))
+                "SELECT TEXTO FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = 900001", String.class))
         .isEqualTo("Nueva ayuda");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COD_AYU FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = 900001", Long.class))
+        .isEqualTo(501L);
     assertThat(
             jdbc.queryForObject(
                 "SELECT ORDEN FROM FRM_PRE_GRUPO WHERE COD_PRE_GRUPO = 900011", Integer.class))
@@ -298,10 +302,11 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
         "INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO, ANIO)"
             + " VALUES (900051, NULL, 'E', 'Huérfano', '2027')");
     jdbc.update(
-        "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO)"
-            + " VALUES (900051, NULL, 'Huérfana')");
+        "INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)"
+            + " VALUES (900051, NULL, 501, 'Huérfana')");
     jdbc.update(
-        "INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO) VALUES (900052, 999998, 'Rota')");
+        "INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)"
+            + " VALUES (900052, 999998, 501, 'Rota')");
 
     assertThatThrownBy(
             () -> inTransaction(() -> repository.updateHeader(900051, "EDIN", "2027", "x")))

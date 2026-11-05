@@ -13,6 +13,7 @@ DELETE FROM FRM_RTA_GRUPO;
 DELETE FROM FRM_ENCABEZADO;
 DELETE FROM FRM_PRE_AYUDA;
 DELETE FROM FRM_ENC_AYUDA;
+DELETE FROM GRAL_AYUDAS;
 DELETE FROM EDIN_20_CAP_B_UBICA;
 DELETE FROM EDIN_20_CAP_C_EXP_PERS;
 DELETE FROM EDIN_20_CAP_D_GEST_TAL;
@@ -95,11 +96,23 @@ INSERT INTO FRM_RTA_GRUPO (COD_GRUPO, GRUPO, COD_RTA, ORDEN, VALOR) VALUES
   (11, 20, 21, '1', '1'), (12, 20, 22, '2', '2');
 
 -- Ayudas ficticias: una por página (B1, C1, C2, D1, D2, E1, F1, G1, H1) y una de encabezado.
-INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO) VALUES
-  (1, 101, 'Ayuda ficticia de la página B1'), (2, 301, 'Ayuda ficticia de la página C1'),
-  (3, 303, 'Ayuda ficticia de la página C2'), (4, 304, 'Ayuda ficticia de la página D1'),
-  (5, 305, 'Ayuda ficticia de la página D2'), (6, 306, 'Ayuda ficticia de la página E1'),
-  (7, 307, 'Ayuda ficticia de la página F1'), (8, 308, 'Ayuda ficticia de la página G1'),
-  (9, 309, 'Ayuda ficticia de la página H1');
-INSERT INTO FRM_ENC_AYUDA (COD_AYU, COD_ENC, TEXTO) VALUES
-  (1, 1, 'Ayuda ficticia del encabezado de B1');
+-- TEXTO es la palabra de la pregunta que se vuelve enlace y COD_AYU la definición en GRAL_AYUDAS.
+-- "desempeña" (sin entidad) deja texto no ASCII en la fotografía del año.
+INSERT INTO GRAL_AYUDAS (PROY, COD, TITULO, DESCRIPCION, ANIO) VALUES
+  ('EDIN', 501, 'Desempe&ntilde;o', '<p>Definici&oacute;n <b>ficticia</b> de desempe&ntilde;o.</p>', 2026),
+  ('EDIN', 502, 'Pregunta C01A', '<p>Definici&oacute;n ficticia de C01A.</p>', 2026),
+  ('EDIN', 503, 'Pregunta C13', '<p>Definici&oacute;n ficticia de C13.</p>', 2026),
+  ('EDIN', 504, 'Pregunta D01A', '<p>Definici&oacute;n ficticia de D01A.</p>', 2026),
+  ('EDIN', 505, 'Pregunta D09', '<p>Definici&oacute;n ficticia de D09.</p>', 2026),
+  ('EDIN', 506, 'Pregunta E01A', '<p>Definici&oacute;n ficticia de E01A.</p>', 2026),
+  ('EDIN', 507, 'Pregunta F01A', '<p>Definici&oacute;n ficticia de F01A.</p>', 2026),
+  ('EDIN', 508, 'Pregunta G01A', '<p>Definici&oacute;n ficticia de G01A.</p>', 2026),
+  ('EDIN', 509, 'Pregunta H01', '<p>Definici&oacute;n ficticia de H01.</p>', 2026),
+  ('EDIN', 510, 'Ubicaci&oacute;n laboral',
+   '<p>Definici&oacute;n ficticia del lugar de trabajo.</p>', 2026);
+INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO) VALUES
+  (1, 101, 501, 'desempeña'), (2, 301, 502, 'ficticia C01A'), (3, 303, 503, 'ficticia C13'),
+  (4, 304, 504, 'ficticia D01A'), (5, 305, 505, 'ficticia D09'), (6, 306, 506, 'ficticia E01A'),
+  (7, 307, 507, 'ficticia F01A'), (8, 308, 508, 'ficticia G01A'), (9, 309, 509, 'ficticia H01');
+INSERT INTO FRM_ENC_AYUDA (COD_ENC_AYU, COD_ENC, COD_AYU, TEXTO) VALUES
+  (1, 1, 510, 'laboral');

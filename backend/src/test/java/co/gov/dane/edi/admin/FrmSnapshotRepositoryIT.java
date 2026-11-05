@@ -79,11 +79,12 @@ class FrmSnapshotRepositoryIT extends OracleIntegrationTest {
     assertThat(FrmSnapshot.tableSum(List.of(sha256("a"), sha256("b"))))
         .isEqualTo(sha256(sha256("b") + "\n" + sha256("a")));
     Map<String, Object> withNull = new LinkedHashMap<>();
-    withNull.put("COD_AYU", new BigDecimal("1.00"));
+    withNull.put("COD_ENC_AYU", new BigDecimal("1.00"));
     withNull.put("COD_ENC", new BigDecimal(3));
+    withNull.put("COD_AYU", new BigDecimal(510));
     withNull.put("TEXTO", null);
     assertThat(FrmSnapshot.rowHash(FrmTable.ENC_AYUDA, withNull))
-        .isEqualTo(sha256("COD_AYU=1:1\u001FCOD_ENC=1:3\u001FTEXTO=NULL"));
+        .isEqualTo(sha256("COD_ENC_AYU=1:1\u001FCOD_ENC=1:3\u001FCOD_AYU=3:510\u001FTEXTO=NULL"));
     // Con la longitud delante, NULL no se confunde con un texto "NULL" ni con un NUL.
     Map<String, Object> withNul = new LinkedHashMap<>(withNull);
     withNul.put("TEXTO", "\u0000");

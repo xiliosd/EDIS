@@ -215,6 +215,36 @@ interface QuestionEditorProps {
   editing: TreeEditing | null;
 }
 
+type AdminHelp = NonNullable<AdminEntry['help']>;
+
+/**
+ * Definición de la ayuda en GRAL_AYUDAS, solo como contexto: se edita en la administración de
+ * ayudas (Fase 4), no aquí. Llega en texto plano y React la escapa.
+ */
+function HelpDefinition({ id, label, help }: { id: string; label: string; help: AdminHelp }) {
+  const definition = help.definition;
+  return (
+    <div
+      role="group"
+      aria-labelledby={`${id}-titulo`}
+      className="rounded border border-ink-muted/40 px-3 py-2 text-sm"
+    >
+      <p id={`${id}-titulo`} className="font-semibold">
+        Definición de la ayuda de {label}
+      </p>
+      <p className="text-ink-muted">COD_AYU {help.codAyu ?? 'sin código'} · solo lectura</p>
+      {definition ? (
+        <>
+          <p className="font-semibold">{definition.title}</p>
+          <p className="whitespace-pre-line">{definition.excerpt}</p>
+        </>
+      ) : (
+        <p>Sin definición en GRAL_AYUDAS</p>
+      )}
+    </div>
+  );
+}
+
 /** Una pregunta o enunciado del árbol con sus encabezados, su ayuda y sus acciones. */
 export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps) {
   const label = entryLabel(entry);
@@ -355,29 +385,37 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
         </>
       )}
 
-      {help &&
-        (editing ? (
-          <EditableText
-            id={`${idBase}-ayuda`}
-            label={`Ayuda de ${label}`}
-            editLabel={`Editar ayuda de ${label}`}
-            display={<p className="text-sm text-ink-muted">{help.text}</p>}
-            value={help.text ?? ''}
-            editing={editing}
-            save={(value, motivo) =>
-              editHelp(
-                editing.survey,
-                editing.year,
-                help.codAyu ?? 0,
-                value,
-                editing.version,
-                motivo,
-              )
-            }
-          />
-        ) : (
-          <p className="text-sm text-ink-muted">{help.text}</p>
-        ))}
+      {help && (
+        <div className="grid gap-1">
+          {editing ? (
+            <EditableText
+              id={`${idBase}-ayuda`}
+              label={`Palabra enlazada a la ayuda de ${label}`}
+              editLabel={`Editar palabra enlazada de ${label}`}
+              display={<p className="text-sm text-ink-muted">{help.text}</p>}
+              value={help.text ?? ''}
+              hint="Es la palabra o frase de la pregunta que se muestra como enlace a la definición."
+              editing={editing}
+              save={(value, motivo) =>
+                editHelp(
+                  editing.survey,
+                  editing.year,
+                  help.codPreAyu ?? 0,
+                  value,
+                  editing.version,
+                  motivo,
+                )
+              }
+            />
+          ) : (
+            <p className="text-sm text-ink-muted">
+              <span className="font-semibold">Palabra enlazada a la ayuda:</span>{' '}
+              <span>{help.text}</span>
+            </p>
+          )}
+          <HelpDefinition id={`${idBase}-definicion`} label={label} help={help} />
+        </div>
+      )}
 
       {editing && (
         <div className="flex flex-wrap gap-2">

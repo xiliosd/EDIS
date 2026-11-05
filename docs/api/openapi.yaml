@@ -295,7 +295,7 @@ paths:
       summary: Editar un encabezado de un año (corrección con motivo si está publicado)
       tags:
       - Administración del cuestionario
-  /api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codAyu}:
+  /api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codPreAyu}:
     put:
       operationId: editHelp
       parameters:
@@ -311,7 +311,7 @@ paths:
           type: integer
           format: int32
       - in: path
-        name: codAyu
+        name: codPreAyu
         required: true
         schema:
           type: integer
@@ -356,8 +356,9 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "El texto queda vacío o es demasiado largo, o en un año publicado\
             \ falta el motivo (10 a 500 caracteres)"
-      summary: Editar la ayuda de una pregunta de un año (corrección con motivo si
-        está publicado)
+      summary: "Editar la palabra enlazada a la ayuda de una pregunta de un año, por\
+        \ COD_PRE_AYU (corrección con motivo si está publicado; la definición en GRAL_AYUDAS\
+        \ no cambia)"
       tags:
       - Administración del cuestionario
   /api/v1/admin/questionnaire/{encuesta}/{anio}/history:
@@ -1887,7 +1888,19 @@ components:
         codAyu:
           type: integer
           format: int64
+        codPreAyu:
+          type: integer
+          format: int64
+        definition:
+          $ref: "#/components/schemas/AdminHelpDefinition"
         text:
+          type: string
+    AdminHelpDefinition:
+      type: object
+      properties:
+        excerpt:
+          type: string
+        title:
           type: string
     AdminPage:
       type: object

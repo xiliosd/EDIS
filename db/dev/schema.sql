@@ -1,10 +1,12 @@
 -- DECISION (Fase 3a): los identificadores de las tablas FRM_* se generan con MAX+1 dentro de
--- la misma transaccion de escritura (ver Tarea 5), porque el DDL real de QA
--- (db/reference/frm-ddl-qa.sql) no fue entregado. Aqui no hay secuencias ni disparadores.
--- Deuda: confirmar con el DDL real de QA como se generan los ids antes de usar la administracion en QA.
--- Esquema DEDUCIDO del código PHP heredado (spec §4.2). Solo para desarrollo y pruebas;
--- se reemplaza por el DDL real de DANE_DIRPEN cuando el DBA lo entregue. Requiere Oracle 23ai
--- (IF NOT EXISTS) para poder ejecutarse en cada arranque del contexto de pruebas.
+-- la misma transaccion de escritura (ver Tarea 5). El respaldo real de DANE_DIRPEN (16-oct-2026)
+-- no trae secuencias ni disparadores para FRM_*, pero tampoco sus CREATE TABLE: sigue sin
+-- confirmar si en produccion existe otra forma de generar los ids.
+-- Esquema solo para desarrollo y pruebas. Las COLUMNAS de las FRM_* (nombres y orden) estan
+-- confirmadas con los INSERT del respaldo real y las claves con sus indices unicos; los TIPOS y
+-- LONGITUDES de las FRM_* siguen DEDUCIDOS del PHP heredado (spec §4.2). GRAL_AYUDAS es el unico
+-- DDL completo del respaldo y se copia tal cual. Requiere Oracle 23ai (IF NOT EXISTS) para poder
+-- ejecutarse en cada arranque del contexto de pruebas.
 CREATE TABLE IF NOT EXISTS EDIN_MUESTRA (
   ANIO VARCHAR2(8), COD_ENT VARCHAR2(10), COD_DEPTO VARCHAR2(2), C_C VARCHAR2(11),
   NOM_APE VARCHAR2(200), ATV NUMBER(1), TC1 NUMBER(1), LGN VARCHAR2(8), PSW VARCHAR2(8)
@@ -50,11 +52,22 @@ CREATE TABLE IF NOT EXISTS FRM_ENCABEZADO (
   COD_ENC NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), TIPO VARCHAR2(1),
   ENCABEZADO VARCHAR2(4000), ANIO VARCHAR2(4)
 );
+-- Ayudas: TEXTO es la palabra o frase de la pregunta (o del encabezado) que se vuelve enlace y
+-- COD_AYU apunta a GRAL_AYUDAS.COD, donde esta la definicion. En el respaldo FRM_PRE_AYUDA no
+-- tiene indice unico visible; aqui COD_PRE_AYU lleva clave primaria porque es su clave natural y
+-- la aplicacion la direcciona.
 CREATE TABLE IF NOT EXISTS FRM_PRE_AYUDA (
-  COD_AYU NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), TEXTO VARCHAR2(4000)
+  COD_PRE_AYU NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), COD_AYU NUMBER(10),
+  TEXTO VARCHAR2(4000)
 );
 CREATE TABLE IF NOT EXISTS FRM_ENC_AYUDA (
-  COD_AYU NUMBER(10) PRIMARY KEY, COD_ENC NUMBER(10), TEXTO VARCHAR2(4000)
+  COD_ENC_AYU NUMBER(10) PRIMARY KEY, COD_ENC NUMBER(10), COD_AYU NUMBER(10),
+  TEXTO VARCHAR2(4000)
+);
+-- DDL real del respaldo. COD es unico en toda la tabla aunque haya PROY y ANIO.
+CREATE TABLE IF NOT EXISTS GRAL_AYUDAS (
+  PROY VARCHAR2(10 BYTE), COD NUMBER(4,0), TITULO VARCHAR2(80 BYTE),
+  DESCRIPCION VARCHAR2(3000 BYTE), ANIO NUMBER
 );
 
 -- Subconjunto de columnas del DDL 2024 (DOCUMENTOS/SCRIPT BASE DE DATOS) necesario para el cuestionario

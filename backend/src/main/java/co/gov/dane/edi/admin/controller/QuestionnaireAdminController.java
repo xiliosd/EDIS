@@ -185,7 +185,9 @@ public class QuestionnaireAdminController {
 
   @Operation(
       summary =
-          "Editar la ayuda de una pregunta de un año (corrección con motivo si está publicado)")
+          "Editar la palabra enlazada a la ayuda de una pregunta de un año, por COD_PRE_AYU"
+              + " (corrección con motivo si está publicado; la definición en GRAL_AYUDAS no"
+              + " cambia)")
   @ApiResponse(responseCode = "200", description = "Página actualizada y nueva versión del año")
   @ApiResponse(
       responseCode = "400",
@@ -218,15 +220,15 @@ public class QuestionnaireAdminController {
           @Content(
               mediaType = "application/problem+json",
               schema = @Schema(implementation = ProblemDetail.class)))
-  @PutMapping(value = EDIT_BASE + "/help/{codAyu}", produces = MediaType.APPLICATION_JSON_VALUE)
+  @PutMapping(value = EDIT_BASE + "/help/{codPreAyu}", produces = MediaType.APPLICATION_JSON_VALUE)
   public AdminEditResult editHelp(
       @PathVariable("encuesta") String survey,
       @PathVariable("anio") int year,
-      @PathVariable long codAyu,
+      @PathVariable long codPreAyu,
       @Valid @RequestBody EditTextRequest request,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
     return edits.editHelp(
-        survey, year, codAyu, request.text(), request.version(), user(jwt), request.motivo());
+        survey, year, codPreAyu, request.text(), request.version(), user(jwt), request.motivo());
   }
 
   @Operation(summary = "Reordenar las preguntas de una página de un año en borrador")

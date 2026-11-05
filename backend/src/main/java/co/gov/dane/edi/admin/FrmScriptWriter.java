@@ -41,6 +41,10 @@ public class FrmScriptWriter {
   /** Nombre de un juego de caracteres de Oracle: entra en un literal y en un comentario. */
   private static final Pattern CHARACTER_SET = Pattern.compile("^[A-Z][A-Z0-9_]{0,29}$");
 
+  /** Comentario que abre el bloque de verificación de las definiciones de ayuda. */
+  private static final String HELP_DEFINITIONS_CHECK_MARK =
+      "-- Verificacion de las definiciones de ayuda en GRAL_AYUDAS";
+
   /** Comentario que abre el bloque de verificación del juego de caracteres. */
   private static final String CHARACTER_SET_CHECK_MARK =
       "-- Verificacion del juego de caracteres de destino";
@@ -67,6 +71,7 @@ public class FrmScriptWriter {
     if (snapshot.hasNonAsciiText()) {
       appendCharacterSetCheck(script, sourceCharacterSet);
     }
+    appendHelpDefinitionsCheck(script, snapshot.helpDefinitionCodes());
     for (FrmTable table : FrmSnapshot.TABLES) {
       for (Map<String, Object> row : snapshot.rows().getOrDefault(table, List.of())) {
         appendRow(script, table, row, kind);
@@ -103,6 +108,35 @@ public class FrmScriptWriter {
     script.append("/\n");
   }
 
+  /**
+   * Las ayudas apuntan a GRAL_AYUDAS.COD, que no viaja en el paquete: si falta una definición en el
+   * destino aborta con ORA-20003 antes de escribir nada, igual que un id ocupado, para no dejar
+   * enlaces sin definición.
+   */
+  private static void appendHelpDefinitionsCheck(StringBuilder script, List<Long> codes) {
+    if (codes.isEmpty()) {
+      return;
+    }
+    script.append(HELP_DEFINITIONS_CHECK_MARK).append('\n');
+    script.append("DECLARE\n");
+    script.append("  DEFINITIONS PLS_INTEGER;\n");
+    script.append("BEGIN\n");
+    for (Long code : codes) {
+      script
+          .append("  SELECT COUNT(*) INTO DEFINITIONS FROM GRAL_AYUDAS WHERE COD = ")
+          .append(code)
+          .append(";\n");
+      script.append("  IF DEFINITIONS = 0 THEN\n");
+      script
+          .append("    RAISE_APPLICATION_ERROR(-20003, 'Falta la definicion COD_AYU ")
+          .append(code)
+          .append(" en GRAL_AYUDAS');\n");
+      script.append("  END IF;\n");
+    }
+    script.append("END;\n");
+    script.append("/\n");
+  }
+
   private static void appendHeader(
       StringBuilder script, FrmSnapshot snapshot, PackageKind kind, String sourceCharacterSet) {
     // La cabecera también es ASCII: sin tildes, para no depender del NLS_LANG del cliente.
@@ -130,7 +164,8 @@ public class FrmScriptWriter {
         -- toca, una fila nueva se inserta y un id ocupado por otra fila aborta con ORA-20001; el
         -- WHENEVER SQLERROR deshace entonces todo lo hecho y nada queda escrito. Si hay texto
         -- no ASCII y la base de destino tiene otro juego de caracteres, aborta con ORA-20002
-        -- antes de escribir nada.
+        -- antes de escribir nada. Si a GRAL_AYUDAS del destino le falta la definicion de una
+        -- ayuda (COD_AYU), aborta con ORA-20003 antes de escribir nada.
         """);
   }
 

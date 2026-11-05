@@ -12,6 +12,7 @@ import jakarta.servlet.http.Cookie;
 import java.util.EnumSet;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 class QuestionnaireAdminIT extends OracleIntegrationTest {
@@ -20,6 +21,7 @@ class QuestionnaireAdminIT extends OracleIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private SessionTokenService tokens;
+  @Autowired private JdbcTemplate jdbc;
 
   @Test
   void adminTreeListsPagesEntriesAndColumnStatus() throws Exception {
@@ -33,9 +35,13 @@ class QuestionnaireAdminIT extends OracleIntegrationTest {
         .andExpect(jsonPath("$.pages.length()").value(9))
         .andExpect(jsonPath("$.pages[0].pageCode").value("B1"))
         .andExpect(jsonPath("$.pages[0].tableName").value("EDIN_20_CAP_B_UBICA"))
-        .andExpect(jsonPath("$.pages[0].entries[0].help.codAyu").value(1))
+        .andExpect(jsonPath("$.pages[0].entries[0].help.codPreAyu").value(1))
+        .andExpect(jsonPath("$.pages[0].entries[0].help.codAyu").value(501))
+        .andExpect(jsonPath("$.pages[0].entries[0].help.text").value("desempeña"))
+        .andExpect(jsonPath("$.pages[0].entries[0].help.definition.title").value("Desempeño"))
         .andExpect(
-            jsonPath("$.pages[0].entries[0].help.text").value("Ayuda ficticia de la página B1"))
+            jsonPath("$.pages[0].entries[0].help.definition.excerpt")
+                .value("Definición ficticia de desempeño."))
         .andExpect(jsonPath("$.pages[0].entries[0].headers.length()").value(2))
         .andExpect(
             jsonPath("$.pages[0].entries[0].headers[?(@.codEnc == 1)].kind").value("HEADING"))
@@ -51,6 +57,25 @@ class QuestionnaireAdminIT extends OracleIntegrationTest {
                     "$.pages[?(@.pageCode == 'C1')].entries[?(@.columnCode == 'C01A')]"
                         + ".referencedByRules[0]")
                 .value("legacy-C01A"));
+  }
+
+  // Una ayuda cuyo COD_AYU no está en GRAL_AYUDAS se lista igual, sin definición.
+  @Test
+  void helpWithoutDefinitionIsListedWithoutDefinition() throws Exception {
+    jdbc.update(
+        "INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)"
+            + " VALUES (900090, 102, 9999, 'Nivel')");
+    try {
+      mockMvc
+          .perform(get(TREE).cookie(questionnaireAdmin()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.pages[0].entries[1].help.codPreAyu").value(900090))
+          .andExpect(jsonPath("$.pages[0].entries[1].help.codAyu").value(9999))
+          .andExpect(jsonPath("$.pages[0].entries[1].help.text").value("Nivel"))
+          .andExpect(jsonPath("$.pages[0].entries[1].help.definition").doesNotExist());
+    } finally {
+      jdbc.update("DELETE FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = 900090");
+    }
   }
 
   @Test

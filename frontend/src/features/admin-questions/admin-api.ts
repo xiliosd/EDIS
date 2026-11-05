@@ -83,18 +83,19 @@ export async function editHeader(
   );
 }
 
+/** Cambia la palabra enlazada (TEXTO) de la ayuda COD_PRE_AYU; la definición no se edita aquí. */
 export async function editHelp(
   survey: string,
   year: number,
-  codAyu: number,
+  codPreAyu: number,
   text: string,
   version: number,
   motivo?: string,
 ): Promise<AdminEditResult> {
   await ensureCsrfToken();
   return unwrap(
-    apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codAyu}', {
-      params: { path: { encuesta: survey, anio: year, codAyu } },
+    apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codPreAyu}', {
+      params: { path: { encuesta: survey, anio: year, codPreAyu } },
       body: { text, version, motivo },
     }),
   );

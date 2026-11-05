@@ -3,6 +3,7 @@ package co.gov.dane.edi.admin;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -86,6 +87,19 @@ public class FrmSnapshotRepository {
             + " ORDER BY "
             + table.idColumn();
     return jdbc.query(sql, (resultSet, rowNumber) -> row(columns, resultSet), parameters);
+  }
+
+  /** De los COD_AYU indicados, los que no tienen definición en GRAL_AYUDAS de esta base. */
+  public List<Long> missingHelpDefinitions(List<Long> codes) {
+    List<Long> missing = new ArrayList<>();
+    for (Long code : codes) {
+      Long found =
+          jdbc.queryForObject("SELECT COUNT(*) FROM GRAL_AYUDAS WHERE COD = ?", Long.class, code);
+      if (found == null || found == 0) {
+        missing.add(code);
+      }
+    }
+    return missing;
   }
 
   /** NLS_CHARACTERSET de esta base: el paquete lo anota y la importación lo compara. */

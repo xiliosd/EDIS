@@ -27,7 +27,10 @@ describe('QuestionnaireTreePage', () => {
     expect(within(first).getByText('Activa')).toBeInTheDocument();
     expect(within(first).getByText('Usada por 1 regla: salto-c05')).toBeInTheDocument();
     expect(within(first).getByText('Ambiente laboral')).toBeInTheDocument();
-    expect(within(first).getByText('Responda según el último año.')).toBeInTheDocument();
+    expect(within(first).getByText('último año')).toBeInTheDocument();
+    expect(
+      within(first).getByText('Año calendario anterior al de la encuesta.'),
+    ).toBeInTheDocument();
     // La vista previa muestra el año sustituido; el texto crudo con 200X se edita.
     expect(within(first).getByText('¿En 2027 trabajó en la entidad?')).toBeInTheDocument();
     const pending = screen.getByRole('listitem', { name: 'Pregunta C07A' });
@@ -50,7 +53,12 @@ describe('QuestionnaireTreePage', () => {
                 text: markup,
                 rawText: markup,
                 headers: [{ codEnc: 501, kind: 'HEADING', text: '<b>Encabezado</b>' }],
-                help: { codAyu: 701, text: '<img src=x onerror=alert(1)>' },
+                help: {
+                  codPreAyu: 701,
+                  codAyu: 9001,
+                  text: '<img src=x onerror=alert(1)>',
+                  definition: { title: '<b>Título</b>', excerpt: '<script>alert(1)</script>' },
+                },
               }),
             ],
           },
@@ -62,6 +70,8 @@ describe('QuestionnaireTreePage', () => {
     expect(await screen.findByText(markup)).toBeInTheDocument();
     expect(screen.getByText('<b>Encabezado</b>')).toBeInTheDocument();
     expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument();
+    expect(screen.getByText('<b>Título</b>')).toBeInTheDocument();
+    expect(screen.getByText('<script>alert(1)</script>')).toBeInTheDocument();
     expect(container.querySelector('main script')).toBeNull();
     expect(container.querySelector('main img')).toBeNull();
     expect(container.querySelector('main b')).toBeNull();

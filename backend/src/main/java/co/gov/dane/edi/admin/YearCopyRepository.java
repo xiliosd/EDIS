@@ -176,21 +176,29 @@ public class YearCopyRepository {
     return mapping;
   }
 
+  /**
+   * Cada fila recibe un COD_PRE_AYU nuevo; COD_AYU y TEXTO se copian iguales: la definición vive en
+   * GRAL_AYUDAS, que es compartida y no se copia ni se toca.
+   */
   void copyHelp(String project, int fromYear, Map<Long, Long> capProys, List<CopiedRange> copied) {
     List<Object[]> sources =
         jdbc.query(
-            "SELECT A.COD_CAP_PROY, A.TEXTO FROM FRM_PRE_AYUDA A WHERE A.COD_CAP_PROY"
+            "SELECT A.COD_CAP_PROY, A.COD_AYU, A.TEXTO FROM FRM_PRE_AYUDA A WHERE A.COD_CAP_PROY"
                 + SOURCE_CAP_PROYS
-                + " ORDER BY A.COD_AYU",
-            (rows, rowNumber) -> new Object[] {rows.getLong(1), rows.getString(2)},
+                + " ORDER BY A.COD_PRE_AYU",
+            (rows, rowNumber) ->
+                new Object[] {rows.getLong(1), rows.getObject(2), rows.getString(3)},
             project,
             fromYear);
     List<Object[]> inserts = new ArrayList<>();
     long next = allocate(FrmTable.PRE_AYUDA, sources.size(), copied);
     for (Object[] source : sources) {
-      inserts.add(new Object[] {next++, capProys.get((Long) source[0]), source[1]});
+      inserts.add(new Object[] {next++, capProys.get((Long) source[0]), source[1], source[2]});
     }
-    batch("INSERT INTO FRM_PRE_AYUDA (COD_AYU, COD_CAP_PROY, TEXTO) VALUES (?, ?, ?)", inserts);
+    batch(
+        "INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)"
+            + " VALUES (?, ?, ?, ?)",
+        inserts);
   }
 
   void copyPeriods(
@@ -243,21 +251,24 @@ public class YearCopyRepository {
       String project, int fromYear, Map<Long, Long> headers, List<CopiedRange> copied) {
     List<Object[]> sources =
         jdbc.query(
-            "SELECT A.COD_ENC, A.TEXTO FROM FRM_ENC_AYUDA A"
+            "SELECT A.COD_ENC, A.COD_AYU, A.TEXTO FROM FRM_ENC_AYUDA A"
                 + " JOIN FRM_ENCABEZADO E ON E.COD_ENC = A.COD_ENC"
                 + " WHERE E.ANIO = ? AND E.COD_CAP_PROY"
                 + SOURCE_CAP_PROYS
-                + " ORDER BY A.COD_AYU",
-            (rows, rowNumber) -> new Object[] {rows.getLong(1), rows.getString(2)},
+                + " ORDER BY A.COD_ENC_AYU",
+            (rows, rowNumber) ->
+                new Object[] {rows.getLong(1), rows.getObject(2), rows.getString(3)},
             String.valueOf(fromYear),
             project,
             fromYear);
     List<Object[]> inserts = new ArrayList<>();
     long next = allocate(FrmTable.ENC_AYUDA, sources.size(), copied);
     for (Object[] source : sources) {
-      inserts.add(new Object[] {next++, headers.get((Long) source[0]), source[1]});
+      inserts.add(new Object[] {next++, headers.get((Long) source[0]), source[1], source[2]});
     }
-    batch("INSERT INTO FRM_ENC_AYUDA (COD_AYU, COD_ENC, TEXTO) VALUES (?, ?, ?)", inserts);
+    batch(
+        "INSERT INTO FRM_ENC_AYUDA (COD_ENC_AYU, COD_ENC, COD_AYU, TEXTO) VALUES (?, ?, ?, ?)",
+        inserts);
   }
 
   /**

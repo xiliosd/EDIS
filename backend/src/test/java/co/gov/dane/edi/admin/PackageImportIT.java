@@ -124,9 +124,10 @@ class PackageImportIT extends OracleIntegrationTest {
     RuleSet before = rulesFiles.load("EDIN", 2027);
     Map<String, Object> help =
         snapshots.snapshot("EDIN", 2027).rows().get(FrmTable.PRE_AYUDA).get(0);
-    Object helpId = help.get("COD_AYU");
+    Object helpId = help.get("COD_PRE_AYU");
     try {
-      jdbc.update("UPDATE FRM_PRE_AYUDA SET TEXTO = 'Editado a mano' WHERE COD_AYU = ?", helpId);
+      jdbc.update(
+          "UPDATE FRM_PRE_AYUDA SET TEXTO = 'Editado a mano' WHERE COD_PRE_AYU = ?", helpId);
       jdbc.execute("ALTER TABLE " + H_TABLE + " DROP COLUMN H02A");
       answerColumns.evict(H_TABLE);
 
@@ -144,10 +145,41 @@ class PackageImportIT extends OracleIntegrationTest {
       assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(before);
     } finally {
       jdbc.update(
-          "UPDATE FRM_PRE_AYUDA SET TEXTO = ? WHERE COD_AYU = ?", help.get("TEXTO"), helpId);
+          "UPDATE FRM_PRE_AYUDA SET TEXTO = ? WHERE COD_PRE_AYU = ?", help.get("TEXTO"), helpId);
       jdbc.execute("ALTER TABLE " + H_TABLE + " ADD (H02A VARCHAR2(50))");
       answerColumns.evict(H_TABLE);
     }
+  }
+
+  /** GRAL_AYUDAS no viaja en el paquete: una definición que falte aquí rechaza la importación. */
+  @Test
+  void importRejectsWhenAHelpDefinitionIsMissing() throws Exception {
+    fixture.installPublished("fixture");
+    byte[] zip = download("anio");
+    RuleSet before = rulesFiles.load("EDIN", 2027);
+    Map<String, Object> definition =
+        jdbc.queryForMap(
+            "SELECT PROY, COD, TITULO, DESCRIPCION, ANIO FROM GRAL_AYUDAS WHERE COD = 501");
+    jdbc.update("DELETE FROM GRAL_AYUDAS WHERE COD = 501");
+    try {
+      importPackage(zip, true)
+          .andExpect(status().isUnprocessableContent())
+          .andExpect(jsonPath("$.detail").value("La base de datos no coincide con el paquete."))
+          .andExpect(
+              jsonPath("$.differences")
+                  .value(hasItems("Falta la definición COD_AYU 501 en GRAL_AYUDAS.")));
+
+      assertThat(rulesFiles.load("EDIN", 2027)).isEqualTo(before);
+    } finally {
+      jdbc.update(
+          "INSERT INTO GRAL_AYUDAS (PROY, COD, TITULO, DESCRIPCION, ANIO) VALUES (?, ?, ?, ?, ?)",
+          definition.get("PROY"),
+          definition.get("COD"),
+          definition.get("TITULO"),
+          definition.get("DESCRIPCION"),
+          definition.get("ANIO"));
+    }
+    importPackage(zip, false).andExpect(status().isOk());
   }
 
   @Test
@@ -216,7 +248,9 @@ class PackageImportIT extends OracleIntegrationTest {
     assertThat(rulesDirectoryFiles()).isEqualTo(filesBefore);
   }
 
-  /** Los datos de desarrollo traen "página" en FRM_PRE_AYUDA: el paquete tiene texto no ASCII. */
+  /**
+   * Los datos de desarrollo traen "desempeña" en FRM_PRE_AYUDA: el paquete tiene texto no ASCII.
+   */
   @Test
   void importRejectsADifferentCharacterSetOnlyWithNonAsciiText() throws Exception {
     fixture.installPublished("fixture");
@@ -234,8 +268,8 @@ class PackageImportIT extends OracleIntegrationTest {
     try {
       for (Map<String, Object> help : helps) {
         jdbc.update(
-            "UPDATE FRM_PRE_AYUDA SET TEXTO = 'Ayuda en ASCII' WHERE COD_AYU = ?",
-            help.get("COD_AYU"));
+            "UPDATE FRM_PRE_AYUDA SET TEXTO = 'Ayuda en ASCII' WHERE COD_PRE_AYU = ?",
+            help.get("COD_PRE_AYU"));
       }
       Map<String, byte[]> ascii = PackageZips.read(download("anio"));
       assertThat(new String(ascii.get("frm.sql"), StandardCharsets.US_ASCII))
@@ -247,9 +281,9 @@ class PackageImportIT extends OracleIntegrationTest {
     } finally {
       for (Map<String, Object> help : helps) {
         jdbc.update(
-            "UPDATE FRM_PRE_AYUDA SET TEXTO = ? WHERE COD_AYU = ?",
+            "UPDATE FRM_PRE_AYUDA SET TEXTO = ? WHERE COD_PRE_AYU = ?",
             help.get("TEXTO"),
-            help.get("COD_AYU"));
+            help.get("COD_PRE_AYU"));
       }
     }
   }
