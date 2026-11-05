@@ -9,6 +9,7 @@ interface ProblemBody {
   errors?: Record<string, string>;
   report?: AnalysisReport;
   checklist?: PublicationChecklist;
+  differences?: string[];
 }
 
 const GENERIC_DETAIL = 'No fue posible completar la solicitud. Intente de nuevo.';
@@ -23,6 +24,8 @@ export class ApiError extends Error {
   readonly report?: AnalysisReport;
   /** Lista de publicación que acompaña el 422 de un año que aún no puede publicarse. */
   readonly checklist?: PublicationChecklist;
+  /** Diferencias que acompañan el 422 de un paquete que no pasa la revisión. */
+  readonly differences?: string[];
 
   constructor(
     status: number,
@@ -31,6 +34,7 @@ export class ApiError extends Error {
     fieldErrors: Record<string, string> = {},
     report?: AnalysisReport,
     checklist?: PublicationChecklist,
+    differences?: string[],
   ) {
     super(detail);
     this.name = 'ApiError';
@@ -40,6 +44,7 @@ export class ApiError extends Error {
     this.fieldErrors = fieldErrors;
     this.report = report;
     this.checklist = checklist;
+    this.differences = differences;
   }
 }
 
@@ -53,6 +58,7 @@ export function toApiError(status: number, body: unknown): ApiError {
     problem.errors ?? {},
     problem.report,
     problem.checklist,
+    problem.differences,
   );
 }
 
