@@ -786,6 +786,9 @@ export interface components {
             valores?: string[];
             y?: components["schemas"]["Condition"][];
         };
+        CorrectionReasonRequest: {
+            motivo?: string;
+        };
         CreateYearRequest: {
             /** Format: int32 */
             fromYear: number;
@@ -2019,8 +2022,6 @@ export interface operations {
         parameters: {
             query: {
                 version: number;
-                /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la URL: no escriba datos personales. */
-                motivo?: string;
             };
             header?: never;
             path: {
@@ -2030,7 +2031,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en el cuerpo (nunca en la URL, que queda en los registros de acceso): no escriba datos personales. */
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CorrectionReasonRequest"];
+            };
+        };
         responses: {
             /** @description Versión nueva, análisis y resultado de casos */
             200: {
@@ -2215,8 +2221,6 @@ export interface operations {
         parameters: {
             query: {
                 version: number;
-                /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la URL: no escriba datos personales. */
-                motivo?: string;
             };
             header?: never;
             path: {
@@ -2226,7 +2230,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en el cuerpo (nunca en la URL, que queda en los registros de acceso): no escriba datos personales. */
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CorrectionReasonRequest"];
+            };
+        };
         responses: {
             /** @description Versión nueva, análisis y resultado de casos */
             200: {
@@ -2316,8 +2325,6 @@ export interface operations {
         parameters: {
             query: {
                 version: number;
-                /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la URL: no escriba datos personales. */
-                motivo?: string;
             };
             header?: never;
             path: {
@@ -2327,7 +2334,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en el cuerpo (nunca en la URL, que queda en los registros de acceso): no escriba datos personales. */
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CorrectionReasonRequest"];
+            };
+        };
         responses: {
             /** @description Versión nueva, análisis y resultado de casos */
             200: {

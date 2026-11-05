@@ -133,10 +133,12 @@ describe('RulesPage', () => {
   });
 
   it('en un año publicado elimina una regla solo con motivo y lo envía recortado', async () => {
-    let query: URLSearchParams | null = null;
+    let url = '';
+    let body: { motivo?: string } = {};
     server.use(
-      http.delete(`${RULES_API}/skips/c01a-no`, ({ request }) => {
-        query = new URL(request.url).searchParams;
+      http.delete(`${RULES_API}/skips/c01a-no`, async ({ request }) => {
+        url = request.url;
+        body = (await request.json()) as { motivo?: string };
         return HttpResponse.json({ version: 5, report: { errors: [], warnings: [] } });
       }),
     );
@@ -153,8 +155,10 @@ describe('RulesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Eliminar' }));
 
     expect(await screen.findByText('Regla eliminada.')).toBeInTheDocument();
-    expect(query!.get('version')).toBe('4');
-    expect(query!.get('motivo')).toBe('corto pero ya suficiente');
+    expect(new URL(url).searchParams.get('version')).toBe('4');
+    // El motivo va en el cuerpo: la URL, que queda en los logs de acceso, no lo lleva.
+    expect(url).not.toContain('motivo');
+    expect(body.motivo).toBe('corto pero ya suficiente');
     expect(screen.getByRole('textbox', { name: 'Motivo de la corrección' })).toHaveValue('');
   });
 

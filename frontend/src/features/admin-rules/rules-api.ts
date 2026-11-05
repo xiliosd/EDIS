@@ -1,4 +1,4 @@
-import { apiClient, readCookie } from '../../services/api-client';
+import { apiClient, ensureCsrfToken } from '../../services/api-client';
 import { unwrap } from '../../services/api-error';
 import type { components } from '../../services/api-schema';
 import { downloadTextFile } from '../../services/download-file';
@@ -28,13 +28,6 @@ export function rulesExportQueryKey(survey: string, year: number) {
 
 export function simulatorQueryKey(survey: string, year: number) {
   return ['admin', 'simulator', survey, year] as const;
-}
-
-// La cookie XSRF-TOKEN puede faltar si el navegador la borró; se pide antes de escribir.
-async function ensureCsrfToken(): Promise<void> {
-  if (!readCookie('XSRF-TOKEN')) {
-    await unwrap(apiClient.GET('/api/v1/auth/csrf'));
-  }
 }
 
 export function fetchRules(survey: string, year: number): Promise<RulesEditorView> {
@@ -89,7 +82,9 @@ export async function deleteSkip(
   await ensureCsrfToken();
   return unwrap(
     apiClient.DELETE('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/skips/{ruleId}', {
-      params: { path: { encuesta: survey, anio: year, ruleId }, query: { version, motivo } },
+      params: { path: { encuesta: survey, anio: year, ruleId }, query: { version } },
+      // El motivo va en el cuerpo, no en la URL: la URL queda en los logs de acceso.
+      body: { motivo },
     }),
   );
 }
@@ -121,7 +116,9 @@ export async function deleteValidation(
   await ensureCsrfToken();
   return unwrap(
     apiClient.DELETE('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/validations/{column}', {
-      params: { path: { encuesta: survey, anio: year, column }, query: { version, motivo } },
+      params: { path: { encuesta: survey, anio: year, column }, query: { version } },
+      // El motivo va en el cuerpo, no en la URL: la URL queda en los logs de acceso.
+      body: { motivo },
     }),
   );
 }
@@ -152,7 +149,9 @@ export async function deleteCase(
   await ensureCsrfToken();
   return unwrap(
     apiClient.DELETE('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/cases/{caseId}', {
-      params: { path: { encuesta: survey, anio: year, caseId }, query: { version, motivo } },
+      params: { path: { encuesta: survey, anio: year, caseId }, query: { version } },
+      // El motivo va en el cuerpo, no en la URL: la URL queda en los logs de acceso.
+      body: { motivo },
     }),
   );
 }

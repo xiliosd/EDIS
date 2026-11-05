@@ -1,6 +1,7 @@
 package co.gov.dane.edi.admin.controller;
 
 import co.gov.dane.edi.admin.RulesAdminService;
+import co.gov.dane.edi.admin.dto.CorrectionReasonRequest;
 import co.gov.dane.edi.admin.dto.ImportRulesRequest;
 import co.gov.dane.edi.admin.dto.RulesEditResult;
 import co.gov.dane.edi.admin.dto.RulesEditorView;
@@ -45,8 +46,9 @@ public class RulesAdminController {
   private static final String PROBLEM = "application/problem+json";
 
   private static final String REASON_DESCRIPTION =
-      "Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en la"
-          + " URL: no escriba datos personales.";
+      "Motivo de la corrección (10 a 500 caracteres), exigido solo en un año publicado. Va en el"
+          + " cuerpo (nunca en la URL, que queda en los registros de acceso): no escriba datos"
+          + " personales.";
 
   private final RulesAdminService rules;
   private final SessionTokenService tokens;
@@ -137,10 +139,11 @@ public class RulesAdminController {
       @PathVariable("anio") int year,
       @PathVariable String ruleId,
       @RequestParam int version,
-      @Parameter(description = REASON_DESCRIPTION) @RequestParam(name = "motivo", required = false)
-          String reason,
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(description = REASON_DESCRIPTION)
+          @RequestBody(required = false)
+          CorrectionReasonRequest body,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.deleteSkip(survey, year, ruleId, version, user(jwt), reason);
+    return rules.deleteSkip(survey, year, ruleId, version, user(jwt), reasonOf(body));
   }
 
   @Operation(
@@ -195,10 +198,11 @@ public class RulesAdminController {
       @PathVariable("anio") int year,
       @PathVariable String column,
       @RequestParam int version,
-      @Parameter(description = REASON_DESCRIPTION) @RequestParam(name = "motivo", required = false)
-          String reason,
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(description = REASON_DESCRIPTION)
+          @RequestBody(required = false)
+          CorrectionReasonRequest body,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.deleteValidation(survey, year, column, version, user(jwt), reason);
+    return rules.deleteValidation(survey, year, column, version, user(jwt), reasonOf(body));
   }
 
   @Operation(
@@ -253,10 +257,11 @@ public class RulesAdminController {
       @PathVariable("anio") int year,
       @PathVariable String caseId,
       @RequestParam int version,
-      @Parameter(description = REASON_DESCRIPTION) @RequestParam(name = "motivo", required = false)
-          String reason,
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(description = REASON_DESCRIPTION)
+          @RequestBody(required = false)
+          CorrectionReasonRequest body,
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
-    return rules.deleteCase(survey, year, caseId, version, user(jwt), reason);
+    return rules.deleteCase(survey, year, caseId, version, user(jwt), reasonOf(body));
   }
 
   @Operation(
@@ -324,6 +329,10 @@ public class RulesAdminController {
       @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
     return rules.importRules(
         survey, year, request.rules(), request.version(), user(jwt), request.motivo());
+  }
+
+  private static String reasonOf(CorrectionReasonRequest body) {
+    return body == null ? null : body.motivo();
   }
 
   private String user(Jwt jwt) {

@@ -915,13 +915,14 @@ paths:
         schema:
           type: integer
           format: int32
-      - description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
-          \ en un año publicado. Va en la URL: no escriba datos personales."
-        in: query
-        name: motivo
-        required: false
-        schema:
-          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectionReasonRequest"
+        description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
+          \ en un año publicado. Va en el cuerpo (nunca en la URL, que queda en los\
+          \ registros de acceso): no escriba datos personales."
       responses:
         "200":
           content:
@@ -1114,13 +1115,14 @@ paths:
         schema:
           type: integer
           format: int32
-      - description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
-          \ en un año publicado. Va en la URL: no escriba datos personales."
-        in: query
-        name: motivo
-        required: false
-        schema:
-          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectionReasonRequest"
+        description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
+          \ en un año publicado. Va en el cuerpo (nunca en la URL, que queda en los\
+          \ registros de acceso): no escriba datos personales."
       responses:
         "200":
           content:
@@ -1233,13 +1235,14 @@ paths:
         schema:
           type: integer
           format: int32
-      - description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
-          \ en un año publicado. Va en la URL: no escriba datos personales."
-        in: query
-        name: motivo
-        required: false
-        schema:
-          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectionReasonRequest"
+        description: "Motivo de la corrección (10 a 500 caracteres), exigido solo\
+          \ en un año publicado. Va en el cuerpo (nunca en la URL, que queda en los\
+          \ registros de acceso): no escriba datos personales."
       responses:
         "200":
           content:
@@ -2063,6 +2066,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Condition"
+    CorrectionReasonRequest:
+      type: object
+      properties:
+        motivo:
+          type: string
     CreateYearRequest:
       type: object
       properties:

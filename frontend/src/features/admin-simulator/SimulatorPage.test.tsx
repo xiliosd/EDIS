@@ -314,10 +314,12 @@ describe('SimulatorPage', () => {
   it(
     'en un año publicado elimina un caso con el motivo válido y luego lo vacía',
     async () => {
-      let query: URLSearchParams | null = null;
+      let url = '';
+      let body: { motivo?: string } = {};
       server.use(
-        http.delete(`${RULES_API}/cases/caso-a`, ({ request }) => {
-          query = new URL(request.url).searchParams;
+        http.delete(`${RULES_API}/cases/caso-a`, async ({ request }) => {
+          url = request.url;
+          body = (await request.json()) as { motivo?: string };
           return HttpResponse.json({
             version: 5,
             report: { errors: [], warnings: [] },
@@ -336,7 +338,8 @@ describe('SimulatorPage', () => {
       await user.click(screen.getByRole('button', { name: 'Eliminar' }));
 
       expect(await screen.findByText('Caso caso-a eliminado.')).toBeInTheDocument();
-      expect(query!.get('motivo')).toBe('Caso duplicado del anterior');
+      expect(body.motivo).toBe('Caso duplicado del anterior');
+      expect(url).not.toContain('motivo');
       expect(screen.getByRole('textbox', { name: 'Motivo de la corrección' })).toHaveValue('');
     },
     LONG_FLOW_TIMEOUT,

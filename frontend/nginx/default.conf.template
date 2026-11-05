@@ -1,3 +1,8 @@
+# El motivo de una corrección viaja en el cuerpo de los DELETE, pero por defensa en profundidad
+# el registro de /api/ usa $uri (sin query string) en vez de $request.
+log_format api_sin_consulta '$remote_addr - [$time_local] "$request_method $uri" $status '
+                            '$body_bytes_sent "$http_user_agent" rid=$request_id';
+
 server {
     listen 8080;
     server_name _;
@@ -8,6 +13,7 @@ server {
     include /etc/nginx/snippets/security-headers.conf;
 
     location /api/ {
+        access_log /dev/stdout api_sin_consulta;
         proxy_pass ${BACKEND_URL};
         # Host original (con puerto) para que el backend reconozca las peticiones del mismo origen.
         # nosemgrep: generic.nginx.security.request-host-used.request-host-used
@@ -24,6 +30,7 @@ server {
     location ~ ^/api/v1/admin/questionnaire/[^/]+/[0-9]+/package/import$ {
         client_max_body_size 6m;
         client_body_buffer_size 6m;
+        access_log /dev/stdout api_sin_consulta;
         proxy_pass ${BACKEND_URL};
         # nosemgrep: generic.nginx.security.request-host-used.request-host-used
         proxy_set_header Host $http_host;

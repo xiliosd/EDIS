@@ -201,11 +201,16 @@ class CorrectionIT extends OracleIntegrationTest {
         .andExpect(jsonPath("$.detail").value(NEEDS_REASON));
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(5);
 
-    send(
-            delete(RULES + "/skips/c01a-si-oculta-c01b?version=5")
-                .param("motivo", "Se retira la regla"),
-            null)
-        .andExpect(status().isOk());
+    var deleted =
+        send(
+                delete(RULES + "/skips/c01a-si-oculta-c01b?version=5"),
+                "{\"motivo\":\"Se retira la regla\"}")
+            .andExpect(status().isOk())
+            .andReturn()
+            .getRequest();
+    // El motivo viaja en el cuerpo: la URL (que un proxy registra) no lo contiene.
+    assertThat(deleted.getRequestURI()).doesNotContain("motivo");
+    assertThat(deleted.getQueryString()).isEqualTo("version=5").doesNotContain("retira");
     assertThat(operation()).isEqualTo("corregir-borrar-salto");
     assertThat(rulesFiles.load("EDIN", 2027).lastChange().reason()).isEqualTo("Se retira la regla");
 
@@ -216,9 +221,7 @@ class CorrectionIT extends OracleIntegrationTest {
                 + "\"}")
         .andExpect(status().isOk());
     assertThat(operation()).isEqualTo("corregir-editar-validacion");
-    send(
-            delete(RULES + "/validations/B06?version=7").param("motivo", "Se retira la validacion"),
-            null)
+    send(delete(RULES + "/validations/B06?version=7"), "{\"motivo\":\"Se retira la validacion\"}")
         .andExpect(status().isOk());
     assertThat(operation()).isEqualTo("corregir-borrar-validacion");
 
@@ -231,9 +234,7 @@ class CorrectionIT extends OracleIntegrationTest {
                 + "\"}")
         .andExpect(status().isOk());
     assertThat(operation()).isEqualTo("corregir-editar-caso");
-    send(
-            delete(RULES + "/cases/c01a-si-caso?version=9").param("motivo", "Se retira el caso ok"),
-            null)
+    send(delete(RULES + "/cases/c01a-si-caso?version=9"), "{\"motivo\":\"Se retira el caso ok\"}")
         .andExpect(status().isOk());
     assertThat(operation()).isEqualTo("corregir-borrar-caso");
   }
@@ -347,9 +348,8 @@ class CorrectionIT extends OracleIntegrationTest {
             textBody("Texto corregido", 2, secret))
         .andExpect(status().isOk());
     send(
-            delete(RULES + "/skips/no-existe?version=3")
-                .param("motivo", "MOTIVO-CONFIDENCIAL-4711 x"),
-            null)
+            delete(RULES + "/skips/no-existe?version=3"),
+            "{\"motivo\":\"MOTIVO-CONFIDENCIAL-4711 x\"}")
         .andExpect(status().isNotFound());
 
     assertThat(output.getAll())
