@@ -95,8 +95,20 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   del año.
 - `db/dev/schema.sql` incorpora la estructura de `FRM_*` usada por la administración: recree el
   contenedor de Oracle de desarrollo.
+- `db/dev/schema.sql` sigue las columnas del respaldo real de `DANE_DIRPEN`: `FRM_RESPUESTA` sin
+  `VALOR`, `FRM_PRE_AYUDA` y `FRM_ENC_AYUDA` con `COD_PRE_AYU` / `COD_ENC_AYU` y `COD_AYU`, y la
+  tabla `GRAL_AYUDAS` (DDL real). Recree el contenedor de Oracle de desarrollo.
 
 ### Corregido
+- Las opciones de respuesta toman su valor de `FRM_RTA_GRUPO.VALOR`: la base real no tiene
+  `FRM_RESPUESTA.VALOR` y la consulta anterior fallaba con ORA-00904 (el encuestado no vería
+  opciones).
+- Ayudas ajustadas al modelo real: `FRM_PRE_AYUDA` y `FRM_ENC_AYUDA` se identifican por
+  `COD_PRE_AYU` / `COD_ENC_AYU`; `TEXTO` es la palabra enlazada y `COD_AYU` la referencia a la
+  definición en `GRAL_AYUDAS`, que la copia de año conserva y nunca genera. El editor llama
+  "palabra enlazada" a lo que edita y muestra la definición en solo lectura; `PUT .../help/{codPreAyu}`
+  reemplaza a `.../help/{codAyu}`. `frm.sql` aborta con ORA-20003 y la importación responde 422 si
+  falta una definición en `GRAL_AYUDAS` del destino.
 - `ColumnCodeResolver` completa el cero de los numerales ("C7a." pasa a `C07A`).
 - El bloqueo de inicio de sesión se comprueba con la IP real enviada por el proxy.
 - Cerrar sesión ya no pierde el aviso de cierre fallido por la carrera con la redirección de la

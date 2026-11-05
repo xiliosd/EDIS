@@ -61,7 +61,7 @@ ediciones, y cada edición lleva la `version` que el cliente leyó (409 si cambi
 | `GET` | `.../tables/{capitulo}/create-script` | Script de creación de la tabla del capítulo (solo texto) |
 | `GET` | `/api/v1/admin/questionnaire/{encuesta}/{anio}` | Árbol del año: páginas, preguntas, estado de columna |
 | `PUT` | `/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text` | Edita el texto de una pregunta |
-| `PUT` | `.../headers/{codEnc}` y `.../help/{codAyu}` | Edita un encabezado o una ayuda |
+| `PUT` | `.../headers/{codEnc}` y `.../help/{codPreAyu}` | Edita un encabezado o la palabra enlazada de una ayuda |
 | `PATCH` | `.../pages/{pagina}/order` | Reordena las preguntas de una página (dentro de su grupo) |
 | `POST` | `.../pages/{pagina}/entries` | Agrega una pregunta propia del año (columna pendiente si no existe) |
 | `GET` | `.../entries/{capProyId}/column-script` | Script `ALTER TABLE` de la columna pendiente (solo texto) |
@@ -443,9 +443,12 @@ ingreso) con un usuario de rol `ADMIN_CUESTIONARIO` y abra **Cuestionario** en e
    año publicado a un año nuevo en borrador; solo puede haber un borrador por encuesta. Publicar
    un año se hace en su pestaña **Publicar** (ver «Publicar, corregir y promover»).
 2. **Árbol.** Al abrir un año se ven sus páginas y preguntas. Un año publicado solo admite correcciones (Fase 3c).
-3. **Editar.** En un borrador, "Editar" cambia el texto, un encabezado o la ayuda y "Guardar" lo
-   envía; no hay autoguardado. Escriba `200X` donde debe ir el año. Si otra persona cambió el
-   cuestionario, aparece un aviso con "Recargar".
+3. **Editar.** En un borrador, "Editar" cambia el texto, un encabezado o la palabra enlazada de la
+   ayuda y "Guardar" lo envía; no hay autoguardado. Escriba `200X` donde debe ir el año. Si otra
+   persona cambió el cuestionario, aparece un aviso con "Recargar". La ayuda de una pregunta es una
+   palabra o frase de su texto (`FRM_PRE_AYUDA.TEXTO`) que el PHP heredado vuelve enlace a una
+   definición de `GRAL_AYUDAS` (`COD_AYU`); el editor cambia solo la palabra y muestra, en solo
+   lectura, el título y el comienzo de la definición («Sin definición en GRAL_AYUDAS» si falta).
 4. **Ordenar.** Con el teclado, "Subir" y "Bajar" (también se puede arrastrar). Solo se mueve dentro
    del mismo bloque de preguntas; el servidor rechaza cruzar bloques.
 5. **Agregar una pregunta.** "Agregar pregunta en {página}" pide numeral (que debe dar el código de
@@ -530,12 +533,15 @@ corre una persona técnica (DBA) con su propio usuario.
 3. **El DBA ejecuta `columnas.sql`** (las columnas nuevas, si hay) y luego **`frm.sql`**, cada uno en
    una sesión nueva de SQL*Plus. `frm.sql` es ASCII puro, idempotente (inserta lo que falta, no
    toca lo que ya está igual) y se detiene con `ORA-20001` y reversión si un id lo ocupa otra fila:
-   no renumera en silencio.
+   no renumera en silencio. `GRAL_AYUDAS` no viaja en el paquete: si al destino le falta la
+   definición de una ayuda del año, `frm.sql` se detiene con `ORA-20003` antes de escribir nada;
+   cree antes esa definición en producción (con su mismo `COD`).
 4. **En producción**, abra **Paquetes** (`/admin/cuestionario/EDIN/AAAA/paquetes`), elija el ZIP y «Verificar». La verificación comprueba, en
    orden: las cuatro entradas del ZIP; el SHA-256 de cada archivo; que `reglas.json` sea válido,
-   publicado y del año y la versión del paquete; las filas y sumas de `FRM_*` de esa base; las
-   tablas y columnas de respuesta; y que la versión sea posterior a la de este ambiente. Si algo
-   falla, el 422 lista las diferencias.
+   publicado y del año y la versión del paquete; las filas y sumas de `FRM_*` de esa base y que
+   cada `COD_AYU` de sus ayudas tenga definición en `GRAL_AYUDAS` («Falta la definición COD_AYU n
+   en GRAL_AYUDAS.»); las tablas y columnas de respuesta; y que la versión sea posterior a la de
+   este ambiente. Si algo falla, el 422 lista las diferencias.
 5. **Revise el impacto** (conteos por página, sin datos personales; solo cuenta cambios de reglas,
    no de textos) y, si es correcto, «Importar» y confirme. Las cachés se limpian sin reiniciar y
    queda la auditoría `importar-paquete`.
@@ -616,14 +622,19 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
 - **Contraseñas en texto plano (D7).** La columna `PSW` es `VARCHAR2(8)` y no se puede cambiar sin DDL.
   Se comparan con `MessageDigest.isEqual` y nunca aparecen en logs ni respuestas. Plan de salida:
   ampliar `PSW` a `VARCHAR2(60)` y migrar a BCrypt.
-- **Esquema `FRM_*` deducido del PHP** hasta recibir el DDL real de `DANE_DIRPEN` (ver el
-  [MER](docs/diagramas/mer-tablas-usadas.md)).
+- **Esquema `FRM_*` parcialmente confirmado (2026-11-05).** Las columnas y claves salen del respaldo
+  real de `DANE_DIRPEN`; los tipos, longitudes y nulabilidad de las `FRM_*` siguen deducidos del PHP
+  (ver el [MER](docs/diagramas/mer-tablas-usadas.md)). `FRM_PRE_AYUDA` no tiene índice único en el
+  respaldo: la aplicación usa `COD_PRE_AYU` como clave.
+- **Ayudas sin mostrar al encuestado.** La Fase 2 no incluyó las ayudas (palabra enlazada a una
+  definición de `GRAL_AYUDAS`) en el formulario del encuestado; sigue pendiente. Editar las
+  definiciones de `GRAL_AYUDAS` queda para la Fase 4 (administración de ayudas).
 - **Confirmar con el DDL real de QA cómo se generan los ids de FRM_* (secuencia/disparador) antes de
   usar la administración en QA.** Mientras tanto los ids se calculan con `MAX+1` (decisión de la
   Fase 3a, registrada al inicio de `db/dev/schema.sql`).
-- **DDL real de `FRM_*` por confirmar (Fase 3a).** Ids, nulabilidad, `COD_GRUPO` y las listas de
-  columnas de la copia de año salen del esquema deducido; confírmelos con el DDL de QA antes de
-  usar la administración allí.
+- **DDL real de `FRM_*` por confirmar (Fase 3a).** Las listas de columnas de la copia de año ya
+  coinciden con el respaldo real; ids, nulabilidad y tipos siguen sin confirmar: confírmelos con el
+  DDL de QA antes de usar la administración allí.
 - **`orderGroup` en el árbol (seguimiento).** `AdminEntry` no expone el bloque de cada pregunta:
   "Subir"/"Bajar" se habilitan en los bordes de bloque y el servidor responde 422 al cruzarlos.
   Agregar `orderGroup` al contrato permitiría deshabilitarlos.

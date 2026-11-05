@@ -479,3 +479,31 @@ siguen vigentes.
     La descarga usa el nombre de `Content-Disposition` del servidor.
 
 Seguimiento de la 3c en el README, «Usage/Examples» y «Deployment».
+
+## Ajuste al DDL real (2026-11-05)
+
+El respaldo real de `DANE_DIRPEN` (16-oct-2026) corrigió dos supuestos del esquema deducido:
+
+1. **Opciones de respuesta.** `FRM_RESPUESTA` solo tiene `COD_RTA` y `RESPUESTA`; el valor de cada
+   opción es `FRM_RTA_GRUPO.VALOR`, como en el PHP heredado. La lectura de opciones usa `G.VALOR`.
+2. **Ayudas.** `FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)` y
+   `FRM_ENC_AYUDA (COD_ENC_AYU, COD_ENC, COD_AYU, TEXTO)`: `TEXTO` es la palabra o frase que se
+   vuelve enlace y `COD_AYU` apunta a `GRAL_AYUDAS.COD` (TITULO y DESCRIPCION en HTML con
+   entidades; `COD` es único en toda la tabla). Decisiones:
+   - Las claves son `COD_PRE_AYU` / `COD_ENC_AYU` (MAX+1 al copiar un año); `COD_AYU` y `TEXTO` se
+     copian iguales y `GRAL_AYUDAS` no se copia ni se toca.
+   - El editor (y la corrección con motivo en un año publicado) cambia solo `TEXTO`, por
+     `PUT .../help/{codPreAyu}`; muestra en solo lectura el TITULO y un extracto de 200 caracteres
+     de la DESCRIPCION en texto plano, o «Sin definición en GRAL_AYUDAS». No se agregó la exigencia
+     de que la palabra aparezca en el texto de la pregunta (la app no la tenía).
+   - En la fotografía, `frm.sql` y el paquete, `COD_AYU` es parte de la fila pero no corregible:
+     una corrección con otro `COD_AYU` aborta como id ocupado (ORA-20001).
+   - `GRAL_AYUDAS` no entra al paquete. `frm.sql` abre con un bloque que aborta con ORA-20003 si
+     al destino le falta alguna definición (mismo patrón que la verificación del juego de
+     caracteres: lo más simple y no deja enlaces sin definición); la importación lo verifica de
+     nuevo y responde 422 con «Falta la definición COD_AYU n en GRAL_AYUDAS.» en `differences`.
+   - El encuestado sigue sin ver las ayudas (pendiente desde la Fase 2); editar definiciones es de
+     la Fase 4.
+
+Siguen sin confirmar los tipos y longitudes de las `FRM_*` y cómo se generan sus ids. En desarrollo
+`FRM_PRE_AYUDA.COD_PRE_AYU` lleva clave primaria aunque el respaldo no muestre índice único.
