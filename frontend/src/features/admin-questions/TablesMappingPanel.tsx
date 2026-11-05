@@ -146,7 +146,16 @@ export function TablesMappingPanel({
           Guardar tablas
         </Button>
       )}
-      {lockedNote && <p className="mt-4 text-sm text-ink-muted">{DRAFT_ONLY_NOTE}</p>}
+      {lockedNote && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button disabled aria-describedby="tablas-solo-borrador">
+            Guardar tablas
+          </Button>
+          <span id="tablas-solo-borrador" className="text-sm text-ink-muted">
+            {DRAFT_ONLY_NOTE}
+          </span>
+        </div>
+      )}
       {message && (
         <p
           role={message.isError ? 'alert' : 'status'}

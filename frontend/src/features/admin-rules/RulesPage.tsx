@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
@@ -317,18 +317,24 @@ export function RulesPage() {
   const canEdit = editable || (correction && reason.motivo !== undefined);
   const { hash } = useLocation();
 
+  // Cada ancla se atiende una sola vez: si no, cada guardado (que sube la versión) volvería a
+  // cambiar de página y quitaría el foco que se dejó a propósito tras guardar.
+  const handledHash = useRef<string | null>(null);
+  const viewLoaded = view !== undefined;
+
   // Los enlaces de la lista de publicación llegan con #regla-<id> o #pregunta-<columna>.
   useEffect(() => {
-    if (!view) {
+    if (!viewLoaded || handledHash.current === hash) {
       return;
     }
+    handledHash.current = hash;
     const match = /^#(regla|pregunta)-(.+)$/.exec(hash);
     if (match) {
       locate(`${match[1]}:${match[2]}`);
     }
-    // locate depende del render actual; el ancla solo se atiende al cambiar la URL o cargar.
+    // locate depende del render actual; solo se invoca al cambiar el ancla o al cargar la vista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hash, view?.version]);
+  }, [hash, viewLoaded]);
 
   return (
     <section aria-labelledby="titulo-reglas">

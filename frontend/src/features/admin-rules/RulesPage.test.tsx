@@ -108,6 +108,30 @@ describe('RulesPage', () => {
     expect(screen.getByLabelText('Importar JSON')).toBeDisabled();
   });
 
+  it('atiende el ancla #regla-<id> una sola vez y no secuestra el foco tras guardar', async () => {
+    server.use(
+      http.delete(`${RULES_API}/skips/c01a-no`, () =>
+        HttpResponse.json({ version: 5, report: { errors: [], warnings: [] } }),
+      ),
+    );
+    serveRules();
+    renderApp(`${RULES_URL}#regla-anidada`);
+    await screen.findByRole('heading', { name: 'Reglas EDIN 2027' });
+    // El ancla lleva a la página de la regla y enfoca su fila.
+    await waitFor(() => expect(rowOf('anidada')).toHaveFocus());
+    expect(screen.getByLabelText('Página')).toHaveValue('C2');
+    const user = userEvent.setup();
+
+    await user.selectOptions(screen.getByLabelText('Página'), 'C1');
+    await user.click(screen.getByRole('button', { name: 'Eliminar regla c01a-no' }));
+    await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+
+    expect(await screen.findByText('Regla eliminada.')).toBeInTheDocument();
+    // Tras guardar la versión cambia: el ancla ya atendida no vuelve a mover página ni foco.
+    await waitFor(() => expect(document.getElementById('saltos-titulo')).toHaveFocus());
+    expect(screen.getByLabelText('Página')).toHaveValue('C1');
+  });
+
   it('en un año publicado elimina una regla solo con motivo y lo envía recortado', async () => {
     let query: URLSearchParams | null = null;
     server.use(

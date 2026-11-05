@@ -393,12 +393,15 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
           <Button
             variant="secondary"
             disabled={editing.correction}
+            aria-describedby={editing.correction ? `${idBase}-solo-borrador` : undefined}
             onClick={() => setConfirming(true)}
           >
             Desactivar {label}
           </Button>
           {editing.correction && (
-            <span className="self-center text-sm text-ink-muted">{DRAFT_ONLY_NOTE}</span>
+            <span id={`${idBase}-solo-borrador`} className="self-center text-sm text-ink-muted">
+              {DRAFT_ONLY_NOTE}
+            </span>
           )}
         </div>
       )}

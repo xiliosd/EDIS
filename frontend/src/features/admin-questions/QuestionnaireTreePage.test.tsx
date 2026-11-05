@@ -75,9 +75,18 @@ describe('QuestionnaireTreePage', () => {
     expect(screen.getByRole('heading', { name: 'Página C1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Desactivar C05/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Agregar pregunta en C1' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: /Subir|Bajar/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Guardar tablas' })).toBeNull();
-    expect(screen.getAllByText('Solo en borrador.').length).toBeGreaterThan(0);
+    for (const name of [/^Subir /, /^Bajar /, 'Guardar tablas']) {
+      for (const button of screen.getAllByRole('button', { name })) {
+        expect(button).toBeDisabled();
+        expect(button).toHaveAccessibleDescription('Solo en borrador.');
+      }
+    }
+    expect(screen.getByRole('button', { name: /^Desactivar C05/ })).toHaveAccessibleDescription(
+      'Solo en borrador.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Agregar pregunta en C1' }),
+    ).toHaveAccessibleDescription('Solo en borrador.');
     // Los textos sí se corrigen.
     expect(screen.getByRole('button', { name: 'Editar texto de C05' })).toBeEnabled();
     expect(screen.getByText('EDIN_27_CAP_H')).toBeInTheDocument();

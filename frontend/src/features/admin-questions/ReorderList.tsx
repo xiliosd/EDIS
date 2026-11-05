@@ -10,6 +10,8 @@ interface ReorderListProps<T> {
   renderItem: (item: T) => ReactNode;
   /** Sin edición la lista se muestra igual pero sin arrastre ni botones de orden. */
   editable: boolean;
+  /** Año publicado: se muestran los botones de orden deshabilitados con la nota "Solo en borrador.". */
+  locked?: boolean;
   /** Guarda el orden pedido; resuelve true si el servidor lo aceptó. */
   onReorder: (ids: number[]) => Promise<boolean>;
 }
@@ -34,6 +36,7 @@ export function ReorderList<T>({
   getLabel,
   renderItem,
   editable,
+  locked = false,
   onReorder,
 }: ReorderListProps<T>) {
   const idPrefix = useId();
@@ -93,8 +96,14 @@ export function ReorderList<T>({
     }
   }
 
+  const lockedNoteId = `${idPrefix}-solo-borrador`;
   return (
     <>
+      {locked && (
+        <p id={lockedNoteId} className="mt-4 text-sm text-ink-muted">
+          Solo en borrador.
+        </p>
+      )}
       <ol aria-label={label} className="mt-4 grid gap-3">
         {items.map((item, index) => {
           const id = getId(item);
@@ -155,6 +164,22 @@ export function ReorderList<T>({
                   >
                     Bajar
                   </button>
+                </div>
+              )}
+              {locked && !editable && (
+                <div className="flex shrink-0 flex-col items-center gap-2">
+                  {(['Subir', 'Bajar'] as const).map((action) => (
+                    <button
+                      key={action}
+                      type="button"
+                      disabled
+                      aria-label={`${action} ${itemLabel}`}
+                      aria-describedby={lockedNoteId}
+                      className="min-h-11 min-w-11 rounded-lg border border-primary px-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {action}
+                    </button>
+                  ))}
                 </div>
               )}
               <div className="min-w-0 flex-1">{renderItem(item)}</div>

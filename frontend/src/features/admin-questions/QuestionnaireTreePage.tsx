@@ -244,6 +244,7 @@ export function QuestionnaireTreePage() {
                     getId={(item) => item.capProyId ?? 0}
                     getLabel={entryLabel}
                     editable={structural !== null}
+                    locked={correction}
                     onReorder={(ids) => reorderPage(page, ids)}
                     renderItem={(item) => (
                       <QuestionEditor entry={item} pageCode={pageCode} editing={editing} />
@@ -277,10 +278,19 @@ export function QuestionnaireTreePage() {
                 )}
                 {correction && (
                   <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <Button variant="secondary" disabled>
+                    <Button
+                      variant="secondary"
+                      disabled
+                      aria-describedby={`agregar-${pageCode}-solo-borrador`}
+                    >
                       Agregar pregunta en {pageCode}
                     </Button>
-                    <span className="text-sm text-ink-muted">{DRAFT_ONLY_NOTE}</span>
+                    <span
+                      id={`agregar-${pageCode}-solo-borrador`}
+                      className="text-sm text-ink-muted"
+                    >
+                      {DRAFT_ONLY_NOTE}
+                    </span>
                   </div>
                 )}
               </section>

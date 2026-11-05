@@ -104,16 +104,16 @@ export const ChecklistView = forwardRef<HTMLElement, ChecklistViewProps>(functio
           : 'La lista está incompleta: corrija lo siguiente para publicar.'}
       </p>
       <ul aria-label="Condiciones para publicar" className="mt-3 grid gap-3">
-        {(checklist.items ?? []).map((item) => (
-          <Item key={item.code} item={item} base={base} />
+        {(checklist.items ?? []).map((item, index) => (
+          <Item key={`${item.code}-${index}`} item={item} base={base} />
         ))}
       </ul>
       {warnings.length > 0 && (
         <div className="mt-4">
           <h2 className="text-lg font-semibold">Avisos (no bloquean la publicación)</h2>
           <ul className="mt-2 list-disc pl-6">
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+            {warnings.map((warning, index) => (
+              <li key={`${warning}-${index}`}>{warning}</li>
             ))}
           </ul>
         </div>
