@@ -69,9 +69,11 @@ public class QuestionnaireRepository {
        WHERE PP.COD_CAP_PROY IN (:entryIds)
       """;
 
+  // FRM_RESPUESTA real solo guarda el texto: el valor que se responde es el de cada grupo
+  // (FRM_RTA_GRUPO.VALOR), como en el PHP heredado.
   private static final String OPTIONS =
       """
-      SELECT G.GRUPO, R.VALOR, R.RESPUESTA
+      SELECT G.GRUPO, G.VALOR, R.RESPUESTA
         FROM FRM_RTA_GRUPO G
         JOIN FRM_RESPUESTA R ON R.COD_RTA = G.COD_RTA
        WHERE G.GRUPO IN (:groups)

@@ -116,6 +116,12 @@ class DevDataIT extends OracleIntegrationTest {
         });
   }
 
+  // FRM_RESPUESTA real solo trae el texto; el valor de cada opción está en FRM_RTA_GRUPO.VALOR.
+  @Test
+  void answerCatalogHasNoValueColumn() {
+    assertThat(columnsOf("FRM_RESPUESTA")).containsExactlyInAnyOrder("COD_RTA", "RESPUESTA");
+  }
+
   @Test
   void everyPageHasOneHelpRow() {
     Integer pagesWithHelp =

@@ -10,11 +10,13 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 class QuestionnaireRepositoryIT extends OracleIntegrationTest {
 
   @Autowired private QuestionnaireRepository questionnaire;
   @Autowired private AnswerColumnRepository answerColumns;
+  @Autowired private NamedParameterJdbcTemplate jdbc;
 
   @Test
   void returnsRowsOfThePageInLegacyOrderForTheActiveYearOnly() {
@@ -50,6 +52,21 @@ class QuestionnaireRepositoryIT extends OracleIntegrationTest {
   void ordersOptionsNumericallyLikeTheLegacySystem() {
     Map<Integer, List<AnswerOption>> options = questionnaire.findOptions(List.of(10));
     assertThat(options.get(10)).extracting(AnswerOption::value).containsExactly("1", "2", "3");
+  }
+
+  // El mismo texto de FRM_RESPUESTA puede tener otro valor en cada grupo: el valor sale del grupo.
+  @Test
+  void optionValueComesFromTheAnswerGroup() {
+    jdbc.update(
+        "INSERT INTO FRM_RTA_GRUPO (COD_GRUPO, GRUPO, ORDEN, VALOR, COD_RTA)"
+            + " VALUES (990, 990, '1', '7', 1)",
+        Map.of());
+    try {
+      assertThat(questionnaire.findOptions(List.of(990)).get(990))
+          .containsExactly(new AnswerOption("7", "Asistencial"));
+    } finally {
+      jdbc.update("DELETE FROM FRM_RTA_GRUPO WHERE COD_GRUPO = 990", Map.of());
+    }
   }
 
   @Test
