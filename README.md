@@ -535,7 +535,9 @@ corre una persona técnica (DBA) con su propio usuario.
    toca lo que ya está igual) y se detiene con `ORA-20001` y reversión si un id lo ocupa otra fila:
    no renumera en silencio. `GRAL_AYUDAS` no viaja en el paquete: si al destino le falta la
    definición de una ayuda del año, `frm.sql` se detiene con `ORA-20003` antes de escribir nada;
-   cree antes esa definición en producción (con su mismo `COD`).
+   cree antes esa definición en producción (con su mismo `COD`). Los paquetes generados antes del
+   ajuste al DDL real (2026-11-05) no sirven, porque cambió la forma de las tablas de ayudas:
+   genérelos de nuevo.
 4. **En producción**, abra **Paquetes** (`/admin/cuestionario/EDIN/AAAA/paquetes`), elija el ZIP y «Verificar». La verificación comprueba, en
    orden: las cuatro entradas del ZIP; el SHA-256 de cada archivo; que `reglas.json` sea válido,
    publicado y del año y la versión del paquete; las filas y sumas de `FRM_*` de esa base y que

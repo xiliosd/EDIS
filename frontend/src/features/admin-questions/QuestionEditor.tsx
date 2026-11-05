@@ -232,7 +232,11 @@ function HelpDefinition({ id, label, help }: { id: string; label: string; help: 
       <p id={`${id}-titulo`} className="font-semibold">
         Definición de la ayuda de {label}
       </p>
-      <p className="text-ink-muted">COD_AYU {help.codAyu ?? 'sin código'} · solo lectura</p>
+      <p className="text-ink-muted">
+        {help.codAyu != null
+          ? `Definición n.º ${help.codAyu} (solo lectura)`
+          : 'Sin definición asociada'}
+      </p>
       {definition ? (
         <>
           <p className="font-semibold">{definition.title}</p>

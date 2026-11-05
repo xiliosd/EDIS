@@ -108,7 +108,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   definición en `GRAL_AYUDAS`, que la copia de año conserva y nunca genera. El editor llama
   "palabra enlazada" a lo que edita y muestra la definición en solo lectura; `PUT .../help/{codPreAyu}`
   reemplaza a `.../help/{codAyu}`. `frm.sql` aborta con ORA-20003 y la importación responde 422 si
-  falta una definición en `GRAL_AYUDAS` del destino.
+  falta una definición en `GRAL_AYUDAS` del destino. Los paquetes de promoción generados antes de
+  este cambio no son válidos (cambió la forma de las tablas de ayudas): hay que generarlos de nuevo.
 - `ColumnCodeResolver` completa el cero de los numerales ("C7a." pasa a `C07A`).
 - El bloqueo de inicio de sesión se comprueba con la IP real enviada por el proxy.
 - Cerrar sesión ya no pierde el aviso de cierre fallido por la carrera con la redirección de la

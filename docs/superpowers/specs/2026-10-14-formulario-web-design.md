@@ -138,6 +138,8 @@ Variables de entorno (documentadas en `.env.example`, nunca en código):
 - `FRM_RTA_GRUPO`: `GRUPO`, `COD_RTA`, `ORDEN`; `FRM_RESPUESTA`: `COD_RTA`, `VALOR`, `RESPUESTA`
 - `FRM_ENCABEZADO`: `COD_ENC`, `COD_CAP_PROY`, `ANIO`, `TIPO` (`E` encabezado / subtítulo), `ENCABEZADO`
 - `FRM_PRE_AYUDA`: `COD_AYU`, `COD_CAP_PROY`, `TEXTO`; `FRM_ENC_AYUDA`: `COD_AYU`, `COD_ENC`, `TEXTO`
+  (**reemplazado**: el modelo real de las ayudas y de `FRM_RESPUESTA` está en «Ajuste al DDL real
+  (2026-11-05)» del [diseño de la Fase 3](2026-10-26-fase-3-administracion-design.md))
 - `EDIN_MUESTRA`: `C_C`, `LGN VARCHAR2(8)`, `PSW VARCHAR2(8)`, `ANIO`, `TC1`, `ATV`, `COD_ENT`, `COD_DEPTO`,
   `NOM_APE`, `AREA_TRA`, `IDFNOV`, `NOV_OTRA_CAUSA`…
 

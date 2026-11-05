@@ -152,8 +152,25 @@ describe('QuestionEditor', () => {
     const definition = await screen.findByRole('group', { name: 'Definición de la ayuda de C05' });
     expect(definition).toHaveTextContent('Último año');
     expect(definition).toHaveTextContent('Año calendario anterior al de la encuesta.');
-    expect(definition).toHaveTextContent('COD_AYU 9001');
+    expect(definition).toHaveTextContent('Definición n.º 9001 (solo lectura)');
     expect(screen.queryByRole('button', { name: /Editar definición/ })).toBeNull();
+  });
+
+  it('avisaCuandoLaAyudaNoTieneCodigoDeDefinicion', async () => {
+    serveTree(
+      draftView({
+        pages: [
+          pageWith({
+            help: { codPreAyu: 701, codAyu: undefined, text: 'último año', definition: undefined },
+          }),
+        ],
+      }),
+    );
+    renderApp(TREE_URL);
+
+    const definition = await screen.findByRole('group', { name: 'Definición de la ayuda de C05' });
+    expect(definition).toHaveTextContent('Sin definición asociada');
+    expect(definition).not.toHaveTextContent('n.º');
   });
 
   it('avisaCuandoLaAyudaNoTieneDefinicion', async () => {
@@ -170,7 +187,7 @@ describe('QuestionEditor', () => {
 
     const definition = await screen.findByRole('group', { name: 'Definición de la ayuda de C05' });
     expect(definition).toHaveTextContent('Sin definición en GRAL_AYUDAS');
-    expect(definition).toHaveTextContent('COD_AYU 9002');
+    expect(definition).toHaveTextContent('Definición n.º 9002 (solo lectura)');
     expect(
       screen.getByRole('button', { name: 'Editar palabra enlazada de C05' }),
     ).toBeInTheDocument();

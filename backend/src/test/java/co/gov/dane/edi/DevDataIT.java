@@ -127,6 +127,23 @@ class DevDataIT extends OracleIntegrationTest {
   void helpDefinitionsTableHasTheRealColumns() {
     assertThat(columnsOf("GRAL_AYUDAS"))
         .containsExactlyInAnyOrder("PROY", "COD", "TITULO", "DESCRIPCION", "ANIO");
+    // PROY VARCHAR2(10 BYTE), COD NUMBER(4,0), TITULO VARCHAR2(80 BYTE),
+    // DESCRIPCION VARCHAR2(3000 BYTE), ANIO NUMBER: "-" es una precisión o escala nula.
+    List<String> types =
+        jdbc.queryForList(
+            "SELECT COLUMN_NAME || ' ' || DATA_TYPE || ' ' || DATA_LENGTH || ' '"
+                + " || NVL(TO_CHAR(DATA_PRECISION), '-') || ' ' || NVL(TO_CHAR(DATA_SCALE), '-')"
+                + " || ' ' || NVL(CHAR_USED, '-')"
+                + " FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'GRAL_AYUDAS' ORDER BY COLUMN_ID",
+            Map.of(),
+            String.class);
+    assertThat(types)
+        .containsExactly(
+            "PROY VARCHAR2 10 - - B",
+            "COD NUMBER 22 4 0 -",
+            "TITULO VARCHAR2 80 - - B",
+            "DESCRIPCION VARCHAR2 3000 - - B",
+            "ANIO NUMBER 22 - - -");
   }
 
   @Test
