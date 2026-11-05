@@ -43,7 +43,7 @@ test('el administrador crea un año, edita, ordena, agrega y desactiva sin tocar
   await page.getByRole('link', { name: 'Cuestionario', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Años del cuestionario' })).toBeVisible();
   // Espera la tabla (2026 publicado) antes de buscar borradores; si no, el conteo sería 0 en vano.
-  await expect(page.getByRole('cell', { name: 'Publicado' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Publicado' }).first()).toBeVisible();
   const openDrafts = await page.getByRole('cell', { name: 'Borrador' }).count();
   // En una corrida completa el proyecto móvil llega con el borrador del proyecto Chromium abierto
   // (solo hay un borrador por encuesta): se omite, pero de forma visible en el reporte.
@@ -144,18 +144,24 @@ test('el administrador crea un año, edita, ordena, agrega y desactiva sin tocar
     .click();
   await expect(newItem).toHaveCount(0);
 
-  // 6. El árbol de 2026 es de solo lectura y su texto no cambió.
+  // 6. El árbol de 2026 solo admite correcciones y su texto no cambió.
   await page.getByRole('link', { name: 'Volver a los años' }).click();
   await expect(page.getByRole('cell', { name: 'Borrador' })).toBeVisible();
   await expectAccessible(page);
   await page.getByRole('link', { name: String(SOURCE_YEAR) }).click();
+  // Desde la 3c un año publicado admite correcciones de texto, pero ninguna edición estructural.
   await expect(
-    page.getByText(`El cuestionario de ${SOURCE_YEAR} está publicado y es de solo lectura.`),
+    page.getByText(
+      'El año está publicado: solo se permiten correcciones de textos, saltos y validaciones.',
+    ),
   ).toBeVisible();
   const readOnly = page.getByRole('region', { name: 'Página C1' });
-  await expect(readOnly.getByRole('button', { name: /^Editar/ })).toHaveCount(0);
-  await expect(readOnly.getByRole('button', { name: /^Subir|^Bajar/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Agregar pregunta/ })).toHaveCount(0);
+  await expect(
+    readOnly.getByRole('button', { name: /^Subir|^Bajar/, disabled: false }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: /^Agregar pregunta/, disabled: false }),
+  ).toHaveCount(0);
   await expect(readOnly.getByRole('listitem', { name: `Pregunta ${first}` })).toHaveText(
     sourceText ?? '',
   );

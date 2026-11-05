@@ -373,3 +373,97 @@ Cambios respecto a lo escrito arriba, decididos durante la Fase 3b (plan
     cualquier archivo con estructura inválida; solo se llega ahí editando el disco a mano.
 
 Seguimiento de la 3b en el README, «Deuda técnica y riesgos».
+
+## Desviaciones de implementación (3c)
+
+Cambios respecto a lo escrito arriba, decididos durante la Fase 3c (plan
+`docs/superpowers/plans/2026-11-04-fase-3c-publicar-corregir-promover.md`). Las de la 3a y la 3b
+siguen vigentes.
+
+1. **El motivo solo vive en el archivo (§7).** Cada corrección exige `motivo` recortado de 10 a 500
+   caracteres (422 «Indique el motivo de la corrección (entre 10 y 500 caracteres).») y se guarda
+   únicamente en `ultimoCambio.motivo` del archivo de reglas y en el historial; nunca en los logs ni
+   en la auditoría, que lleva solo claves fijas (`publicar`, `importar-paquete`,
+   `restaurar-version` y `corregir-` más la operación, p. ej. `corregir-editar-texto`). La interfaz
+   avisa «No escriba datos personales en el motivo.».
+2. **Una corrección no puede dejar un caso en rojo.** Se rechaza si tras ella hay algún caso en
+   `falla` que no estaba en `falla` antes (incluye los casos nuevos). Así un año publicado nunca
+   tiene casos en rojo, que es lo que el paquete necesita para pasar la lista en producción; el
+   costo es que el técnico arregla el caso o la regla en la misma corrección. Editar el texto de una
+   pregunta que usa un caso lo deja `por_revisar` (3b, desviación 10), y un caso `por_revisar` bloquea
+   la lista de publicación y la generación del paquete hasta que se abre en el simulador y se guarda
+   de nuevo.
+3. **Restaurar no restaura `FRM_*` (§4).** Restaurar una versión reemplaza saltos, validaciones,
+   casos, tablas y columnas nuevas del archivo y lo guarda como versión nueva, conservando el estado;
+   los textos y preguntas (tablas `FRM_*`) no vuelven atrás. Solo es posible en borrador y pasa por el
+   mismo análisis que cualquier cambio.
+4. **El impacto cuenta solo cambios de reglas (§7).** Al verificar un paquete, una página aparece en
+   el impacto si un salto agregado, quitado o cambiado nombra una de sus columnas, o si cambió la
+   validación de una de ellas; un cambio de texto no cuenta. Son conteos de encuestados que ya
+   guardaron la página, nunca `C_C`, y la tabla y las columnas salen de la base y del cuestionario de
+   ese ambiente, no del paquete. Ninguna página guardada se reabre ni se recalcula (D16).
+5. **Publicar solo desde borrador y con la lista completa (§3).** Cuatro condiciones: cero errores de
+   análisis, todos los casos en `pasa` (`falla` y `por_revisar` bloquean), cada pregunta activa con su
+   columna (`ACTIVE`) y cada tabla mapeada válida. Los avisos no bloquean; sus códigos y elementos
+   quedan en `publicacion.avisos`. La lista se recalcula dentro del candado de administración al
+   publicar. Publicar el año activo levanta por sí mismo el 503 de la 3a (desviación 9).
+6. **Estructura bloqueada en un año publicado.** Agregar, desactivar, reordenar y elegir tablas
+   responden 409 «El cuestionario de AAAA está publicado: solo se permiten correcciones de textos,
+   saltos y validaciones.»; en la interfaz esos controles quedan deshabilitados con «Solo en
+   borrador.» en vez de ocultarse.
+7. **Mismo número de versión en QA y en producción.** Importar un paquete reemplaza el archivo de
+   reglas conservando la versión del paquete, que debe ser posterior a la de ese ambiente (o la misma
+   con idéntico contenido: «El paquete ya estaba importado.»). Producción no recalcula versiones; una
+   edición posterior la sube desde ahí. Si la versión vigente no la dejó una importación, la vista
+   previa avisa que importar reemplaza un cambio hecho en ese ambiente.
+8. **`frm.sql` según la clase de paquete (§8).** Ambos llevan la fotografía de `FRM_*` del año como
+   bloques PL/SQL: inserta la fila si su id está libre, no hace nada si ya es idéntica y aborta con
+   `ORA-20001` si el id lo ocupa otra fila (no renumera). El paquete de **año** no modifica filas
+   existentes. El de **corrección** además actualiza en una fila existente solo las columnas
+   corregibles de texto (`FRM_PREGUNTA.PREGUNTA`, `FRM_ENCABEZADO.ENCABEZADO`, `FRM_PRE_AYUDA.TEXTO`,
+   `FRM_ENC_AYUDA.TEXTO`) y el repunte de la copia al escribir (`FRM_CAP_PROY.COD_PRE_GRUPO`); si
+   difiere cualquier otra columna, aborta igual que con un id ajeno, y una corrección que tocara
+   otras columnas no se puede promover. `FRM_ENCABEZADO` del paquete se filtra por `ANIO` del año,
+   como la copia de año y el encuestado. La fotografía se lee bajo el candado de administración, de
+   modo que generar un paquete bloquea brevemente las ediciones.
+9. **`frm.sql` es ASCII puro y avisa el juego de caracteres.** Los caracteres no ASCII se escriben con
+   `TO_CHAR(UNISTR('\XXXX'))` (pares sustitutos como dos `\XXXX`), los controles con `CHR(n)`, una
+   parte del literal por línea y menos de 1000 bytes (SQL*Plus descarta sin error las líneas
+   largas). La cabecera lleva `SET AUTOCOMMIT OFF`, `WHENEVER SQLERROR` y `WHENEVER OSERROR` con
+   `EXIT FAILURE ROLLBACK` y la indicación de correrlo en una sesión nueva. El `NLS_CHARACTERSET` de
+   origen va en la cabecera y en el manifiesto; si hay texto no ASCII, el primer bloque aborta con
+   `ORA-20002` cuando el destino difiere (`UNISTR` sustituiría en silencio con `?`), y la importación
+   también lo compara. Hay que confirmar el juego de caracteres de producción (se espera `AL32UTF8`).
+   `columnas.sql` lleva las columnas que el año estrena, con una cabecera aunque no haya ninguna.
+10. **Sin firma: la verificación es contra la base real.** «Verificable» (§8) se resolvió comprobando
+    el paquete contra la base de producción y no con un HMAC: las columnas exigidas salen de la base y
+    de `reglas.json`, no del manifiesto; la importación revalida sobre `reglas.json` que haya
+    publicación con versión no mayor que la del archivo, cero errores y casos en `pasa` con las
+    preguntas de esa base; y se audita `importar-paquete` con un código `m` más 12 hexadecimales del
+    SHA-256 del manifiesto. Costo: no hay autenticidad criptográfica; una persona administradora con
+    acceso podría fabricar un paquete coherente que pase la verificación.
+11. **Generar un paquete exige la misma lista de publicación.** Si el año ya no la pasa (p. ej. un
+    caso `por_revisar` tras una corrección), la generación responde 422 «Lista de publicación
+    incompleta» con la lista (la misma propiedad `checklist` que publicar), para no entregar un ZIP
+    que producción rechazaría. Un paquete de corrección además exige una versión posterior a la
+    publicación (409). Hay que revisar los casos en el simulador antes de promover.
+12. **Límites del ZIP.** Como máximo 5 MB (413 en español), 20 MB descomprimidos contados al leer (no
+    por el tamaño declarado), exactamente las cuatro entradas `manifiesto.json`, `reglas.json`,
+    `frm.sql` y `columnas.sql` (sin rutas ni repetidas, a lo sumo 16 entradas leídas) y a lo sumo 100
+    diferencias en la respuesta 422. La importación nunca ejecuta `frm.sql` ni `columnas.sql` y solo
+    escribe el archivo de reglas, al confirmar.
+13. **nginx.** La importación tiene una `location` propia por expresión regular con tope de 6 MB (la
+    petición de 5 MB más cabeceras del multipart; `spring.servlet.multipart.max-request-size` es
+    6 MB); el resto de `/api/` conserva 1 MB. Por estar dentro de una `location` regex, `BACKEND_URL`
+    debe ser `esquema://host:puerto` sin ruta.
+14. **Producción solo lee `FRM_*`.** Su usuario de base de datos tiene `SELECT`; un DBA ejecuta
+    `columnas.sql` y `frm.sql` con su propio usuario antes de importar (README, «Paso a producción»).
+15. **Las cachés se limpian al importar.** Importar (también un paquete ya importado) hace `evict` de
+    preguntas, reglas y tablas sin reiniciar.
+16. **E2E.** `frontend/e2e/admin-publicar.spec.ts` desactiva `B99` (pregunta ficticia de
+    `db/dev/data.sql` sin columna real en el esquema de desarrollo) antes de publicar, porque sin su
+    columna el año no puede publicarse, y corrige el texto de B06 y no el de una pregunta de un caso,
+    para que el paquete de corrección se pueda generar. `admin-cuestionario` y `admin-reglas` se
+    adaptaron a que un año publicado ya no es de solo lectura y a que 2027 puede quedar publicado.
+
+Seguimiento de la 3c en el README, «Usage/Examples» y «Deployment».

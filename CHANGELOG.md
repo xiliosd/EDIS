@@ -53,8 +53,30 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   Reglas, el constructor, la alerta de un 422, el simulador y la lista de casos.
 - Diagrama de secuencia de guardar una regla y sección «Desviaciones de implementación (3b)» en el
   diseño de la Fase 3.
+- Publicar, corregir y promover (Fase 3c) para `ADMIN_CUESTIONARIO`:
+  - **Publicar** un año con una lista de comprobación (análisis sin errores, todos los casos en
+    «Pasa», columnas creadas y tablas válidas; los avisos no bloquean) que enlaza a cada elemento
+    que falla; un año publicado ya no admite edición estructural (409).
+  - **Correcciones** sobre un año publicado (textos, encabezados, ayudas, saltos, validaciones y
+    casos) con un motivo de 10 a 500 caracteres que queda solo en el archivo de reglas; una
+    corrección no puede dejar ningún caso en rojo.
+  - **Historial** de versiones con comparación entre dos versiones y restauración en borrador
+    (saltos, validaciones, casos y tablas; no las filas `FRM_*`).
+  - **Paquetes de promoción** (ZIP con `manifiesto.json`, `reglas.json`, `frm.sql` y
+    `columnas.sql`) de un año o de una corrección, y su importación verificada contra la base real
+    (sin firma), con el impacto por página y sin escribir `FRM_*`.
+  - Auditoría `publicar`, `importar-paquete`, `restaurar-version` y `corregir-<operación>`.
+  - Prueba E2E `frontend/e2e/admin-publicar.spec.ts` con axe (WCAG 2.1 AA) sobre Publicar, Historial
+    y Paquetes; diagramas de secuencia de publicar y de promover; procedimiento de paso a producción
+    en el README y sección «Desviaciones de implementación (3c)» en el diseño de la Fase 3.
 
 ### Cambiado
+- nginx tiene una `location` propia para `.../package/import` con tope de 6 MB (el resto de `/api/`
+  conserva 1 MB); `BACKEND_URL` debe ser `esquema://host:puerto` sin ruta.
+- `GET /api/v1/survey/**` deja de responder 503 en cuanto el año activo se publica.
+- Las pruebas E2E `admin-cuestionario` y `admin-reglas` se adaptaron: un año publicado muestra el
+  recuadro de corrección (ya no «solo lectura») y `admin-reglas` usa el siguiente año libre si 2027
+  quedó publicado por `admin-publicar`.
 - El inicio del encuestado muestra el avance por página.
 - El `C_C` viaja cifrado (AES-GCM) en la sesión.
 - La encuesta queda terminada al guardar las nueve páginas (D18): el inicio y "Terminar la encuesta"

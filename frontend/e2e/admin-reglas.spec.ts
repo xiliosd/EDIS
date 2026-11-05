@@ -45,20 +45,24 @@ test('el administrador crea una regla, la importa con ciclo, la prueba en el sim
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await page.getByRole('link', { name: 'Cuestionario', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Años del cuestionario' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Publicado' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Publicado' }).first()).toBeVisible();
 
   // 1. Reutiliza el borrador abierto (p. ej. el de admin-cuestionario en la misma corrida) o crea 2027.
   const draftRow = page
     .getByRole('row')
     .filter({ has: page.getByRole('cell', { name: 'Borrador' }) });
   let year = NEW_YEAR;
+  // admin-publicar deja 2027 publicado cuando corre antes en la misma corrida: se usa el siguiente año libre.
+  while ((await page.getByRole('rowheader', { name: String(year), exact: true }).count()) > 0) {
+    year += 1;
+  }
   if ((await draftRow.count()) > 0) {
     year = Number(await draftRow.getByRole('rowheader').innerText());
     await draftRow.getByRole('link').click();
   } else {
     await page.getByRole('button', { name: 'Crear año' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Crear año' });
-    await createDialog.getByLabel('Año nuevo').fill(String(NEW_YEAR));
+    await createDialog.getByLabel('Año nuevo').fill(String(year));
     await createDialog.getByLabel('Año de origen').fill(String(SOURCE_YEAR));
     await createDialog.getByRole('button', { name: 'Crear' }).click();
   }

@@ -20,6 +20,9 @@ dos aplicaciones independientes: `backend/` (Spring Boot) y `frontend/` (React).
  - [Diagrama de secuencia de editar con copia al escribir](docs/diagramas/secuencia-editar-copia-al-escribir.md)
 - [Plan de la Fase 3b (reglas, simulador y casos)](docs/superpowers/plans/2026-11-03-fase-3b-reglas-simulador-casos.md)
 - [Diagrama de secuencia de guardar una regla](docs/diagramas/secuencia-guardar-regla.md)
+- [Plan de la Fase 3c (publicar, corregir y promover)](docs/superpowers/plans/2026-11-04-fase-3c-publicar-corregir-promover.md)
+- [Diagrama de secuencia de publicar un año](docs/diagramas/secuencia-publicar.md)
+- [Diagrama de secuencia de promover un año o una corrección](docs/diagramas/secuencia-promover.md)
  - [Reglas de EDIN 2026](docs/reglas/edin-2026.md)
  - [MER de las tablas usadas](docs/diagramas/mer-tablas-usadas.md)
  - [Contrato OpenAPI](docs/api/openapi.yaml)
@@ -87,6 +90,27 @@ caso; `422` con el informe cuando el cambio agrega errores que el archivo vigent
 advertencias nunca bloquean); `409` si el año está publicado o la versión cambió. Los ids de regla y
 de caso admiten hasta 40 caracteres. El respondiente sigue leyendo `GET /api/v1/survey/rules`, que
 nunca incluye los casos.
+
+**Publicar, corregir y promover (Fase 3c).** Mismo rol (`ADMIN_CUESTIONARIO`), CSRF y `version` en el
+cuerpo que la 3a. Prefijo `/api/v1/admin/questionnaire/{encuesta}/{anio}`. Sobre un año publicado,
+agregar, desactivar, reordenar y elegir tablas responden 409 «El cuestionario de AAAA está publicado:
+solo se permiten correcciones de textos, saltos y validaciones.»; las correcciones (textos,
+encabezados, ayudas, saltos, validaciones y casos) llevan además `motivo` (10 a 500 caracteres, 422
+«Indique el motivo de la corrección (entre 10 y 500 caracteres).»).
+
+| Verbo | Ruta | Descripción |
+| :-- | :-- | :-- |
+| `GET` | `.../publication` | Lista de comprobación: análisis sin errores, casos en verde, columnas creadas y tablas válidas (avisos aparte) |
+| `POST` | `.../publication` | Publica el año si la lista está completa (422 con la lista si no; 409 si ya está publicado o la versión cambió) |
+| `GET` | `.../history` | Versiones guardadas: quién, cuándo, operación y, en correcciones, el motivo |
+| `GET` | `.../history/{version}` | Archivo de reglas tal como estaba en esa versión (alimenta la comparación) |
+| `POST` | `.../history/{version}/restore` | Restaura saltos, validaciones, casos y tablas de una versión como versión nueva; solo en borrador y sin restaurar `FRM_*` |
+| `GET` | `.../package?tipo=anio` o `tipo=correccion` | ZIP con `manifiesto.json`, `reglas.json`, `frm.sql` y `columnas.sql` de un año publicado (422 con la lista si no pasa la lista de publicación) |
+| `POST` | `.../package/import?confirmar=false` o `true` | Verifica un ZIP contra esta base (`multipart`, campo `archivo`) y, con `true`, reemplaza el archivo de reglas; nunca escribe `FRM_*` |
+
+La importación responde 413 si el ZIP pasa de 5 MB y 422 «Paquete rechazado» con la lista
+`differences` si alguna revisión falla. Las operaciones de auditoría son `publicar`,
+`importar-paquete`, `restaurar-version` y `corregir-<operación>`.
 
 Límites de `PUT .../answers`: como máximo 200 respuestas por página (400 «Envíe como máximo 200
 respuestas por página») y 4000 caracteres por valor (422 con «La respuesta es demasiado larga.» en
@@ -179,6 +203,17 @@ puede repetir sin reiniciar el backend con un `RULES_DIR` limpio (`docker compos
 `docker compose up -d --build --wait`). Es el único chequeo de accesibilidad (axe, WCAG 2.1 AA) de
 las pantallas de reglas y del simulador.
 
+La prueba `admin-publicar` (solo Chromium; el móvil la omite con la anotación «omitida») crea 2027
+desde 2026 o reutiliza el borrador abierto, edita el texto de C01A (el caso copiado
+`c01a-no-oculta-c01b` queda **Por revisar** y la lista de publicación lo señala), lo guarda de nuevo
+en el simulador, desactiva `B99` (la pregunta ficticia de `db/dev/data.sql` sin columna real, que
+impediría publicar), publica, corrige un texto con el motivo «Corrección de prueba ficticia»,
+comprueba la versión y el motivo en Historial, descarga el paquete de corrección y lo verifica en el
+mismo ambiente («El paquete ya estaba importado.»), con axe en Publicar, Historial y Paquetes. En una
+corrida completa corre después de `admin-cuestionario` (reutiliza su borrador 2027) y antes de
+`admin-reglas`, que al encontrar 2027 publicado usa el siguiente año libre (2028). Como las demás,
+necesita un backend recién arrancado y un `RULES_DIR` limpio (`docker compose down -v`).
+
 Pruebas automatizadas:
 
 ```bash
@@ -256,6 +291,19 @@ propias (`DB_SCHEMA=DANE_DIRPEN` en el institucional, `COOKIE_SECURE=true`, `SWA
 > **Pendiente:** las etapas de *staging* y producción del pipeline aún no están implementadas; hoy
 > `ci.yml` cubre hasta imágenes y E2E.
 
+**nginx y la importación de paquetes.** `BACKEND_URL` debe ser `esquema://host:puerto` sin ruta
+(`http://backend:8080`, no `http://backend:8080/api`): la ruta de importación se enruta con una
+`location` por expresión regular, donde `proxy_pass` no admite URI. Esa `location` permite 6 MB
+(el tope de la aplicación es 5 MB por petición y 20 MB descomprimido); el resto de `/api/` conserva
+el tope de 1 MB de nginx. Un ZIP de más de 5 MB llega al backend y responde 413 en español; uno de
+más de 6 MB lo corta nginx con su 413 genérico. Con el stack en pie,
+`docker compose exec frontend nginx -t` valida la configuración ya renderizada.
+
+**Usuario de base de datos de producción.** Solo `SELECT` sobre `FRM_*`: nunca `INSERT`, `UPDATE`
+ni DDL. Los scripts del paquete (`columnas.sql`, `frm.sql`) los ejecuta un DBA con su propio
+usuario; confirme antes `NLS_CHARACTERSET` (se espera `AL32UTF8`). El procedimiento completo está en
+Usage/Examples, «Paso a producción, paso a paso».
+
 **`CORS_ALLOWED_ORIGIN` y nginx.** Debe ser exactamente el origen público con el que el navegador abre
 la aplicación (esquema + host + puerto), incluso cuando entra por nginx. nginx reenvía
 `X-Forwarded-Proto` y el `RemoteIpValve` de Tomcat hace que la petición aparente estar en el puerto por
@@ -289,7 +337,7 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `SWAGGER_ENABLED` | Habilita OpenAPI y Swagger UI | No | `false` (`true` en dev y QA) |
 | `SWAGGER_PUBLIC` | Swagger abierto sin rol; `false` limita a `ADMIN_NACIONAL` | No | `false` |
 | `LOG_FORMAT` | Formato de logs estructurados | No | `ecs` |
-| `BACKEND_URL` | Destino del proxy `/api` en nginx (lo fija compose) | Sí (frontend) | `http://backend:8080` |
+| `BACKEND_URL` | Destino del proxy `/api` en nginx: `esquema://host:puerto` **sin ruta** (lo fija compose); ver Deployment | Sí (frontend) | `http://backend:8080` |
 | `E2E_BASE_URL` | URL base de las pruebas E2E | No | `http://localhost:8081` |
 | `E2E_RESPONDENT_USER` | Usuario ficticio de las pruebas E2E | No | `PRUEBA01` |
 | `E2E_RESPONDENT_PASSWORD` | Clave ficticia de las pruebas E2E | No | ver `db/dev/data.sql` |
@@ -389,8 +437,8 @@ ingreso) con un usuario de rol `ADMIN_CUESTIONARIO` y abra **Cuestionario** en e
 
 1. **Años.** La tabla muestra cada año con su estado (Publicado o Borrador). "Crear año" copia un
    año publicado a un año nuevo en borrador; solo puede haber un borrador por encuesta. Publicar
-   un año llega en una fase posterior (3c).
-2. **Árbol.** Al abrir un año se ven sus páginas y preguntas. Un año publicado es de solo lectura.
+   un año es la Fase 3c (ver más abajo).
+2. **Árbol.** Al abrir un año se ven sus páginas y preguntas. Un año publicado solo admite correcciones (Fase 3c).
 3. **Editar.** En un borrador, "Editar" cambia el texto, un encabezado o la ayuda y "Guardar" lo
    envía; no hay autoguardado. Escriba `200X` donde debe ir el año. Si otra persona cambió el
    cuestionario, aparece un aviso con "Recargar".
@@ -436,6 +484,61 @@ escapados en la base, y se muestran escapados.
    muestra (id en minúsculas y guiones, nombre de 1 a 100 caracteres). Cada caso muestra **Pasa**,
    **Falla** (con la diferencia) o **Por revisar** (si una pregunta que usa cambió o se desactivó).
    "Abrir en el simulador" lo recarga; no se puede desactivar una pregunta que solo usa un caso.
+
+**Publicar, corregir y promover (Fase 3c).** Las pestañas **Publicar**, **Historial** y **Paquetes**
+completan el ciclo del año.
+
+1. **Publicar.** La lista dice si el año cumple las cuatro condiciones: análisis sin errores, todos
+   los casos en **Pasa** (**Falla** y **Por revisar** bloquean), cada pregunta activa con su columna
+   y cada tabla mapeada válida. Cada condición que falla enlaza al caso, la regla, la columna o el
+   panel de tablas. Los avisos no bloquean y quedan anotados en la publicación. «Publicar» pide
+   confirmar; un año publicado ya no admite edición estructural.
+2. **Corregir un año publicado.** En **Preguntas**, **Reglas** y **Simulador** aparece el recuadro
+   «Corrección de un año publicado»: escriba el motivo (10 a 500 caracteres, sin datos personales:
+   queda en el archivo de reglas) y edite textos, encabezados, ayudas, saltos, validaciones o
+   casos. Agregar, desactivar, reordenar y «Guardar tablas» se ven deshabilitados con «Solo en
+   borrador.». Una corrección no puede dejar ningún caso en rojo: si lo hace, se rechaza y hay que
+   arreglar el caso o la regla en la misma corrección. Editar el texto de una pregunta que usa un
+   caso lo deja **Por revisar**; ábralo en el simulador y guárdelo de nuevo antes de generar el
+   paquete. Las páginas que los encuestados ya guardaron no cambian (escritura única, D16).
+3. **Historial.** Cada versión con fecha, usuario, operación y motivo, y una comparación entre dos
+   versiones. «Restaurar esta versión» solo existe en borrador: devuelve saltos, validaciones,
+   casos y tablas, **no** las filas `FRM_*` (textos y preguntas).
+4. **Paquetes.** «Descargar paquete del año» (de un año publicado) y «Descargar paquete de
+   corrección» (si hay versiones posteriores a la publicación) generan
+   `paquete-EDIN-AAAA-anio.zip` o `paquete-EDIN-AAAA-correccion.zip`. Para importar, elija el ZIP
+   (máximo 5 MB), «Verificar» y, si pasa, «Importar»; la verificación muestra cuántos encuestados
+   ya guardaron cada página cuyas reglas cambian. Verificar un paquete que este ambiente ya tiene
+   dice «El paquete ya estaba importado.».
+
+**Paso a producción, paso a paso.** La aplicación en producción **solo lee** `FRM_*`: su usuario de
+base de datos tiene `SELECT` y nada más sobre esas tablas, así que `columnas.sql` y `frm.sql` los
+corre una persona técnica (DBA) con su propio usuario.
+
+1. **En QA.** Publique el año (o guarde las correcciones) y, en **Paquetes**, descargue el paquete.
+   Si la lista de publicación ya no pasa, la descarga responde 422 con la lista: arregle y repita.
+2. **Antes de correr nada, el DBA confirma el juego de caracteres de producción** (se espera
+   `AL32UTF8`):
+   `SELECT value FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET';`.
+   Si `frm.sql` trae texto no ASCII y la base de destino tiene otro, aborta con `ORA-20002` antes de
+   escribir nada; si no abortara, `TO_CHAR(UNISTR())` sustituiría en silencio con `?`.
+3. **El DBA ejecuta `columnas.sql`** (las columnas nuevas, si hay) y luego **`frm.sql`**, cada uno en
+   una sesión nueva de SQL*Plus. `frm.sql` es ASCII puro, idempotente (inserta lo que falta, no
+   toca lo que ya está igual) y se detiene con `ORA-20001` y reversión si un id lo ocupa otra fila:
+   no renumera en silencio.
+4. **En producción**, abra **Paquetes**, elija el ZIP y «Verificar». La verificación comprueba, en
+   orden: las cuatro entradas del ZIP; el SHA-256 de cada archivo; que `reglas.json` sea válido,
+   publicado y del año y la versión del paquete; las filas y sumas de `FRM_*` de esa base; las
+   tablas y columnas de respuesta; y que la versión sea posterior a la de este ambiente. Si algo
+   falla, el 422 lista las diferencias.
+5. **Revise el impacto** (conteos por página, sin datos personales; solo cuenta cambios de reglas,
+   no de textos) y, si es correcto, «Importar» y confirme. Las cachés se limpian sin reiniciar y
+   queda la auditoría `importar-paquete`.
+6. **Registre el paso** con el formato FR-FT-GST-02, el RFC y la aprobación del CAB (ver Deployment).
+
+Producción queda con **el mismo número de versión que QA**: la importación conserva la versión del
+paquete, y una edición posterior en producción la sube desde ahí. Si en producción se hizo un cambio
+después de la versión del paquete, la vista previa avisa que importar lo reemplaza.
 
 **Regenerar el contrato y los tipos.** El contrato lo genera el backend durante `./mvnw verify`
 (CI falla si `docs/api/openapi.yaml` no coincide). Los tipos del frontend:
