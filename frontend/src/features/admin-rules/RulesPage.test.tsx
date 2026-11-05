@@ -101,13 +101,37 @@ describe('RulesPage', () => {
   it('con el año publicado deshabilita todas las ediciones', async () => {
     await openRules(rulesView({ state: 'publicado' }));
 
-    expect(
-      screen.getByText('El cuestionario de 2027 está publicado y es de solo lectura.'),
-    ).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Motivo de la corrección' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Nueva regla' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Editar regla c01a-no' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Eliminar regla c01a-no' })).toBeDisabled();
     expect(screen.getByLabelText('Importar JSON')).toBeDisabled();
+  });
+
+  it('en un año publicado elimina una regla solo con motivo y lo envía recortado', async () => {
+    let query: URLSearchParams | null = null;
+    server.use(
+      http.delete(`${RULES_API}/skips/c01a-no`, ({ request }) => {
+        query = new URL(request.url).searchParams;
+        return HttpResponse.json({ version: 5, report: { errors: [], warnings: [] } });
+      }),
+    );
+    await openRules(rulesView({ state: 'publicado' }));
+    const user = userEvent.setup();
+
+    await user.type(screen.getByRole('textbox', { name: 'Motivo de la corrección' }), '  corto ');
+    expect(screen.getByRole('button', { name: 'Eliminar regla c01a-no' })).toBeDisabled();
+    await user.type(
+      screen.getByRole('textbox', { name: 'Motivo de la corrección' }),
+      'pero ya suficiente  ',
+    );
+    await user.click(screen.getByRole('button', { name: 'Eliminar regla c01a-no' }));
+    await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+
+    expect(await screen.findByText('Regla eliminada.')).toBeInTheDocument();
+    expect(query!.get('version')).toBe('4');
+    expect(query!.get('motivo')).toBe('corto pero ya suficiente');
+    expect(screen.getByRole('textbox', { name: 'Motivo de la corrección' })).toHaveValue('');
   });
 
   it(

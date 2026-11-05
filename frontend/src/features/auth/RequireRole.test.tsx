@@ -30,8 +30,8 @@ describe('RequireRole', () => {
     expect(await screen.findByRole('heading', { name: 'Acceso denegado' })).toBeInTheDocument();
   });
 
-  it.each(['reglas', 'simulador'])(
-    'niega las secciones de reglas y simulador a quien no tiene ADMIN_CUESTIONARIO (%s)',
+  it.each(['reglas', 'simulador', 'publicar', 'historial', 'paquetes'])(
+    'niega las secciones del cuestionario a quien no tiene ADMIN_CUESTIONARIO (%s)',
     async (section) => {
       server.use(http.get('*/api/v1/auth/me', () => sessionResponse(['ADMIN_TERRITORIAL'])));
       renderApp(`/admin/cuestionario/EDIN/2027/${section}`);
@@ -39,7 +39,7 @@ describe('RequireRole', () => {
     },
   );
 
-  it.each(['reglas', 'simulador'])(
+  it.each(['reglas', 'simulador', 'publicar', 'historial', 'paquetes'])(
     'envía a ingresar a quien no tiene sesión al abrir %s',
     async (section) => {
       server.use(http.get('*/api/v1/auth/me', () => HttpResponse.json({}, { status: 401 })));

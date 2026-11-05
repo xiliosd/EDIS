@@ -62,12 +62,13 @@ export async function editText(
   capProyId: number,
   text: string,
   version: number,
+  motivo?: string,
 ): Promise<AdminEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/entries/{capProyId}/text', {
       params: { path: { encuesta: survey, anio: year, capProyId } },
-      body: { text, version },
+      body: { text, version, motivo },
     }),
   );
 }
@@ -78,12 +79,13 @@ export async function editHeader(
   codEnc: number,
   text: string,
   version: number,
+  motivo?: string,
 ): Promise<AdminEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/headers/{codEnc}', {
       params: { path: { encuesta: survey, anio: year, codEnc } },
-      body: { text, version },
+      body: { text, version, motivo },
     }),
   );
 }
@@ -94,12 +96,13 @@ export async function editHelp(
   codAyu: number,
   text: string,
   version: number,
+  motivo?: string,
 ): Promise<AdminEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/help/{codAyu}', {
       params: { path: { encuesta: survey, anio: year, codAyu } },
-      body: { text, version },
+      body: { text, version, motivo },
     }),
   );
 }

@@ -4,6 +4,8 @@ import { AdminLayout } from './components/AdminLayout';
 import { AppLayout } from './components/AppLayout';
 import { SessionMenu } from './components/SessionMenu';
 import { AdminHomePage } from './features/admin/AdminHomePage';
+import { PublishPage } from './features/admin-publish/PublishPage';
+import { SectionPlaceholderPage } from './features/admin-publish/SectionPlaceholderPage';
 import { QuestionnaireTreePage } from './features/admin-questions/QuestionnaireTreePage';
 import { YearsPage } from './features/admin-questions/YearsPage';
 import { HomeRedirect } from './features/auth/HomeRedirect';
@@ -109,6 +111,30 @@ export function App() {
                 <Suspense fallback={<LoadingSection />}>
                   <SimulatorPage />
                 </Suspense>
+              </RequireRole>
+            }
+          />
+          <Route
+            path="cuestionario/:encuesta/:anio/publicar"
+            element={
+              <RequireRole roles={['ADMIN_CUESTIONARIO']}>
+                <PublishPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="cuestionario/:encuesta/:anio/historial"
+            element={
+              <RequireRole roles={['ADMIN_CUESTIONARIO']}>
+                <SectionPlaceholderPage section="Historial" />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="cuestionario/:encuesta/:anio/paquetes"
+            element={
+              <RequireRole roles={['ADMIN_CUESTIONARIO']}>
+                <SectionPlaceholderPage section="Paquetes" />
               </RequireRole>
             }
           />

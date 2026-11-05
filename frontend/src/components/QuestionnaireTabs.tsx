@@ -13,7 +13,7 @@ function tabClass({ isActive }: { isActive: boolean }) {
   return `${LINK_CLASSES} ${isActive ? ACTIVE_LINK_CLASSES : ''}`;
 }
 
-/** Secciones de un cuestionario por año: árbol de preguntas, reglas y simulador. */
+/** Secciones de un cuestionario por año: árbol de preguntas, reglas, simulador, publicación, historial y paquetes. */
 export function QuestionnaireTabs({ survey, year }: QuestionnaireTabsProps) {
   const base = `/admin/cuestionario/${survey}/${year}`;
   return (
@@ -32,6 +32,21 @@ export function QuestionnaireTabs({ survey, year }: QuestionnaireTabsProps) {
         <li>
           <NavLink to={`${base}/simulador`} className={tabClass}>
             Simulador
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to={`${base}/publicar`} className={tabClass}>
+            Publicar
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to={`${base}/historial`} className={tabClass}>
+            Historial
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to={`${base}/paquetes`} className={tabClass}>
+            Paquetes
           </NavLink>
         </li>
       </ul>

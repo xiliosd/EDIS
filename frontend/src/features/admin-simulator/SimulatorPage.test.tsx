@@ -306,10 +306,41 @@ describe('SimulatorPage', () => {
 
     expect(screen.getByRole('button', { name: 'Guardar como caso de prueba' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Eliminar caso caso-a' })).toBeDisabled();
-    expect(screen.getByText(/está publicado/)).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Motivo de la corrección' })).toBeVisible();
     await user.click(within(group('C01A')).getByLabelText('No'));
     expect(await screen.findByText(/Oculta por la regla c01a-no/)).toBeVisible();
   });
+
+  it(
+    'en un año publicado elimina un caso con el motivo válido y luego lo vacía',
+    async () => {
+      let query: URLSearchParams | null = null;
+      server.use(
+        http.delete(`${RULES_API}/cases/caso-a`, ({ request }) => {
+          query = new URL(request.url).searchParams;
+          return HttpResponse.json({
+            version: 5,
+            report: { errors: [], warnings: [] },
+            caseResults: [],
+          });
+        }),
+      );
+      await openSimulator(rulesView({ state: 'publicado', cases: CASES, caseResults: RESULTS }));
+      const user = userEvent.setup();
+
+      await user.type(
+        screen.getByRole('textbox', { name: 'Motivo de la corrección' }),
+        'Caso duplicado del anterior',
+      );
+      await user.click(screen.getByRole('button', { name: 'Eliminar caso caso-a' }));
+      await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+
+      expect(await screen.findByText('Caso caso-a eliminado.')).toBeInTheDocument();
+      expect(query!.get('motivo')).toBe('Caso duplicado del anterior');
+      expect(screen.getByRole('textbox', { name: 'Motivo de la corrección' })).toHaveValue('');
+    },
+    LONG_FLOW_TIMEOUT,
+  );
 
   it(
     'con #caso-<id> desplaza la vista y enfoca la fila del caso',

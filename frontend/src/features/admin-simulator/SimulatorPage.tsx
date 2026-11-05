@@ -4,11 +4,13 @@ import { Link, useLocation, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
 import { ConflictNotice } from '../../components/ConflictNotice';
+import { CorrectionReasonBar } from '../../components/CorrectionReasonBar';
 import { ErrorState } from '../../components/ErrorState';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
+import { useCorrectionReason } from '../../hooks/use-correction-reason';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
-import { errorMessage } from '../admin-questions/tree-editing';
+import { errorMessage, REASON_REQUIRED_NOTE } from '../admin-questions/tree-editing';
 import { describeRule } from '../admin-rules/rule-description';
 import {
   deleteCase,
@@ -187,7 +189,10 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
     [rulesView.questions],
   );
   const cases = rulesView.cases ?? [];
-  const editable = rulesView.state === 'borrador';
+  const reason = useCorrectionReason();
+  const correction = rulesView.state === 'publicado';
+  // Un año publicado admite guardar y eliminar casos como corrección, solo con motivo válido.
+  const editable = rulesView.state === 'borrador' || (correction && reason.motivo !== undefined);
   const rulesKey = rulesQueryKey(survey, year);
   const simulatorKey = simulatorQueryKey(survey, year);
 
@@ -257,7 +262,16 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
     setSaveError(null);
     setConflict(null);
     try {
-      const result = await saveCase(survey, year, testCase, rulesVersion);
+      const result = await saveCase(
+        survey,
+        year,
+        testCase,
+        rulesVersion,
+        correction ? reason.motivo : undefined,
+      );
+      if (correction) {
+        reason.clear();
+      }
       applyResult(result, (current) =>
         current.some((item) => item.id === testCase.id)
           ? current.map((item) => (item.id === testCase.id ? testCase : item))
@@ -284,7 +298,16 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
     setDeleteError(null);
     setConflict(null);
     try {
-      const result = await deleteCase(survey, year, caseId, currentRulesVersion());
+      const result = await deleteCase(
+        survey,
+        year,
+        caseId,
+        currentRulesVersion(),
+        correction ? reason.motivo : undefined,
+      );
+      if (correction) {
+        reason.clear();
+      }
       applyResult(result, (current) => current.filter((item) => item.id !== caseId));
       setStatusMessage(`Caso ${caseId} eliminado.`);
       // La fila desaparece con el botón enfocado: el foco pasa al título de la lista.
@@ -330,11 +353,11 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
           Las reglas cambiaron; revise el resultado antes de guardar.
         </p>
       )}
-      {!editable && (
-        <p className="mt-4 rounded-xl border border-ink-muted/30 bg-surface p-4">
-          El cuestionario de {rulesView.year} está publicado: el simulador funciona, pero no se
-          pueden guardar ni eliminar casos.
-        </p>
+      {correction && (
+        <>
+          <CorrectionReasonBar value={reason.text} onChange={reason.setText} />
+          {!editable && <p className="mt-2 text-ink-muted">{REASON_REQUIRED_NOTE}</p>}
+        </>
       )}
 
       <div className="mt-6 max-w-xs">

@@ -16,8 +16,11 @@ import {
   entryLabel,
   errorMessage,
   fieldErrorsOf,
+  DRAFT_ONLY_NOTE,
   handleEditError,
   INPUT_TYPE_LABELS,
+  REASON_REQUIRED_NOTE,
+  saveBlocked,
   deactivationBlockers,
   type DeactivationBlockers,
   type TreeEditing,
@@ -34,7 +37,7 @@ interface EditableTextProps {
   value: string;
   hint?: string;
   editing: TreeEditing;
-  save: (text: string) => Promise<AdminEditResult>;
+  save: (text: string, motivo: string | undefined) => Promise<AdminEditResult>;
 }
 
 /** Texto con edición en línea y guardado explícito (sin autoguardado). */
@@ -80,8 +83,9 @@ function EditableText({
     setBusy(true);
     setError(null);
     try {
-      const result = await save(draft);
+      const result = await save(draft, editing.motivo);
       editing.onEdited(result);
+      editing.onSaved?.();
       close();
     } catch (caught) {
       const message = handleEditError(caught, editing);
@@ -132,13 +136,18 @@ function EditableText({
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void submit()} disabled={busy} aria-busy={busy || undefined}>
+        <Button
+          onClick={() => void submit()}
+          disabled={busy || saveBlocked(editing)}
+          aria-busy={busy || undefined}
+        >
           Guardar
         </Button>
         <Button variant="secondary" onClick={close} disabled={busy}>
           Cancelar
         </Button>
       </div>
+      {saveBlocked(editing) && <p className="text-sm text-ink-muted">{REASON_REQUIRED_NOTE}</p>}
     </div>
   );
 }
@@ -276,8 +285,15 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
         display={display}
         value={text}
         editing={editing}
-        save={(value) =>
-          editHeader(editing.survey, editing.year, header.codEnc ?? 0, value, editing.version)
+        save={(value, motivo) =>
+          editHeader(
+            editing.survey,
+            editing.year,
+            header.codEnc ?? 0,
+            value,
+            editing.version,
+            motivo,
+          )
         }
       />
     );
@@ -323,8 +339,8 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
           value={entry.rawText}
           hint="Escriba 200X donde debe ir el año; se reemplaza al mostrar la pregunta."
           editing={editing}
-          save={(value) =>
-            editText(editing.survey, editing.year, capProyId, value, editing.version)
+          save={(value, motivo) =>
+            editText(editing.survey, editing.year, capProyId, value, editing.version, motivo)
           }
         />
       ) : (
@@ -348,8 +364,15 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
             display={<p className="text-sm text-ink-muted">{help.text}</p>}
             value={help.text ?? ''}
             editing={editing}
-            save={(value) =>
-              editHelp(editing.survey, editing.year, help.codAyu ?? 0, value, editing.version)
+            save={(value, motivo) =>
+              editHelp(
+                editing.survey,
+                editing.year,
+                help.codAyu ?? 0,
+                value,
+                editing.version,
+                motivo,
+              )
             }
           />
         ) : (
@@ -358,7 +381,7 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
 
       {editing && (
         <div className="flex flex-wrap gap-2">
-          {pending && (
+          {pending && !editing.correction && (
             <Button
               variant="secondary"
               aria-label={`Descargar script de columna de ${label}`}
@@ -367,9 +390,16 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
               Descargar script de columna
             </Button>
           )}
-          <Button variant="secondary" onClick={() => setConfirming(true)}>
+          <Button
+            variant="secondary"
+            disabled={editing.correction}
+            onClick={() => setConfirming(true)}
+          >
             Desactivar {label}
           </Button>
+          {editing.correction && (
+            <span className="self-center text-sm text-ink-muted">{DRAFT_ONLY_NOTE}</span>
+          )}
         </div>
       )}
 

@@ -3,7 +3,13 @@ import { Button } from '../../components/Button';
 import { TextField } from '../../components/TextField';
 import { downloadTextFile } from '../../services/download-file';
 import { fetchCreateTableScript, saveTables, type TablesResult } from './admin-api';
-import { errorMessage, fieldErrorsOf, handleEditError, type TreeEditing } from './tree-editing';
+import {
+  DRAFT_ONLY_NOTE,
+  errorMessage,
+  fieldErrorsOf,
+  handleEditError,
+  type TreeEditing,
+} from './tree-editing';
 
 interface TablesMappingPanelProps {
   /** Tabla de respuestas de cada capítulo (código de capítulo → tabla). */
@@ -12,6 +18,8 @@ interface TablesMappingPanelProps {
   missingChapters: ReadonlySet<string>;
   /** Null en un año publicado: el mapeo se muestra sin edición. */
   editing: TreeEditing | null;
+  /** Año publicado: el mapeo no se puede cambiar y el panel lo dice. */
+  lockedNote?: boolean;
   onSaved: (result: TablesResult) => void;
 }
 
@@ -20,6 +28,7 @@ export function TablesMappingPanel({
   tables,
   missingChapters,
   editing,
+  lockedNote = false,
   onSaved,
 }: TablesMappingPanelProps) {
   const chapters = Object.keys(tables).sort();
@@ -137,6 +146,7 @@ export function TablesMappingPanel({
           Guardar tablas
         </Button>
       )}
+      {lockedNote && <p className="mt-4 text-sm text-ink-muted">{DRAFT_ONLY_NOTE}</p>}
       {message && (
         <p
           role={message.isError ? 'alert' : 'status'}

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '../../components/Button';
 import { ConflictNotice } from '../../components/ConflictNotice';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
 import { ErrorState } from '../../components/ErrorState';
+import { CorrectionReasonBar } from '../../components/CorrectionReasonBar';
+import { useCorrectionReason } from '../../hooks/use-correction-reason';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import {
   fetchQuestionnaire,
@@ -18,7 +21,13 @@ import { AddQuestionDialog, type OptionGroupChoice } from './AddQuestionDialog';
 import { QuestionEditor } from './QuestionEditor';
 import { ReorderList } from './ReorderList';
 import { TablesMappingPanel } from './TablesMappingPanel';
-import { entryLabel, errorMessage, handleEditError, type TreeEditing } from './tree-editing';
+import {
+  DRAFT_ONLY_NOTE,
+  entryLabel,
+  errorMessage,
+  handleEditError,
+  type TreeEditing,
+} from './tree-editing';
 
 const STATE_LABELS: Record<string, string> = { borrador: 'Borrador', publicado: 'Publicado' };
 
@@ -65,6 +74,7 @@ export function QuestionnaireTreePage() {
   const [focusTargetId, setFocusTargetId] = useState<string | null>(null);
 
   const view = treeQuery.data;
+  const reason = useCorrectionReason();
 
   /** La respuesta trae la página releída y la nueva versión: reemplaza la de la caché. */
   function applyEdit(result: AdminEditResult) {
@@ -126,20 +136,25 @@ export function QuestionnaireTreePage() {
     void treeQuery.refetch();
   }
 
-  const editing: TreeEditing | null =
-    view && view.state === 'borrador'
-      ? {
-          survey: encuesta,
-          year,
-          version: view.version ?? 0,
-          onEdited: applyEdit,
-          onDeactivated: applyDeactivation,
-          onConflict: setConflict,
-        }
-      : null;
+  // Un año publicado sigue editable, pero solo como corrección con motivo.
+  const correction = view?.state === 'publicado';
+  const editing: TreeEditing | null = view
+    ? {
+        survey: encuesta,
+        year,
+        version: view.version ?? 0,
+        correction,
+        motivo: reason.motivo,
+        onSaved: reason.clear,
+        onEdited: applyEdit,
+        onDeactivated: applyDeactivation,
+        onConflict: setConflict,
+      }
+    : null;
+  const structural = correction ? null : editing;
 
   async function reorderPage(page: AdminPage, ids: number[]): Promise<boolean> {
-    if (!editing) {
+    if (!editing || correction) {
       return false;
     }
     const pageCode = page.pageCode ?? '';
@@ -198,16 +213,13 @@ export function QuestionnaireTreePage() {
             Estado: {STATE_LABELS[view.state ?? ''] ?? view.state} ·{' '}
             <span>Versión {view.version}</span>
           </p>
-          {!editing && (
-            <p className="mt-4 rounded-xl border border-ink-muted/30 bg-surface p-4">
-              El cuestionario de {view.year} está publicado y es de solo lectura.
-            </p>
-          )}
+          {correction && <CorrectionReasonBar value={reason.text} onChange={reason.setText} />}
 
           <TablesMappingPanel
             tables={view.tables ?? {}}
             missingChapters={missingChaptersOf(view)}
-            editing={editing}
+            editing={structural}
+            lockedNote={correction}
             onSaved={applyTables}
           />
 
@@ -231,7 +243,7 @@ export function QuestionnaireTreePage() {
                     items={entries}
                     getId={(item) => item.capProyId ?? 0}
                     getLabel={entryLabel}
-                    editable={editing !== null}
+                    editable={structural !== null}
                     onReorder={(ids) => reorderPage(page, ids)}
                     renderItem={(item) => (
                       <QuestionEditor entry={item} pageCode={pageCode} editing={editing} />
@@ -256,12 +268,20 @@ export function QuestionnaireTreePage() {
                     </ul>
                   </div>
                 )}
-                {editing && (
+                {structural && (
                   <AddQuestionDialog
                     page={page}
                     optionGroups={optionGroupsOf(view)}
-                    editing={editing}
+                    editing={structural}
                   />
+                )}
+                {correction && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Button variant="secondary" disabled>
+                      Agregar pregunta en {pageCode}
+                    </Button>
+                    <span className="text-sm text-ink-muted">{DRAFT_ONLY_NOTE}</span>
+                  </div>
                 )}
               </section>
             );

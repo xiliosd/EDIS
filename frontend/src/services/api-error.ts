@@ -1,12 +1,14 @@
 import type { components } from './api-schema';
 
 export type AnalysisReport = components['schemas']['AnalysisReport'];
+export type PublicationChecklist = components['schemas']['PublicationChecklist'];
 
 interface ProblemBody {
   title?: string;
   detail?: string;
   errors?: Record<string, string>;
   report?: AnalysisReport;
+  checklist?: PublicationChecklist;
 }
 
 const GENERIC_DETAIL = 'No fue posible completar la solicitud. Intente de nuevo.';
@@ -19,6 +21,8 @@ export class ApiError extends Error {
   readonly fieldErrors: Record<string, string>;
   /** Informe de análisis que acompaña un 422 de reglas. */
   readonly report?: AnalysisReport;
+  /** Lista de publicación que acompaña el 422 de un año que aún no puede publicarse. */
+  readonly checklist?: PublicationChecklist;
 
   constructor(
     status: number,
@@ -26,6 +30,7 @@ export class ApiError extends Error {
     detail: string,
     fieldErrors: Record<string, string> = {},
     report?: AnalysisReport,
+    checklist?: PublicationChecklist,
   ) {
     super(detail);
     this.name = 'ApiError';
@@ -34,6 +39,7 @@ export class ApiError extends Error {
     this.detail = detail;
     this.fieldErrors = fieldErrors;
     this.report = report;
+    this.checklist = checklist;
   }
 }
 
@@ -46,6 +52,7 @@ export function toApiError(status: number, body: unknown): ApiError {
     problem.detail ?? GENERIC_DETAIL,
     problem.errors ?? {},
     problem.report,
+    problem.checklist,
   );
 }
 

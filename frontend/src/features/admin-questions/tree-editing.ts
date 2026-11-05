@@ -10,6 +10,15 @@ export interface TreeEditing {
   onEdited: (result: AdminEditResult) => void;
   /** Tras desactivar: la pregunta sale de la lista y el árbol mueve el foco y lo anuncia. */
   onDeactivated: (result: AdminEditResult, capProyId: number, columnLabel: string) => void;
+  /**
+   * Año publicado: solo se corrigen textos, y cada guardado necesita un motivo válido. Lo
+   * estructural (agregar, desactivar, reordenar, tablas) queda deshabilitado.
+   */
+  correction: boolean;
+  /** Motivo recortado y válido que viaja en la corrección; undefined mientras no lo sea. */
+  motivo?: string;
+  /** Tras guardar una corrección: la página vacía el motivo para que el siguiente sea nuevo. */
+  onSaved?: () => void;
   /** 409 de versión vieja o año publicado: se muestra arriba con el botón "Recargar". */
   onConflict: (message: string) => void;
 }
@@ -30,6 +39,14 @@ export function errorMessage(error: unknown): string {
 export function fieldErrorsOf(error: unknown): Record<string, string> {
   return error instanceof ApiError ? error.fieldErrors : {};
 }
+
+/** Mientras falte el motivo válido, una corrección no se puede guardar. */
+export function saveBlocked(editing: TreeEditing): boolean {
+  return editing.correction && !editing.motivo;
+}
+
+export const DRAFT_ONLY_NOTE = 'Solo en borrador.';
+export const REASON_REQUIRED_NOTE = 'Escriba el motivo de la corrección para guardar.';
 
 /** Reglas y casos de prueba que impiden desactivar una pregunta. */
 export interface DeactivationBlockers {

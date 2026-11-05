@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ConflictNotice } from '../../components/ConflictNotice';
+import { CorrectionReasonBar } from '../../components/CorrectionReasonBar';
 import { ErrorState } from '../../components/ErrorState';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
+import { useCorrectionReason } from '../../hooks/use-correction-reason';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
-import { errorMessage } from '../admin-questions/tree-editing';
+import { errorMessage, REASON_REQUIRED_NOTE } from '../admin-questions/tree-editing';
 import { AnalysisSummary, FindingNotes, findingsOfElements } from './AnalysisSummary';
 import { describeRule } from './rule-description';
 import {
@@ -111,6 +113,8 @@ export function RulesPage() {
   const [reloads, setReloads] = useState(0);
 
   const view = rulesQuery.data;
+  const reason = useCorrectionReason();
+  const correction = view?.state === 'publicado';
 
   useEffect(() => {
     if (!focusTargetId) {
@@ -128,7 +132,7 @@ export function RulesPage() {
 
   /** Aplica una edición con la versión leída y atiende 409 y 422 de forma común. */
   async function runEdit(
-    action: (version: number) => Promise<RulesEditResult>,
+    action: (version: number, motivo: string | undefined) => Promise<RulesEditResult>,
     announcement: string,
   ): Promise<EditOutcome> {
     if (!view) {
@@ -142,7 +146,11 @@ export function RulesPage() {
       // La versión se lee de la caché al enviar: la del render puede ser de antes del último guardado.
       const sentVersion =
         queryClient.getQueryData<RulesEditorView>(queryKey)?.version ?? view.version ?? 0;
-      const result = await action(sentVersion);
+      // En un año publicado cada corrección lleva su motivo; en borrador no viaja.
+      const result = await action(sentVersion, correction ? reason.motivo : undefined);
+      if (correction) {
+        reason.clear();
+      }
       queryClient.setQueryData<RulesEditorView>(queryKey, (current) =>
         current
           ? {
@@ -209,7 +217,7 @@ export function RulesPage() {
     let outcome: EditOutcome;
     try {
       outcome = await runEdit(
-        (version) => saveSkip(encuesta, year, rule, version),
+        (version, motivo) => saveSkip(encuesta, year, rule, version, motivo),
         'Regla guardada.',
       );
     } finally {
@@ -235,7 +243,7 @@ export function RulesPage() {
     setDeleting(true);
     try {
       const outcome = await runEdit(
-        (version) => deleteSkip(encuesta, year, toDelete.id ?? '', version),
+        (version, motivo) => deleteSkip(encuesta, year, toDelete.id ?? '', version, motivo),
         'Regla eliminada.',
       );
       if (outcome.status === 'error') {
@@ -253,7 +261,7 @@ export function RulesPage() {
 
   async function submitValidation(column: string, validation: FieldValidation) {
     const outcome = await runEdit(
-      (version) => saveValidation(encuesta, year, column, validation, version),
+      (version, motivo) => saveValidation(encuesta, year, column, validation, version, motivo),
       'Validación guardada.',
     );
     if (outcome.status === 'error') {
@@ -263,7 +271,7 @@ export function RulesPage() {
 
   async function removeValidation(column: string) {
     const outcome = await runEdit(
-      (version) => deleteValidation(encuesta, year, column, version),
+      (version, motivo) => deleteValidation(encuesta, year, column, version, motivo),
       'Validación eliminada.',
     );
     if (outcome.status === 'error') {
@@ -275,7 +283,7 @@ export function RulesPage() {
 
   async function importFile(rules: RuleSet): Promise<string | null> {
     const outcome = await runEdit(
-      (version) => importRules(encuesta, year, rules, version),
+      (version, motivo) => importRules(encuesta, year, rules, version, motivo),
       'Reglas importadas.',
     );
     return outcome.status === 'error' ? outcome.message : null;
@@ -305,6 +313,22 @@ export function RulesPage() {
     .filter((item) => item.rules.length > 0);
   const legacyIds = new Set(view?.legacySkipIds ?? []);
   const editable = view?.state === 'borrador';
+  // Un año publicado admite correcciones de saltos y validaciones, pero solo con motivo válido.
+  const canEdit = editable || (correction && reason.motivo !== undefined);
+  const { hash } = useLocation();
+
+  // Los enlaces de la lista de publicación llegan con #regla-<id> o #pregunta-<columna>.
+  useEffect(() => {
+    if (!view) {
+      return;
+    }
+    const match = /^#(regla|pregunta)-(.+)$/.exec(hash);
+    if (match) {
+      locate(`${match[1]}:${match[2]}`);
+    }
+    // locate depende del render actual; el ancla solo se atiende al cambiar la URL o cargar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hash, view?.version]);
 
   return (
     <section aria-labelledby="titulo-reglas">
@@ -368,10 +392,11 @@ export function RulesPage() {
             Estado: {STATE_LABELS[view.state ?? ''] ?? view.state} ·{' '}
             <span>Versión {view.version}</span>
           </p>
-          {!editable && (
-            <p className="mt-4 rounded-xl border border-ink-muted/30 bg-surface p-4">
-              El cuestionario de {view.year} está publicado y es de solo lectura.
-            </p>
+          {correction && (
+            <>
+              <CorrectionReasonBar value={reason.text} onChange={reason.setText} />
+              {!canEdit && <p className="mt-2 text-ink-muted">{REASON_REQUIRED_NOTE}</p>}
+            </>
           )}
 
           <div className="mt-6 max-w-xs">
@@ -425,7 +450,7 @@ export function RulesPage() {
             </h2>
             <Button
               className="mt-3"
-              disabled={!editable}
+              disabled={!canEdit}
               onClick={() => {
                 setBuilderError(null);
                 setBuilder({});
@@ -459,7 +484,7 @@ export function RulesPage() {
                           <Button
                             variant="secondary"
                             aria-label={`Editar regla ${ruleId}`}
-                            disabled={!editable}
+                            disabled={!canEdit}
                             onClick={() => {
                               setBuilderError(null);
                               setBuilder({ rule });
@@ -470,7 +495,7 @@ export function RulesPage() {
                           <Button
                             variant="secondary"
                             aria-label={`Eliminar regla ${ruleId}`}
-                            disabled={!editable}
+                            disabled={!canEdit}
                             onClick={() => setToDelete(rule)}
                           >
                             Eliminar
@@ -496,7 +521,7 @@ export function RulesPage() {
                 questions={pageQuestions}
                 validations={view.validations ?? {}}
                 report={view.report}
-                disabled={!editable}
+                disabled={!canEdit}
                 onSave={submitValidation}
                 onDelete={removeValidation}
               />
@@ -515,12 +540,7 @@ export function RulesPage() {
             />
           </section>
 
-          <RulesJsonPanel
-            survey={encuesta}
-            year={year}
-            readOnly={!editable}
-            onImport={importFile}
-          />
+          <RulesJsonPanel survey={encuesta} year={year} readOnly={!canEdit} onImport={importFile} />
 
           {builder && (
             <SkipRuleBuilder

@@ -68,12 +68,13 @@ export async function saveSkip(
   year: number,
   rule: SkipRule,
   version: number,
+  motivo?: string,
 ): Promise<RulesEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/skips/{ruleId}', {
       params: { path: { encuesta: survey, anio: year, ruleId: rule.id ?? '' } },
-      body: { rule, version },
+      body: { rule, version, motivo },
     }),
   );
 }
@@ -83,11 +84,12 @@ export async function deleteSkip(
   year: number,
   ruleId: string,
   version: number,
+  motivo?: string,
 ): Promise<RulesEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.DELETE('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/skips/{ruleId}', {
-      params: { path: { encuesta: survey, anio: year, ruleId }, query: { version } },
+      params: { path: { encuesta: survey, anio: year, ruleId }, query: { version, motivo } },
     }),
   );
 }
@@ -98,12 +100,13 @@ export async function saveValidation(
   column: string,
   validation: FieldValidation,
   version: number,
+  motivo?: string,
 ): Promise<RulesEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/validations/{column}', {
       params: { path: { encuesta: survey, anio: year, column } },
-      body: { validation, version },
+      body: { validation, version, motivo },
     }),
   );
 }
@@ -113,11 +116,12 @@ export async function deleteValidation(
   year: number,
   column: string,
   version: number,
+  motivo?: string,
 ): Promise<RulesEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.DELETE('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/validations/{column}', {
-      params: { path: { encuesta: survey, anio: year, column }, query: { version } },
+      params: { path: { encuesta: survey, anio: year, column }, query: { version, motivo } },
     }),
   );
 }
@@ -127,12 +131,13 @@ export async function saveCase(
   year: number,
   testCase: TestCase,
   version: number,
+  motivo?: string,
 ): Promise<RulesEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/cases/{caseId}', {
       params: { path: { encuesta: survey, anio: year, caseId: testCase.id ?? '' } },
-      body: { testCase, version },
+      body: { testCase, version, motivo },
     }),
   );
 }
@@ -142,11 +147,12 @@ export async function deleteCase(
   year: number,
   caseId: string,
   version: number,
+  motivo?: string,
 ): Promise<RulesEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.DELETE('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/cases/{caseId}', {
-      params: { path: { encuesta: survey, anio: year, caseId }, query: { version } },
+      params: { path: { encuesta: survey, anio: year, caseId }, query: { version, motivo } },
     }),
   );
 }
@@ -156,12 +162,13 @@ export async function importRules(
   year: number,
   rules: RuleSet,
   version: number,
+  motivo?: string,
 ): Promise<RulesEditResult> {
   await ensureCsrfToken();
   return unwrap(
     apiClient.PUT('/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/import', {
       params: { path: { encuesta: survey, anio: year } },
-      body: { rules, version },
+      body: { rules, version, motivo },
     }),
   );
 }

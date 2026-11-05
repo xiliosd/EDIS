@@ -12,7 +12,7 @@ function renderAt(path: string) {
 }
 
 describe('QuestionnaireTabs', () => {
-  it('ofrece las tres secciones en una navegación con nombre', () => {
+  it('ofrece las seis secciones en una navegación con nombre', () => {
     renderAt('/admin/cuestionario/EDIN/2027');
 
     expect(
@@ -29,6 +29,18 @@ describe('QuestionnaireTabs', () => {
     expect(screen.getByRole('link', { name: 'Simulador' })).toHaveAttribute(
       'href',
       '/admin/cuestionario/EDIN/2027/simulador',
+    );
+    expect(screen.getByRole('link', { name: 'Publicar' })).toHaveAttribute(
+      'href',
+      '/admin/cuestionario/EDIN/2027/publicar',
+    );
+    expect(screen.getByRole('link', { name: 'Historial' })).toHaveAttribute(
+      'href',
+      '/admin/cuestionario/EDIN/2027/historial',
+    );
+    expect(screen.getByRole('link', { name: 'Paquetes' })).toHaveAttribute(
+      'href',
+      '/admin/cuestionario/EDIN/2027/paquetes',
     );
   });
 

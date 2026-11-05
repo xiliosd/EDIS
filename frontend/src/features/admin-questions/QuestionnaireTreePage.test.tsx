@@ -67,20 +67,63 @@ describe('QuestionnaireTreePage', () => {
     expect(container.querySelector('main b')).toBeNull();
   });
 
-  it('publishedYearIsReadOnly', async () => {
+  it('publishedYearDisablesStructuralControlsAndOffersCorrections', async () => {
     serveTree(draftView({ state: 'publicado' }));
     renderApp(TREE_URL);
 
-    expect(
-      await screen.findByText('El cuestionario de 2027 está publicado y es de solo lectura.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('textbox', { name: 'Motivo de la corrección' })).toBeRequired();
     expect(screen.getByRole('heading', { name: 'Página C1' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Editar|Subir|Bajar|Desactivar|Agregar/ })).toBe(
-      null,
-    );
-    expect(screen.queryByRole('button', { name: /Guardar|Descargar/ })).toBeNull();
-    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Desactivar C05/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Agregar pregunta en C1' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Subir|Bajar/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Guardar tablas' })).toBeNull();
+    expect(screen.getAllByText('Solo en borrador.').length).toBeGreaterThan(0);
+    // Los textos sí se corrigen.
+    expect(screen.getByRole('button', { name: 'Editar texto de C05' })).toBeEnabled();
     expect(screen.getByText('EDIN_27_CAP_H')).toBeInTheDocument();
+  });
+
+  it('publishedYearBlocksSaveWithoutReasonAndSendsTrimmedReason', async () => {
+    const bodies: unknown[] = [];
+    serveTree(draftView({ state: 'publicado' }));
+    server.use(
+      http.put(`${API_BASE}/entries/101/text`, async ({ request }) => {
+        const body = (await request.json()) as { text: string };
+        bodies.push(body);
+        return HttpResponse.json({
+          version: 5,
+          page: {
+            ...PAGE_C1,
+            entries: [
+              entry({ capProyId: 101, numeral: 'C05', text: body.text, rawText: body.text }),
+            ],
+          },
+          skipsTargetingEarlierQuestions: [],
+        });
+      }),
+    );
+    renderApp(TREE_URL);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Editar texto de C05' }));
+    await user.type(screen.getByLabelText('Texto de C05'), ' ajustado');
+    expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
+
+    const reason = screen.getByRole('textbox', { name: 'Motivo de la corrección' });
+    await user.type(reason, '  Se corrige la redacción  ');
+    expect(screen.getByRole('button', { name: 'Guardar' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    await screen.findByRole('button', { name: 'Editar texto de C05' });
+    expect(bodies).toEqual([
+      {
+        text: '¿En 200X trabajó en la entidad? ajustado',
+        version: 4,
+        motivo: 'Se corrige la redacción',
+      },
+    ]);
+    // El motivo se vacía tras guardar: la siguiente corrección necesita el suyo.
+    expect(reason).toHaveValue('');
   });
 
   it('showsLoadErrorWithRetry', async () => {
