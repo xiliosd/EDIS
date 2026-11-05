@@ -466,4 +466,16 @@ siguen vigentes.
     para que el paquete de corrección se pueda generar. `admin-cuestionario` y `admin-reglas` se
     adaptaron a que un año publicado ya no es de solo lectura y a que 2027 puede quedar publicado.
 
+17. **El motivo va en el cuerpo también en los DELETE.** El plan escribía `?motivo=` para borrar
+    un salto, una validación o un caso de un año publicado; la revisión final lo cambió porque
+    nginx-unprivileged registra `$request` con la query string, y el motivo acabaría en los logs de
+    acceso. Ahora `DELETE .../skips/{id}`, `.../validations/{col}` y `.../cases/{id}` llevan
+    `?version=` en la URL y `{ "motivo": "..." }` como cuerpo JSON opcional (obligatorio y validado
+    igual en un año publicado). Además la `location /api/` de nginx registra con `$uri` y el README
+    pide que los proxies de delante no registren cuerpos.
+18. **Paquetes de un año que el ambiente no tiene.** La página Paquetes muestra una nota neutra
+    («Este ambiente aún no tiene el año AAAA; importe su paquete.») en vez de un error 404 y oculta
+    solo la descarga; el backend ya aceptaba importar un año sin archivo (solo exige año en rango).
+    La descarga usa el nombre de `Content-Disposition` del servidor.
+
 Seguimiento de la 3c en el README, «Usage/Examples» y «Deployment».

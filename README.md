@@ -299,6 +299,10 @@ el tope de 1 MB de nginx. Un ZIP de más de 5 MB llega al backend y responde 413
 más de 6 MB lo corta nginx con su 413 genérico. Con el stack en pie,
 `docker compose exec frontend nginx -t` valida la configuración ya renderizada.
 
+**Registros de acceso y motivo de las correcciones.** El motivo de una corrección viaja en el
+cuerpo JSON de la petición, nunca en la URL. nginx registra `/api/` con `$uri` (sin query string).
+Los proxies o balanceadores que estén delante **no deben registrar cuerpos de petición**.
+
 **Usuario de base de datos de producción.** Solo `SELECT` sobre `FRM_*`: nunca `INSERT`, `UPDATE`
 ni DDL. Los scripts del paquete (`columnas.sql`, `frm.sql`) los ejecuta un DBA con su propio
 usuario; confirme antes `NLS_CHARACTERSET` (se espera `AL32UTF8`). El procedimiento completo está en
@@ -437,7 +441,7 @@ ingreso) con un usuario de rol `ADMIN_CUESTIONARIO` y abra **Cuestionario** en e
 
 1. **Años.** La tabla muestra cada año con su estado (Publicado o Borrador). "Crear año" copia un
    año publicado a un año nuevo en borrador; solo puede haber un borrador por encuesta. Publicar
-   un año es la Fase 3c (ver más abajo).
+   un año se hace en su pestaña **Publicar** (ver «Publicar, corregir y promover»).
 2. **Árbol.** Al abrir un año se ven sus páginas y preguntas. Un año publicado solo admite correcciones (Fase 3c).
 3. **Editar.** En un borrador, "Editar" cambia el texto, un encabezado o la ayuda y "Guardar" lo
    envía; no hay autoguardado. Escriba `200X` donde debe ir el año. Si otra persona cambió el
@@ -506,7 +510,8 @@ completan el ciclo del año.
    casos y tablas, **no** las filas `FRM_*` (textos y preguntas).
 4. **Paquetes.** «Descargar paquete del año» (de un año publicado) y «Descargar paquete de
    corrección» (si hay versiones posteriores a la publicación) generan
-   `paquete-EDIN-AAAA-anio.zip` o `paquete-EDIN-AAAA-correccion.zip`. Para importar, elija el ZIP
+   un ZIP con el nombre que fija el servidor (por ejemplo `EDIN-2026-v7-correccion.zip`; el
+   navegador lo guarda con ese nombre). Para importar, elija el ZIP
    (máximo 5 MB), «Verificar» y, si pasa, «Importar»; la verificación muestra cuántos encuestados
    ya guardaron cada página cuyas reglas cambian. Verificar un paquete que este ambiente ya tiene
    dice «El paquete ya estaba importado.».
@@ -526,7 +531,7 @@ corre una persona técnica (DBA) con su propio usuario.
    una sesión nueva de SQL*Plus. `frm.sql` es ASCII puro, idempotente (inserta lo que falta, no
    toca lo que ya está igual) y se detiene con `ORA-20001` y reversión si un id lo ocupa otra fila:
    no renumera en silencio.
-4. **En producción**, abra **Paquetes**, elija el ZIP y «Verificar». La verificación comprueba, en
+4. **En producción**, abra **Paquetes** (`/admin/cuestionario/EDIN/AAAA/paquetes`), elija el ZIP y «Verificar». La verificación comprueba, en
    orden: las cuatro entradas del ZIP; el SHA-256 de cada archivo; que `reglas.json` sea válido,
    publicado y del año y la versión del paquete; las filas y sumas de `FRM_*` de esa base; las
    tablas y columnas de respuesta; y que la versión sea posterior a la de este ambiente. Si algo
@@ -535,6 +540,13 @@ corre una persona técnica (DBA) con su propio usuario.
    no de textos) y, si es correcto, «Importar» y confirme. Las cachés se limpian sin reiniciar y
    queda la auditoría `importar-paquete`.
 6. **Registre el paso** con el formato FR-FT-GST-02, el RFC y la aprobación del CAB (ver Deployment).
+
+**Un año que producción aún no tiene.** Ese año no aparece en la lista de años (solo salen los
+que tienen archivo de reglas y el año activo). Abra directamente
+`/admin/cuestionario/EDIN/AAAA/paquetes` (con `AAAA` el año nuevo): la página avisa «Este ambiente
+aún no tiene el año AAAA; importe su paquete.», oculta la descarga y deja la importación, que crea
+el archivo de reglas. Haga la importación **antes** de cambiar `SURVEY_YEAR` y reiniciar: así, al
+activarlo, el año ya está publicado y no responde 503.
 
 Producción queda con **el mismo número de versión que QA**: la importación conserva la versión del
 paquete, y una edición posterior en producción la sube desde ahí. Si en producción se hizo un cambio

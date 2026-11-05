@@ -71,6 +71,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
     en el README y sección «Desviaciones de implementación (3c)» en el diseño de la Fase 3.
 
 ### Cambiado
+- El motivo de una corrección en los DELETE de saltos, validaciones y casos viaja en el cuerpo JSON
+  y no en la query string (para que no llegue a los logs de acceso); nginx registra `/api/` sin
+  query string.
+- La página Paquetes muestra una nota neutra (no un error) para un año que el ambiente aún no
+  tiene, y deja importar su paquete; la descarga usa el nombre del servidor.
 - nginx tiene una `location` propia para `.../package/import` con tope de 6 MB (el resto de `/api/`
   conserva 1 MB); `BACKEND_URL` debe ser `esquema://host:puerto` sin ruta.
 - `GET /api/v1/survey/**` deja de responder 503 en cuanto el año activo se publica.
