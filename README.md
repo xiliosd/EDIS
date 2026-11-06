@@ -306,6 +306,20 @@ más de 6 MB lo corta nginx con su 413 genérico. Con el stack en pie,
 cuerpo JSON de la petición, nunca en la URL. nginx registra `/api/` con `$uri` (sin query string).
 Los proxies o balanceadores que estén delante **no deben registrar cuerpos de petición**.
 
+**Cuestionario de solo lectura en producción.** Producción corre con
+`QUESTIONNAIRE_WRITES_ENABLED=false` (el valor por defecto: un despliegue que la olvide queda en
+solo lectura); QA la necesita en `true`. Con `false`, el backend responde 403 «Cuestionario de solo
+lectura» a toda operación de la administración que escribe `FRM_*` o el archivo de reglas (editar
+textos, encabezados y ayudas, reordenar, agregar o desactivar preguntas, crear años, mapear tablas,
+saltos, validaciones, casos, importar reglas, publicar y restaurar versiones), antes de leer el
+cuerpo o tomar el candado. Siguen disponibles las lecturas (árbol, reglas, simulador, historial,
+lista de publicación, scripts y descarga de paquetes) y la importación de paquetes de promoción,
+que es el camino por el que producción recibe los cambios aprobados en QA. Los encuestados no se
+ven afectados. El front lo lee de `GET /api/v1/admin/environment` y muestra esos controles
+deshabilitados con el aviso «Este ambiente es de solo lectura…». Una operación de escritura nueva
+queda bloqueada por defecto; para permitirla habría que marcarla con
+`@AllowedInReadOnlyQuestionnaire` (hoy solo la lleva la importación de paquetes).
+
 **Usuario de base de datos de producción.** Solo `SELECT` sobre `FRM_*`: nunca `INSERT`, `UPDATE`
 ni DDL. Los scripts del paquete (`columnas.sql`, `frm.sql`) los ejecuta la persona técnica
 responsable (no se cuenta con un DBA) con un usuario que tenga permisos de escritura sobre
@@ -337,6 +351,7 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `SURVEY_YEAR` | Año de la encuesta | Sí | `2026` |
 | `RULES_DIR` | Carpeta de los JSON de reglas | No | `/data/rules` |
 | `RULES_SEED_DIR` | Semilla de reglas ficticias; solo desarrollo | No | vacía |
+| `QUESTIONNAIRE_WRITES_ENABLED` | Permite cambiar el cuestionario (`FRM_*` y archivo de reglas) desde la administración. Con `false` toda escritura responde 403 «Cuestionario de solo lectura» y solo se importan paquetes de promoción; ver Deployment | No | `false` (`true` en desarrollo, lo fija compose, y en QA; `false` en producción) |
 | `RECEIPT_KEY` | Clave del radicado (HMAC, mín. 32), estable por ambiente | Sí | ver nota |
 | `JWT_SECRET` | Secreto de firma de la sesión (mínimo 32 caracteres aleatorios) | Sí | genere con `openssl rand -base64 48` |
 | `SESSION_MINUTES` | Duración de la sesión | No | `30` |
@@ -670,6 +685,14 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
   definiciones de `GRAL_AYUDAS` queda para la Fase 4 (administración de ayudas).
 - **Ids de `FRM_*` con `MAX+1`.** La base real no tiene secuencias ni disparadores sobre `FRM_*`
   (confirmado el 2026-11-06); QA debe ser igual.
+- **El usuario de la aplicación en producción tiene más permisos de los necesarios
+  (2026-11-06).** Tiene `INSERT`, `UPDATE` y `DELETE` sobre todas las `FRM_*` y `GRAL_AYUDAS`,
+  `ALTER ANY TABLE` y `CREATE TABLE`, y no hay DBA para quitarlos. La aplicación lo compensa con el
+  modo de solo lectura (`QUESTIONNAIRE_WRITES_ENABLED=false`, ver Deployment), pero eso no protege
+  contra un error de configuración ni contra el uso de esas credenciales fuera de la aplicación. Se
+  recomienda pedir a quien administre Oracle un usuario de aplicación con solo `SELECT` sobre
+  `FRM_*` y `GRAL_AYUDAS` más lo necesario en las tablas de respuesta, sin `ALTER ANY TABLE`, y
+  credenciales separadas para la persona técnica que corre los scripts del paquete.
 - **`columnas.sql` y tablas nuevas.** El usuario con que se verificó la base tiene DML sobre `FRM_*`
   y `GRAL_AYUDAS` y `ALTER ANY TABLE`, pero no `CREATE ANY TABLE`: un `columnas.sql` que cree tablas
   nuevas en `DANE_DIRPEN` requiere ese permiso o correrlo como `DANE_DIRPEN`.

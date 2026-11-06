@@ -5,6 +5,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [Sin publicar]
 
 ### Agregado
+- Modo de solo lectura del cuestionario para producción (`QUESTIONNAIRE_WRITES_ENABLED`, por
+  defecto `false`): toda operación de la administración que escribe `FRM_*` o el archivo de reglas
+  responde 403 «Cuestionario de solo lectura»; las lecturas y la importación de paquetes de
+  promoción siguen disponibles. Nueva lectura `GET /api/v1/admin/environment`
+  (`adminEnvironment`); las pantallas de Años, Preguntas, Reglas, Simulador, Publicar e Historial
+  muestran los controles de escritura deshabilitados con un aviso enlazado por
+  `aria-describedby`. docker compose (desarrollo) la deja en `true`; QA también la necesita en
+  `true`.
 - `db/verificacion/verificar-base-produccion.sql`: consultas de solo lectura sobre el diccionario de
   Oracle (juego de caracteres, dueño y sinónimos de las tablas, tipos y claves, secuencias y
   disparadores, permisos) para verificar la base antes de promover, sin apoyo de un DBA.
