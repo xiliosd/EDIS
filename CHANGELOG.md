@@ -5,6 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [Sin publicar]
 
 ### Agregado
+- `db/verificacion/verificar-base-produccion.sql`: consultas de solo lectura sobre el diccionario de
+  Oracle (juego de caracteres, dueño y sinónimos de las tablas, tipos y claves, secuencias y
+  disparadores, permisos) para verificar la base antes de promover, sin apoyo de un DBA.
 - Backend Spring Boot 4.1.1 con inicio y cierre de sesión (encuestados y administradores), sesión JWT
   en cookie HttpOnly, CSRF, bloqueo tras 5 intentos fallidos y cabeceras de seguridad.
 - Lectura del cuestionario (capítulos B–H) desde las tablas FRM_* de Oracle, con lista blanca de
