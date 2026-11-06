@@ -566,12 +566,13 @@ Decisiones:
 6. **Producción solo lee `FRM_*` (D3/D4, 3c), y ahora lo hace cumplir la aplicación.** El
    usuario de la aplicación en producción tiene `INSERT`/`UPDATE`/`DELETE` sobre todas las `FRM_*` y
    `GRAL_AYUDAS`, `ALTER ANY TABLE` y `CREATE TABLE`, y no hay DBA para quitarlos. La propiedad
-   `edi.admin.questionnaire-writes-enabled` (`QUESTIONNAIRE_WRITES_ENABLED`, por defecto `false`)
+   `app.admin.questionnaire-writes-enabled` (`QUESTIONNAIRE_WRITES_ENABLED`, por defecto `false`)
    deja el cuestionario en solo lectura: una sola compuerta (`QuestionnaireWriteGuard`, interceptor
-   sobre `/api/v1/admin/questionnaire/**` y `/api/v1/admin/years/**`) responde 403 «Cuestionario de
-   solo lectura» a todo POST, PUT, PATCH o DELETE antes de leer el cuerpo o tomar el candado. Bloquea
+   sobre toda la API de administración `/api/v1/admin/**`) responde 403 «Cuestionario de solo
+   lectura» a todo POST, PUT, PATCH o DELETE antes de leer el cuerpo o tomar el candado. Bloquea
    por defecto; la única excepción marcada es la importación del paquete
    (`@AllowedInReadOnlyQuestionnaire`), que es el camino por el que producción recibe los cambios.
    El front lo lee de `GET /api/v1/admin/environment` y deshabilita los controles de escritura con
-   un aviso por página. QA y desarrollo van en `true`. Se recomienda igual pedir a quien administre
+   un aviso por página (también si no logra leer el modo). La primera lectura de un año sin archivo
+   de reglas lo sigue sembrando desde la imagen, sin tocar `FRM_*`. QA y desarrollo van en `true`. Se recomienda igual pedir a quien administre
    Oracle un usuario solo de lectura sobre `FRM_*` y `GRAL_AYUDAS`.

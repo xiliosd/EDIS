@@ -307,18 +307,24 @@ cuerpo JSON de la petición, nunca en la URL. nginx registra `/api/` con `$uri` 
 Los proxies o balanceadores que estén delante **no deben registrar cuerpos de petición**.
 
 **Cuestionario de solo lectura en producción.** Producción corre con
-`QUESTIONNAIRE_WRITES_ENABLED=false` (el valor por defecto: un despliegue que la olvide queda en
-solo lectura); QA la necesita en `true`. Con `false`, el backend responde 403 «Cuestionario de solo
-lectura» a toda operación de la administración que escribe `FRM_*` o el archivo de reglas (editar
+`QUESTIONNAIRE_WRITES_ENABLED=false` (propiedad `app.admin.questionnaire-writes-enabled`; el valor
+por defecto: un despliegue que la olvide queda en solo lectura); QA la necesita en `true`. Con
+`false`, el backend responde 403 «Cuestionario de solo lectura» a toda escritura (POST, PUT, PATCH,
+DELETE) de la API de administración `/api/v1/admin/**`; hoy son las que escriben `FRM_*` o el
+archivo de reglas (editar
 textos, encabezados y ayudas, reordenar, agregar o desactivar preguntas, crear años, mapear tablas,
 saltos, validaciones, casos, importar reglas, publicar y restaurar versiones), antes de leer el
 cuerpo o tomar el candado. Siguen disponibles las lecturas (árbol, reglas, simulador, historial,
 lista de publicación, scripts y descarga de paquetes) y la importación de paquetes de promoción,
-que es el camino por el que producción recibe los cambios aprobados en QA. Los encuestados no se
-ven afectados. El front lo lee de `GET /api/v1/admin/environment` y muestra esos controles
+que es el camino por el que producción recibe los cambios aprobados en QA. La primera lectura de
+un año que aún no tiene archivo de reglas lo sigue creando a partir de la semilla de la imagen (no
+toca `FRM_*`). Los encuestados no se ven afectados. Si el front no logra leer el modo, también
+muestra los controles deshabilitados. El front lo lee de `GET /api/v1/admin/environment` y muestra esos controles
 deshabilitados con el aviso «Este ambiente es de solo lectura…». Una operación de escritura nueva
 queda bloqueada por defecto; para permitirla habría que marcarla con
 `@AllowedInReadOnlyQuestionnaire` (hoy solo la lleva la importación de paquetes).
+`QuestionnaireReadOnlyIT` recorre todas las escrituras de la API (salvo sesión y encuestado) y falla
+si alguna no responde 403 sin estar exceptuada.
 
 **Usuario de base de datos de producción.** Solo `SELECT` sobre `FRM_*`: nunca `INSERT`, `UPDATE`
 ni DDL. Los scripts del paquete (`columnas.sql`, `frm.sql`) los ejecuta la persona técnica
@@ -351,7 +357,7 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `SURVEY_YEAR` | Año de la encuesta | Sí | `2026` |
 | `RULES_DIR` | Carpeta de los JSON de reglas | No | `/data/rules` |
 | `RULES_SEED_DIR` | Semilla de reglas ficticias; solo desarrollo | No | vacía |
-| `QUESTIONNAIRE_WRITES_ENABLED` | Permite cambiar el cuestionario (`FRM_*` y archivo de reglas) desde la administración. Con `false` toda escritura responde 403 «Cuestionario de solo lectura» y solo se importan paquetes de promoción; ver Deployment | No | `false` (`true` en desarrollo, lo fija compose, y en QA; `false` en producción) |
+| `QUESTIONNAIRE_WRITES_ENABLED` | Permite cambiar el cuestionario (`FRM_*` y archivo de reglas) desde la administración. Propiedad `app.admin.questionnaire-writes-enabled`. Con `false` toda escritura de `/api/v1/admin/**` responde 403 «Cuestionario de solo lectura» y solo se importan paquetes de promoción (la primera lectura de un año sin archivo de reglas lo sigue creando desde la semilla, sin tocar `FRM_*`); ver Deployment | No | `false` (`true` en desarrollo, lo fija compose, y en QA; `false` en producción) |
 | `RECEIPT_KEY` | Clave del radicado (HMAC, mín. 32), estable por ambiente | Sí | ver nota |
 | `JWT_SECRET` | Secreto de firma de la sesión (mínimo 32 caracteres aleatorios) | Sí | genere con `openssl rand -base64 48` |
 | `SESSION_MINUTES` | Duración de la sesión | No | `30` |
