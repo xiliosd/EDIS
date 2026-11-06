@@ -149,4 +149,44 @@ describe('AddQuestionDialog', () => {
     },
     LONG_FLOW_TIMEOUT,
   );
+  it('limitsNumeralAndTextToTheRealColumns', async () => {
+    let posted = false;
+    serveTree();
+    server.use(
+      http.post(`${API_BASE}/pages/C1/entries`, () => {
+        posted = true;
+        return problem(500, 'No debió enviarse.');
+      }),
+    );
+    renderApp(TREE_URL);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Agregar pregunta en C1' }));
+    const dialog = screen.getByRole('dialog', { name: 'Agregar pregunta en C1' });
+    const numeral = within(dialog).getByLabelText('Numeral');
+    const text = within(dialog).getByLabelText('Texto');
+    expect(numeral).toHaveAttribute('maxlength', '5');
+    expect(numeral).toHaveAccessibleDescription('Hasta 5 caracteres, por ejemplo C30A.');
+    expect(text).toHaveAttribute('maxlength', '1000');
+    expect(text).toHaveAccessibleDescription(/se guardan como código, sin perder el texto/);
+
+    await user.click(numeral);
+    await user.paste('C30A');
+    await user.click(within(dialog).getByLabelText('Código de columna'));
+    await user.paste('C30A');
+    await user.click(text);
+    // 143 comillas tipográficas: se guardan como "&#8220;" (7 cada una), 1001 en la base.
+    await user.paste('“'.repeat(143));
+    await user.selectOptions(within(dialog).getByLabelText('Tipo de respuesta'), 'TEXT');
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar' }));
+
+    expect(
+      within(dialog).getByText(
+        'El texto de la pregunta admite hasta 1000 caracteres (los caracteres especiales que se ' +
+          'guardan como código cuentan como varios).',
+      ),
+    ).toBeInTheDocument();
+    expect(text).toHaveFocus();
+    expect(posted).toBe(false);
+  });
 });

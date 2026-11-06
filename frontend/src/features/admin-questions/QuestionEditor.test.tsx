@@ -333,4 +333,35 @@ describe('QuestionEditor', () => {
       screen.getByRole('button', { name: 'Editar palabra enlazada de C05' }),
     ).toBeInTheDocument();
   });
+  it('warnsBeforeSendingAHelpWordThatDoesNotFit', async () => {
+    let sent = false;
+    serveTree();
+    server.use(
+      http.put(`${API_BASE}/help/701`, () => {
+        sent = true;
+        return problem(500, 'No debió enviarse.');
+      }),
+    );
+    renderApp(TREE_URL);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Editar palabra enlazada de C05' }));
+    const field = screen.getByLabelText('Palabra enlazada a la ayuda de C05');
+    expect(field).toHaveAttribute('maxlength', '100');
+    expect(field).toHaveAccessibleDescription(/Hasta 100 caracteres\. Los caracteres especiales/);
+    await user.clear(field);
+    // 95 caracteres escritos, pero la raya se guarda como "&#8211;": 101 en la base.
+    await user.paste(`${'a'.repeat(94)}–`);
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    expect(
+      screen.getByText(
+        'La palabra de ayuda admite hasta 100 caracteres (los caracteres especiales que se ' +
+          'guardan como código cuentan como varios).',
+      ),
+    ).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveFocus();
+    expect(sent).toBe(false);
+  });
 });

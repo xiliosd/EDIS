@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { downloadTextFile } from '../../services/download-file';
+import { storedLength } from '../../services/latin9-text';
 import {
   deactivate,
   editHeader,
@@ -22,7 +23,11 @@ import {
   REASON_REQUIRED_NOTE,
   saveBlocked,
   deactivationBlockers,
+  SPECIAL_CHARACTERS_NOTE,
+  TEXT_LIMITS,
+  tooLongMessage,
   type DeactivationBlockers,
+  type TextLimit,
   type TreeEditing,
 } from './tree-editing';
 
@@ -36,6 +41,8 @@ interface EditableTextProps {
   /** Lo que se edita: el texto guardado, que conserva el comodín 200X. */
   value: string;
   hint?: string;
+  /** Columna real que recibe el texto: su máximo y el nombre que usa el aviso. */
+  limit: TextLimit;
   editing: TreeEditing;
   save: (text: string, motivo: string | undefined) => Promise<AdminEditResult>;
 }
@@ -48,6 +55,7 @@ function EditableText({
   display,
   value,
   hint,
+  limit,
   editing,
   save,
 }: EditableTextProps) {
@@ -80,6 +88,12 @@ function EditableText({
   }
 
   async function submit() {
+    // Aproximado (el servidor decide): evita enviar un texto que con sus códigos no cabe.
+    if (storedLength(draft.trim(), { escapeMarkup: true }) > limit.maxLength) {
+      setError(tooLongMessage(limit));
+      fieldRef.current?.focus();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -97,7 +111,10 @@ function EditableText({
 
   const errorId = `${id}-error`;
   const hintId = `${id}-hint`;
-  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ');
+  const describedBy = [hintId, error ? errorId : null].filter(Boolean).join(' ');
+  const fullHint = [hint, `Hasta ${limit.maxLength} caracteres.`, SPECIAL_CHARACTERS_NOTE]
+    .filter(Boolean)
+    .join(' ');
 
   if (!isEditing) {
     return (
@@ -120,16 +137,15 @@ function EditableText({
         ref={fieldRef}
         value={draft}
         rows={3}
+        maxLength={limit.maxLength}
         onChange={(event) => setDraft(event.target.value)}
         aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy || undefined}
+        aria-describedby={describedBy}
         className="block w-full rounded-lg border border-ink-muted/40 bg-surface px-3 py-2 text-base text-ink aria-invalid:border-danger"
       />
-      {hint && (
-        <p id={hintId} className="text-sm text-ink-muted">
-          {hint}
-        </p>
-      )}
+      <p id={hintId} className="text-sm text-ink-muted">
+        {fullHint}
+      </p>
       {error && (
         <p id={errorId} className="text-sm text-danger">
           {error}
@@ -318,6 +334,7 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
         editLabel={`Editar encabezado de ${label}`}
         display={display}
         value={text}
+        limit={TEXT_LIMITS.header}
         editing={editing}
         save={(value, motivo) =>
           editHeader(
@@ -372,6 +389,7 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
           display={textDisplay}
           value={entry.rawText}
           hint="Escriba 200X donde debe ir el año; se reemplaza al mostrar la pregunta."
+          limit={TEXT_LIMITS.question}
           editing={editing}
           save={(value, motivo) =>
             editText(editing.survey, editing.year, capProyId, value, editing.version, motivo)
@@ -399,6 +417,7 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
               display={<p className="text-sm text-ink-muted">{help.text}</p>}
               value={help.text ?? ''}
               hint="Es la palabra o frase de la pregunta que se muestra como enlace a la definición."
+              limit={TEXT_LIMITS.helpWord}
               editing={editing}
               save={(value, motivo) =>
                 editHelp(

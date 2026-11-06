@@ -45,6 +45,32 @@ export function saveBlocked(editing: TreeEditing): boolean {
   return editing.correction && !editing.motivo;
 }
 
+/**
+ * Límites de las columnas reales (WE8ISO8859P15, en bytes), los mismos que aplica el servidor.
+ * El numeral va a FRM_CAP_PROY.NUMERAL, VARCHAR2(5).
+ */
+export const TEXT_LIMITS = {
+  question: { maxLength: 1000, name: 'El texto de la pregunta' },
+  header: { maxLength: 500, name: 'El encabezado' },
+  helpWord: { maxLength: 100, name: 'La palabra de ayuda' },
+} as const;
+
+export type TextLimit = (typeof TEXT_LIMITS)[keyof typeof TEXT_LIMITS];
+
+export const NUMERAL_MAX_LENGTH = 5;
+
+export const SPECIAL_CHARACTERS_NOTE =
+  'Los caracteres especiales que la base no admite (comillas tipográficas, rayas, emojis) se ' +
+  'guardan como código, sin perder el texto, y ocupan más espacio.';
+
+/** El mismo mensaje del servidor, para avisar antes de enviar un texto que no cabe. */
+export function tooLongMessage(limit: TextLimit): string {
+  return (
+    `${limit.name} admite hasta ${limit.maxLength} caracteres (los caracteres especiales que ` +
+    'se guardan como código cuentan como varios).'
+  );
+}
+
 export const DRAFT_ONLY_NOTE = 'Solo en borrador.';
 export const REASON_REQUIRED_NOTE = 'Escriba el motivo de la corrección para guardar.';
 

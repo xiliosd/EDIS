@@ -3,6 +3,7 @@ import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { TextField } from '../../components/TextField';
 import { downloadTextFile } from '../../services/download-file';
+import { storedLength } from '../../services/latin9-text';
 import {
   addQuestion,
   fetchColumnScript,
@@ -15,6 +16,10 @@ import {
   fieldErrorsOf,
   handleEditError,
   INPUT_TYPE_LABELS,
+  NUMERAL_MAX_LENGTH,
+  SPECIAL_CHARACTERS_NOTE,
+  TEXT_LIMITS,
+  tooLongMessage,
   type TreeEditing,
 } from './tree-editing';
 
@@ -70,12 +75,18 @@ function validate(values: FormValues): Partial<Record<FieldName, string>> {
   const errors: Partial<Record<FieldName, string>> = {};
   if (!values.numeral.trim()) {
     errors.numeral = 'Escriba el numeral.';
+  } else if (values.numeral.trim().length > NUMERAL_MAX_LENGTH) {
+    errors.numeral = `El numeral admite hasta ${NUMERAL_MAX_LENGTH} caracteres.`;
   }
   if (!values.columnCode.trim()) {
     errors.columnCode = 'Escriba el código de la columna.';
   }
   if (!values.text.trim()) {
     errors.text = 'Escriba el texto.';
+  } else if (
+    storedLength(values.text.trim(), { escapeMarkup: true }) > TEXT_LIMITS.question.maxLength
+  ) {
+    errors.text = tooLongMessage(TEXT_LIMITS.question);
   }
   if (values.inputType === 'SINGLE_CHOICE' && !values.optionGroup) {
     errors.optionGroup = 'Elija el grupo de opciones.';
@@ -300,6 +311,8 @@ export function AddQuestionDialog({ page, optionGroups, editing }: AddQuestionDi
             <TextField
               id={fieldId('numeral')}
               label="Numeral"
+              hint={`Hasta ${NUMERAL_MAX_LENGTH} caracteres, por ejemplo C30A.`}
+              maxLength={NUMERAL_MAX_LENGTH}
               value={values.numeral}
               onChange={(event) => update('numeral', event.target.value)}
               error={errors.numeral}
@@ -318,12 +331,20 @@ export function AddQuestionDialog({ page, optionGroups, editing }: AddQuestionDi
               <textarea
                 id={fieldId('text')}
                 rows={3}
+                maxLength={TEXT_LIMITS.question.maxLength}
                 value={values.text}
                 onChange={(event) => update('text', event.target.value)}
                 aria-invalid={errors.text ? true : undefined}
-                aria-describedby={errors.text ? `${fieldId('text')}-error` : undefined}
+                aria-describedby={
+                  errors.text
+                    ? `${fieldId('text')}-hint ${fieldId('text')}-error`
+                    : `${fieldId('text')}-hint`
+                }
                 className="mt-1 block w-full rounded-lg border border-ink-muted/40 bg-surface px-3 py-2 text-base text-ink aria-invalid:border-danger"
               />
+              <p id={`${fieldId('text')}-hint`} className="mt-1 text-sm text-ink-muted">
+                {`Hasta ${TEXT_LIMITS.question.maxLength} caracteres. ${SPECIAL_CHARACTERS_NOTE}`}
+              </p>
               {errors.text && (
                 <p id={`${fieldId('text')}-error`} className="mt-1 text-sm text-danger">
                   {errors.text}
