@@ -8,6 +8,8 @@ interface CaseListProps {
   results: CaseResult[];
   /** Con el año publicado los casos solo se consultan. */
   editable: boolean;
+  /** Id del aviso de solo lectura del ambiente, que explica por qué no se puede eliminar. */
+  lockNoteId?: string;
   onOpen: (testCase: TestCase) => void;
   onDelete: (testCase: TestCase) => void;
 }
@@ -25,7 +27,14 @@ const NO_RESULT = {
 };
 
 /** Casos de prueba del año con su resultado; cada fila es un ancla `caso-<id>`. */
-export function CaseList({ cases, results, editable, onOpen, onDelete }: CaseListProps) {
+export function CaseList({
+  cases,
+  results,
+  editable,
+  lockNoteId,
+  onOpen,
+  onDelete,
+}: CaseListProps) {
   const [toDelete, setToDelete] = useState<TestCase | null>(null);
   const resultOf = new Map(results.map((result) => [result.id, result]));
 
@@ -81,6 +90,7 @@ export function CaseList({ cases, results, editable, onOpen, onDelete }: CaseLis
                   variant="secondary"
                   aria-label={`Eliminar caso ${caseId}`}
                   disabled={!editable}
+                  aria-describedby={lockNoteId}
                   onClick={() => setToDelete(testCase)}
                 >
                   Eliminar

@@ -15,6 +15,11 @@ export interface TreeEditing {
    * estructural (agregar, desactivar, reordenar, tablas) queda deshabilitado.
    */
   correction: boolean;
+  /**
+   * Ambiente de solo lectura (producción): todo control de escritura se muestra deshabilitado y
+   * enlazado al aviso de la página; los cambios llegan con el paquete de promoción.
+   */
+  readOnly: boolean;
   /** Motivo recortado y válido que viaja en la corrección; undefined mientras no lo sea. */
   motivo?: string;
   /** Tras guardar una corrección: la página vacía el motivo para que el siguiente sea nuevo. */

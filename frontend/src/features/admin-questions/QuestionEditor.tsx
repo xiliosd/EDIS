@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../../components/Button';
+import { READ_ONLY_NOTE_ID } from '../../components/ReadOnlyNotice';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { downloadTextFile } from '../../services/download-file';
 import { storedLength } from '../../services/latin9-text';
@@ -120,7 +121,14 @@ function EditableText({
     return (
       <div className="flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1 break-words">{display}</div>
-        <Button ref={editButtonRef} variant="secondary" aria-label={editLabel} onClick={open}>
+        <Button
+          ref={editButtonRef}
+          variant="secondary"
+          aria-label={editLabel}
+          disabled={editing.readOnly}
+          aria-describedby={editing.readOnly ? READ_ONLY_NOTE_ID : undefined}
+          onClick={open}
+        >
           Editar
         </Button>
       </div>
@@ -453,13 +461,19 @@ export function QuestionEditor({ entry, pageCode, editing }: QuestionEditorProps
           )}
           <Button
             variant="secondary"
-            disabled={editing.correction}
-            aria-describedby={editing.correction ? `${idBase}-solo-borrador` : undefined}
+            disabled={editing.correction || editing.readOnly}
+            aria-describedby={
+              editing.readOnly
+                ? READ_ONLY_NOTE_ID
+                : editing.correction
+                  ? `${idBase}-solo-borrador`
+                  : undefined
+            }
             onClick={() => setConfirming(true)}
           >
             Desactivar {label}
           </Button>
-          {editing.correction && (
+          {editing.correction && !editing.readOnly && (
             <span id={`${idBase}-solo-borrador`} className="self-center text-sm text-ink-muted">
               {DRAFT_ONLY_NOTE}
             </span>

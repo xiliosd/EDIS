@@ -5,9 +5,11 @@ import { Button } from '../../components/Button';
 import { ConflictNotice } from '../../components/ConflictNotice';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
 import { ErrorState } from '../../components/ErrorState';
+import { READ_ONLY_NOTE_ID, ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { CorrectionReasonBar } from '../../components/CorrectionReasonBar';
 import { useCorrectionReason } from '../../hooks/use-correction-reason';
 import { useDocumentTitle } from '../../hooks/use-document-title';
+import { useQuestionnaireReadOnly } from '../admin/environment-api';
 import {
   fetchQuestionnaire,
   questionnaireQueryKey,
@@ -59,6 +61,7 @@ export function QuestionnaireTreePage() {
   const title = `Cuestionario ${encuesta} ${anio}`;
   useDocumentTitle(title);
   const queryClient = useQueryClient();
+  const readOnly = useQuestionnaireReadOnly();
   const queryKey = questionnaireQueryKey(encuesta, year);
   const treeQuery = useQuery({
     queryKey,
@@ -144,6 +147,7 @@ export function QuestionnaireTreePage() {
         year,
         version: view.version ?? 0,
         correction,
+        readOnly,
         motivo: reason.motivo,
         onSaved: reason.clear,
         onEdited: applyEdit,
@@ -151,10 +155,13 @@ export function QuestionnaireTreePage() {
         onConflict: setConflict,
       }
     : null;
-  const structural = correction ? null : editing;
+  // Lo estructural se bloquea en un año publicado y en un ambiente de solo lectura.
+  const locked = correction || readOnly;
+  const lockNoteId = readOnly ? READ_ONLY_NOTE_ID : undefined;
+  const structural = locked ? null : editing;
 
   async function reorderPage(page: AdminPage, ids: number[]): Promise<boolean> {
-    if (!editing || correction) {
+    if (!editing || locked) {
       return false;
     }
     const pageCode = page.pageCode ?? '';
@@ -188,6 +195,7 @@ export function QuestionnaireTreePage() {
         {title}
       </h1>
       <QuestionnaireTabs survey={encuesta} year={year} />
+      <ReadOnlyNotice show={readOnly} />
 
       {treeQuery.isPending && (
         <p role="status" aria-live="polite" className="mt-6 text-ink-muted">
@@ -213,13 +221,16 @@ export function QuestionnaireTreePage() {
             Estado: {STATE_LABELS[view.state ?? ''] ?? view.state} ·{' '}
             <span>Versión {view.version}</span>
           </p>
-          {correction && <CorrectionReasonBar value={reason.text} onChange={reason.setText} />}
+          {correction && !readOnly && (
+            <CorrectionReasonBar value={reason.text} onChange={reason.setText} />
+          )}
 
           <TablesMappingPanel
             tables={view.tables ?? {}}
             missingChapters={missingChaptersOf(view)}
             editing={structural}
-            lockedNote={correction}
+            lockedNote={locked}
+            lockNoteId={lockNoteId}
             onSaved={applyTables}
           />
 
@@ -244,7 +255,8 @@ export function QuestionnaireTreePage() {
                     getId={(item) => item.capProyId ?? 0}
                     getLabel={entryLabel}
                     editable={structural !== null}
-                    locked={correction}
+                    locked={locked}
+                    lockNoteId={lockNoteId}
                     onReorder={(ids) => reorderPage(page, ids)}
                     renderItem={(item) => (
                       <QuestionEditor entry={item} pageCode={pageCode} editing={editing} />
@@ -276,21 +288,23 @@ export function QuestionnaireTreePage() {
                     editing={structural}
                   />
                 )}
-                {correction && (
+                {locked && (
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <Button
                       variant="secondary"
                       disabled
-                      aria-describedby={`agregar-${pageCode}-solo-borrador`}
+                      aria-describedby={lockNoteId ?? `agregar-${pageCode}-solo-borrador`}
                     >
                       Agregar pregunta en {pageCode}
                     </Button>
-                    <span
-                      id={`agregar-${pageCode}-solo-borrador`}
-                      className="text-sm text-ink-muted"
-                    >
-                      {DRAFT_ONLY_NOTE}
-                    </span>
+                    {!lockNoteId && (
+                      <span
+                        id={`agregar-${pageCode}-solo-borrador`}
+                        className="text-sm text-ink-muted"
+                      >
+                        {DRAFT_ONLY_NOTE}
+                      </span>
+                    )}
                   </div>
                 )}
               </section>

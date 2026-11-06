@@ -1,8 +1,9 @@
+import { READ_ONLY_NOTE } from '../../components/ReadOnlyNotice';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { server } from '../../test/msw-server';
+import { readOnlyEnvironment, server } from '../../test/msw-server';
 import { API_BASE, draftView } from '../../test/questionnaire-fixtures';
 import { renderApp } from '../../test/render-app';
 
@@ -146,5 +147,41 @@ describe('AdminLayout', () => {
       'href',
       '/admin/cuestionario',
     );
+  });
+});
+
+describe('YearsPage en un ambiente de solo lectura', () => {
+  it('disablesCreateYearAndLinksTheNotice', async () => {
+    readOnlyEnvironment();
+    server.use(http.get('*/api/v1/admin/years/EDIN', () => HttpResponse.json(YEARS)));
+    renderApp('/admin/cuestionario');
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    const create = await screen.findByRole('button', { name: 'Crear año' });
+    expect(create).toBeDisabled();
+    expect(create).toHaveAccessibleDescription(READ_ONLY_NOTE);
+    // Los años se siguen consultando.
+    expect(screen.getByRole('link', { name: '2027' })).toBeVisible();
+  });
+
+  it('showsTheBackendMessageWhenTheServerRejectsTheWrite', async () => {
+    const detail =
+      'En este ambiente el cuestionario es de solo lectura: los cambios se hacen en QA y llegan con un paquete de promoción.';
+    server.use(
+      http.get('*/api/v1/admin/years/EDIN', () => HttpResponse.json(YEARS)),
+      http.post('*/api/v1/admin/years/EDIN', () =>
+        HttpResponse.json(
+          { title: 'Cuestionario de solo lectura', status: 403, detail },
+          { status: 403, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    );
+    renderApp('/admin/cuestionario');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Crear año' }));
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+
+    expect(await screen.findByText(detail)).toBeVisible();
   });
 });

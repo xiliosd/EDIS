@@ -1,8 +1,9 @@
+import { READ_ONLY_NOTE } from '../../components/ReadOnlyNotice';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { server } from '../../test/msw-server';
+import { readOnlyEnvironment, server } from '../../test/msw-server';
 import { LONG_FLOW_TIMEOUT } from '../../test/questionnaire-fixtures';
 import { renderApp } from '../../test/render-app';
 import { RULES_API, RULES_URL, rulesView } from '../../test/rules-fixtures';
@@ -542,5 +543,37 @@ describe('RulesPage', () => {
 
     expect(await screen.findByText('Validación guardada.')).toBeInTheDocument();
     expect(queryClient.getQueryState(simulatorQueryKey('EDIN', 2027))?.isInvalidated).toBe(true);
+  });
+});
+
+describe('RulesPage en un ambiente de solo lectura', () => {
+  it('deshabilita toda edición, la enlaza al aviso y deja descargar', async () => {
+    readOnlyEnvironment();
+    await openRules();
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    for (const name of [
+      'Nueva regla',
+      'Editar regla c01a-no',
+      'Eliminar regla c01a-no',
+      'Guardar validación de C01A',
+    ]) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription(READ_ONLY_NOTE);
+    }
+    expect(screen.getByLabelText('Importar JSON')).toBeDisabled();
+    expect(screen.getByLabelText('Importar JSON')).toHaveAccessibleDescription(READ_ONLY_NOTE);
+    expect(screen.getByRole('button', { name: 'Descargar JSON' })).toBeEnabled();
+  });
+
+  it('en un año publicado no pide motivo de corrección', async () => {
+    readOnlyEnvironment();
+    await openRules(rulesView({ state: 'publicado' }));
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    expect(
+      screen.queryByRole('textbox', { name: 'Motivo de la corrección' }),
+    ).not.toBeInTheDocument();
   });
 });

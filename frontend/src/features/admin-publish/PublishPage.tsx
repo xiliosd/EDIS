@@ -6,8 +6,10 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ConflictNotice } from '../../components/ConflictNotice';
 import { ErrorState } from '../../components/ErrorState';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
+import { READ_ONLY_NOTE_ID, ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
+import { useQuestionnaireReadOnly } from '../admin/environment-api';
 import { questionnaireQueryKey } from '../admin-questions/admin-api';
 import { errorMessage } from '../admin-questions/tree-editing';
 import { rulesExportQueryKey, rulesQueryKey } from '../admin-rules/rules-api';
@@ -32,6 +34,7 @@ export function PublishPage() {
   const title = `Publicar ${encuesta} ${anio}`;
   useDocumentTitle(title);
   const queryClient = useQueryClient();
+  const readOnly = useQuestionnaireReadOnly();
   const checklistKey = checklistQueryKey(encuesta, year);
   const checklistQuery = useQuery({
     queryKey: checklistKey,
@@ -108,6 +111,7 @@ export function PublishPage() {
         {title}
       </h1>
       <QuestionnaireTabs survey={encuesta} year={year} />
+      <ReadOnlyNotice show={readOnly} />
 
       {(checklistQuery.isPending || ruleSetQuery.isPending) &&
         !checklistQuery.isError &&
@@ -153,7 +157,8 @@ export function PublishPage() {
           />
           <Button
             className="mt-6"
-            disabled={published || !checklist.ready || publish.isPending}
+            disabled={readOnly || published || !checklist.ready || publish.isPending}
+            aria-describedby={readOnly ? READ_ONLY_NOTE_ID : undefined}
             aria-busy={publish.isPending || undefined}
             onClick={() => setConfirming(true)}
           >

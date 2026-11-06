@@ -20,6 +20,8 @@ interface TablesMappingPanelProps {
   editing: TreeEditing | null;
   /** Año publicado: el mapeo no se puede cambiar y el panel lo dice. */
   lockedNote?: boolean;
+  /** Id de un aviso de la página que explica el bloqueo; reemplaza la nota "Solo en borrador.". */
+  lockNoteId?: string;
   onSaved: (result: TablesResult) => void;
 }
 
@@ -29,6 +31,7 @@ export function TablesMappingPanel({
   missingChapters,
   editing,
   lockedNote = false,
+  lockNoteId,
   onSaved,
 }: TablesMappingPanelProps) {
   const chapters = Object.keys(tables).sort();
@@ -148,12 +151,14 @@ export function TablesMappingPanel({
       )}
       {lockedNote && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button disabled aria-describedby="tablas-solo-borrador">
+          <Button disabled aria-describedby={lockNoteId ?? 'tablas-solo-borrador'}>
             Guardar tablas
           </Button>
-          <span id="tablas-solo-borrador" className="text-sm text-ink-muted">
-            {DRAFT_ONLY_NOTE}
-          </span>
+          {!lockNoteId && (
+            <span id="tablas-solo-borrador" className="text-sm text-ink-muted">
+              {DRAFT_ONLY_NOTE}
+            </span>
+          )}
         </div>
       )}
       {message && (

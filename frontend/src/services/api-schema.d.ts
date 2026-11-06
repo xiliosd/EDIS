@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/admin/environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar si este ambiente permite cambiar el cuestionario
+         * @description En producción el cuestionario es de solo lectura: los cambios se hacen en QA y llegan con un paquete de promoción. El front lo usa para deshabilitar los controles de escritura; el backend igual rechaza esas operaciones con 403.
+         */
+        get: operations["adminEnvironment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questionnaire/{encuesta}/{anio}": {
         parameters: {
             query?: never;
@@ -694,6 +714,9 @@ export interface components {
             referencedByRules?: string[];
             text?: string;
         };
+        AdminEnvironment: {
+            questionnaireWritesEnabled?: boolean;
+        };
         AdminHeader: {
             /** Format: int64 */
             codEnc?: number;
@@ -1152,6 +1175,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    adminEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Modo del ambiente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEnvironment"];
+                };
+            };
+        };
+    };
     questionnaire: {
         parameters: {
             query?: never;
@@ -1206,6 +1249,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminEditResult"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
             /** @description La encuesta, el año o la pregunta no existen en ese año */
@@ -1308,6 +1360,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La encuesta, el año, la página o el registro no existen en ese año */
             404: {
                 headers: {
@@ -1372,6 +1433,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La encuesta, el año, la página o el registro no existen en ese año */
             404: {
                 headers: {
@@ -1429,6 +1499,15 @@ export interface operations {
             };
             /** @description Cuerpo inválido: falta el texto o la versión, o el texto excede el límite */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1558,6 +1637,15 @@ export interface operations {
             };
             /** @description Cuerpo inválido: falta la versión */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1759,6 +1847,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La encuesta, el año, la página o la pregunta de referencia no existen */
             404: {
                 headers: {
@@ -1816,6 +1913,15 @@ export interface operations {
             };
             /** @description Cuerpo inválido: faltan los capProyIds (o la lista está vacía) o la versión */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1918,6 +2024,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La encuesta o el año no existen */
             404: {
                 headers: {
@@ -2005,6 +2120,15 @@ export interface operations {
                     "application/json": components["schemas"]["RulesEditResult"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
@@ -2052,6 +2176,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
             /** @description El caso no existe en el archivo del año */
@@ -2140,6 +2273,15 @@ export interface operations {
                     "application/json": components["schemas"]["RulesEditResult"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
@@ -2193,6 +2335,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
             /** @description La encuesta o el año no existen */
@@ -2253,6 +2404,15 @@ export interface operations {
                     "application/json": components["schemas"]["RulesEditResult"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La regla no existe en el archivo del año */
             404: {
                 headers: {
@@ -2308,6 +2468,15 @@ export interface operations {
                     "application/json": components["schemas"]["RulesEditResult"];
                 };
             };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description La versión cambió: otro usuario modificó el cuestionario */
             409: {
                 headers: {
@@ -2355,6 +2524,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RulesEditResult"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
             /** @description La columna no tiene validación en el archivo del año */
@@ -2445,6 +2623,15 @@ export interface operations {
             };
             /** @description Cuerpo inválido: faltan las tablas o la versión */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2580,6 +2767,15 @@ export interface operations {
             };
             /** @description Cuerpo inválido: falta el año nuevo o el de origen */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un paquete de promoción */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -6,8 +6,10 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ConflictNotice } from '../../components/ConflictNotice';
 import { ErrorState } from '../../components/ErrorState';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
+import { READ_ONLY_NOTE_ID, ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
+import { useQuestionnaireReadOnly } from '../admin/environment-api';
 import { questionnaireQueryKey } from '../admin-questions/admin-api';
 import { errorMessage } from '../admin-questions/tree-editing';
 import { AnalysisSummary } from '../admin-rules/AnalysisSummary';
@@ -172,6 +174,7 @@ export function HistoryPage() {
   const title = `Historial ${encuesta} ${anio}`;
   useDocumentTitle(title);
   const queryClient = useQueryClient();
+  const readOnly = useQuestionnaireReadOnly();
   const historyQuery = useQuery({
     queryKey: historyQueryKey(encuesta, year),
     queryFn: () => fetchHistory(encuesta, year),
@@ -237,6 +240,7 @@ export function HistoryPage() {
         {title}
       </h1>
       <QuestionnaireTabs survey={encuesta} year={year} />
+      <ReadOnlyNotice show={readOnly} />
 
       {historyQuery.isPending && (
         <p role="status" aria-live="polite" className="mt-6 text-ink-muted">
@@ -311,7 +315,8 @@ export function HistoryPage() {
                       {!entry.current && (
                         <Button
                           variant="secondary"
-                          disabled={!isDraft || restore.isPending}
+                          disabled={readOnly || !isDraft || restore.isPending}
+                          aria-describedby={readOnly ? READ_ONLY_NOTE_ID : undefined}
                           aria-label={`Restaurar esta versión ${entry.version}`}
                           onClick={() => setRestoring(entry.version ?? 0)}
                         >

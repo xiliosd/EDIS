@@ -1,8 +1,9 @@
+import { READ_ONLY_NOTE } from '../../components/ReadOnlyNotice';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
-import { server } from '../../test/msw-server';
+import { readOnlyEnvironment, server } from '../../test/msw-server';
 import {
   API_BASE,
   draftView,
@@ -156,5 +157,57 @@ describe('QuestionnaireTreePage', () => {
     server.use(http.get(API_BASE, () => HttpResponse.json(draftView())));
     await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByRole('heading', { name: 'Página C1' })).toBeInTheDocument();
+  });
+});
+
+describe('QuestionnaireTreePage en un ambiente de solo lectura', () => {
+  it('readOnlyEnvironmentDisablesEveryWriteControlAndLinksTheNotice', async () => {
+    readOnlyEnvironment();
+    serveTree();
+    renderApp(TREE_URL);
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    expect(screen.getAllByRole('note')).toHaveLength(1);
+    const writes = [
+      'Editar texto de C05',
+      'Editar encabezado de C05',
+      'Editar palabra enlazada de C05',
+      /^Desactivar C05/,
+      'Agregar pregunta en C1',
+      'Guardar tablas',
+      /^Subir /,
+      /^Bajar /,
+    ];
+    for (const name of writes) {
+      for (const button of screen.getAllByRole('button', { name })) {
+        expect(button).toBeDisabled();
+        expect(button).toHaveAccessibleDescription(READ_ONLY_NOTE);
+      }
+    }
+    // Las lecturas siguen disponibles: el script de columna solo se descarga.
+    expect(
+      screen.getByRole('button', { name: 'Descargar script de columna de C07A' }),
+    ).toBeEnabled();
+    expect(screen.queryByText('Solo en borrador.')).not.toBeInTheDocument();
+  });
+
+  it('readOnlyPublishedYearHidesTheCorrectionReason', async () => {
+    readOnlyEnvironment();
+    serveTree(draftView({ state: 'publicado' }));
+    renderApp(TREE_URL);
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    expect(screen.getByRole('button', { name: 'Editar texto de C05' })).toBeDisabled();
+    expect(
+      screen.queryByRole('textbox', { name: 'Motivo de la corrección' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('writableEnvironmentShowsNoNotice', async () => {
+    serveTree();
+    renderApp(TREE_URL);
+
+    expect(await screen.findByRole('button', { name: 'Editar texto de C05' })).toBeEnabled();
+    expect(screen.queryByText(READ_ONLY_NOTE)).not.toBeInTheDocument();
   });
 });

@@ -11,6 +11,8 @@ interface RulesJsonPanelProps {
   year: number;
   /** El año está publicado: se puede ver y descargar, no importar. */
   readOnly: boolean;
+  /** Id del aviso de solo lectura del ambiente, que explica por qué no se puede importar. */
+  lockNoteId?: string;
   /** Importa el archivo; devuelve el mensaje de error si falló de forma que se muestra aquí. */
   onImport: (rules: RuleSet) => Promise<string | null>;
 }
@@ -34,7 +36,13 @@ interface PendingImport {
 }
 
 /** Vista de solo lectura del archivo de reglas, con descarga e importación. */
-export function RulesJsonPanel({ survey, year, readOnly, onImport }: RulesJsonPanelProps) {
+export function RulesJsonPanel({
+  survey,
+  year,
+  readOnly,
+  lockNoteId,
+  onImport,
+}: RulesJsonPanelProps) {
   const exportQuery = useQuery({
     queryKey: rulesExportQueryKey(survey, year),
     queryFn: () => fetchRulesExport(survey, year),
@@ -130,6 +138,7 @@ export function RulesJsonPanel({ survey, year, readOnly, onImport }: RulesJsonPa
             type="file"
             accept=".json,application/json"
             disabled={readOnly}
+            aria-describedby={lockNoteId}
             onChange={(event) => void chooseFile(event)}
             className="mt-1 block min-h-11 text-base"
           />

@@ -7,9 +7,11 @@ import { ConflictNotice } from '../../components/ConflictNotice';
 import { CorrectionReasonBar } from '../../components/CorrectionReasonBar';
 import { ErrorState } from '../../components/ErrorState';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
+import { READ_ONLY_NOTE_ID, ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { useCorrectionReason } from '../../hooks/use-correction-reason';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
+import { useQuestionnaireReadOnly } from '../admin/environment-api';
 import { errorMessage, REASON_REQUIRED_NOTE } from '../admin-questions/tree-editing';
 import { AnalysisSummary, FindingNotes, findingsOfElements } from './AnalysisSummary';
 import { describeRule } from './rule-description';
@@ -314,7 +316,10 @@ export function RulesPage() {
   const legacyIds = new Set(view?.legacySkipIds ?? []);
   const editable = view?.state === 'borrador';
   // Un año publicado admite correcciones de saltos y validaciones, pero solo con motivo válido.
-  const canEdit = editable || (correction && reason.motivo !== undefined);
+  // En un ambiente de solo lectura nada se edita aquí: las reglas llegan con el paquete.
+  const readOnly = useQuestionnaireReadOnly();
+  const lockNoteId = readOnly ? READ_ONLY_NOTE_ID : undefined;
+  const canEdit = !readOnly && (editable || (correction && reason.motivo !== undefined));
   const { hash } = useLocation();
 
   // Cada ancla se atiende una sola vez: si no, cada guardado (que sube la versión) volvería a
@@ -348,6 +353,7 @@ export function RulesPage() {
         {title}
       </h1>
       <QuestionnaireTabs survey={encuesta} year={year} />
+      <ReadOnlyNotice show={readOnly} />
 
       {rulesQuery.isPending && (
         <p role="status" aria-live="polite" className="mt-6 text-ink-muted">
@@ -398,7 +404,7 @@ export function RulesPage() {
             Estado: {STATE_LABELS[view.state ?? ''] ?? view.state} ·{' '}
             <span>Versión {view.version}</span>
           </p>
-          {correction && (
+          {correction && !readOnly && (
             <>
               <CorrectionReasonBar value={reason.text} onChange={reason.setText} />
               {!canEdit && <p className="mt-2 text-ink-muted">{REASON_REQUIRED_NOTE}</p>}
@@ -457,6 +463,7 @@ export function RulesPage() {
             <Button
               className="mt-3"
               disabled={!canEdit}
+              aria-describedby={lockNoteId}
               onClick={() => {
                 setBuilderError(null);
                 setBuilder({});
@@ -491,6 +498,7 @@ export function RulesPage() {
                             variant="secondary"
                             aria-label={`Editar regla ${ruleId}`}
                             disabled={!canEdit}
+                            aria-describedby={lockNoteId}
                             onClick={() => {
                               setBuilderError(null);
                               setBuilder({ rule });
@@ -502,6 +510,7 @@ export function RulesPage() {
                             variant="secondary"
                             aria-label={`Eliminar regla ${ruleId}`}
                             disabled={!canEdit}
+                            aria-describedby={lockNoteId}
                             onClick={() => setToDelete(rule)}
                           >
                             Eliminar
@@ -528,6 +537,7 @@ export function RulesPage() {
                 validations={view.validations ?? {}}
                 report={view.report}
                 disabled={!canEdit}
+                describedBy={lockNoteId}
                 onSave={submitValidation}
                 onDelete={removeValidation}
               />
@@ -546,7 +556,13 @@ export function RulesPage() {
             />
           </section>
 
-          <RulesJsonPanel survey={encuesta} year={year} readOnly={!canEdit} onImport={importFile} />
+          <RulesJsonPanel
+            survey={encuesta}
+            year={year}
+            readOnly={!canEdit}
+            lockNoteId={lockNoteId}
+            onImport={importFile}
+          />
 
           {builder && (
             <SkipRuleBuilder

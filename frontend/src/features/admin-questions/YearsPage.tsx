@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ErrorState } from '../../components/ErrorState';
+import { READ_ONLY_NOTE_ID, ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { TextField } from '../../components/TextField';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
+import { useQuestionnaireReadOnly } from '../admin/environment-api';
 import {
   createYear,
   fetchYears,
@@ -37,6 +39,7 @@ export function YearsPage() {
   useDocumentTitle('Años del cuestionario');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const readOnly = useQuestionnaireReadOnly();
   const [survey, setSurvey] = useState<SurveyCode>('EDIN');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newYear, setNewYear] = useState('');
@@ -92,6 +95,7 @@ export function YearsPage() {
       <h1 id="titulo-anios" className="text-2xl font-semibold">
         Años del cuestionario
       </h1>
+      <ReadOnlyNotice show={readOnly} />
 
       <div className="mt-4 max-w-xs">
         <label htmlFor="encuesta" className="block text-sm font-medium">
@@ -168,7 +172,12 @@ export function YearsPage() {
               </tbody>
             </table>
           </div>
-          <Button className="mt-6" onClick={openDialog}>
+          <Button
+            className="mt-6"
+            disabled={readOnly}
+            aria-describedby={readOnly ? READ_ONLY_NOTE_ID : undefined}
+            onClick={openDialog}
+          >
             Crear año
           </Button>
         </>

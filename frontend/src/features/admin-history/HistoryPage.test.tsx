@@ -1,8 +1,9 @@
+import { READ_ONLY_NOTE } from '../../components/ReadOnlyNotice';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
-import { server } from '../../test/msw-server';
+import { readOnlyEnvironment, server } from '../../test/msw-server';
 import { renderApp } from '../../test/render-app';
 import type { HistoryView } from './history-api';
 
@@ -182,5 +183,21 @@ describe('HistoryPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Hay un ciclo de saltos.');
     await waitFor(() => expect(alert).toHaveFocus());
+  });
+});
+
+describe('HistoryPage en un ambiente de solo lectura', () => {
+  it('compara versiones pero deshabilita Restaurar y lo enlaza al aviso', async () => {
+    readOnlyEnvironment();
+    serve('borrador');
+    await openPage();
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    const buttons = screen.getAllByRole('button', { name: /^Restaurar esta versión/ });
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription(READ_ONLY_NOTE);
+    }
   });
 });

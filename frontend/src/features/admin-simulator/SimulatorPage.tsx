@@ -7,9 +7,11 @@ import { ConflictNotice } from '../../components/ConflictNotice';
 import { CorrectionReasonBar } from '../../components/CorrectionReasonBar';
 import { ErrorState } from '../../components/ErrorState';
 import { QuestionnaireTabs } from '../../components/QuestionnaireTabs';
+import { READ_ONLY_NOTE_ID, ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { useCorrectionReason } from '../../hooks/use-correction-reason';
 import { useDocumentTitle } from '../../hooks/use-document-title';
 import { ApiError } from '../../services/api-error';
+import { useQuestionnaireReadOnly } from '../admin/environment-api';
 import { errorMessage, REASON_REQUIRED_NOTE } from '../admin-questions/tree-editing';
 import { describeRule } from '../admin-rules/rule-description';
 import {
@@ -192,7 +194,11 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
   const reason = useCorrectionReason();
   const correction = rulesView.state === 'publicado';
   // Un año publicado admite guardar y eliminar casos como corrección, solo con motivo válido.
-  const editable = rulesView.state === 'borrador' || (correction && reason.motivo !== undefined);
+  // Simular siempre se puede; guardar o eliminar casos no en un ambiente de solo lectura.
+  const readOnly = useQuestionnaireReadOnly();
+  const lockNoteId = readOnly ? READ_ONLY_NOTE_ID : undefined;
+  const editable =
+    !readOnly && (rulesView.state === 'borrador' || (correction && reason.motivo !== undefined));
   const rulesKey = rulesQueryKey(survey, year);
   const simulatorKey = simulatorQueryKey(survey, year);
 
@@ -353,7 +359,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
           Las reglas cambiaron; revise el resultado antes de guardar.
         </p>
       )}
-      {correction && (
+      {correction && !readOnly && (
         <>
           <CorrectionReasonBar value={reason.text} onChange={reason.setText} />
           {!editable && <p className="mt-2 text-ink-muted">{REASON_REQUIRED_NOTE}</p>}
@@ -401,6 +407,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
           </Button>
           <Button
             disabled={!editable || !page}
+            aria-describedby={lockNoteId}
             onClick={() => {
               setSaveError(null);
               setSaveOpen(true);
@@ -427,6 +434,7 @@ function SimulatorWorkspace({ survey, year, view, rulesView, onReload }: Workspa
           cases={cases}
           results={rulesView.caseResults ?? []}
           editable={editable}
+          lockNoteId={lockNoteId}
           onOpen={openCase}
           onDelete={(testCase) => void removeCase(testCase)}
         />
@@ -455,6 +463,7 @@ export function SimulatorPage() {
   const year = Number(anio);
   const title = `Simulador ${encuesta} ${anio}`;
   useDocumentTitle(title);
+  const readOnly = useQuestionnaireReadOnly();
   const simulator = useQuery({
     queryKey: simulatorQueryKey(encuesta, year),
     queryFn: () => fetchSimulator(encuesta, year),
@@ -481,6 +490,7 @@ export function SimulatorPage() {
         {title}
       </h1>
       <QuestionnaireTabs survey={encuesta} year={year} />
+      <ReadOnlyNotice show={readOnly} />
 
       {(simulator.isPending || rules.isPending) && !simulator.isError && !rules.isError && (
         <p role="status" aria-live="polite" className="mt-6 text-ink-muted">

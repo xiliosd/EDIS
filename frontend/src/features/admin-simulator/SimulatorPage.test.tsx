@@ -1,8 +1,9 @@
+import { READ_ONLY_NOTE } from '../../components/ReadOnlyNotice';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { server } from '../../test/msw-server';
+import { readOnlyEnvironment, server } from '../../test/msw-server';
 import { LONG_FLOW_TIMEOUT } from '../../test/questionnaire-fixtures';
 import { renderApp } from '../../test/render-app';
 import { RULES_API, rulesView } from '../../test/rules-fixtures';
@@ -423,4 +424,24 @@ describe('SimulatorPage', () => {
     },
     LONG_FLOW_TIMEOUT,
   );
+});
+
+describe('SimulatorPage en un ambiente de solo lectura', () => {
+  it('simula pero no guarda ni elimina casos, y lo explica con el aviso', async () => {
+    readOnlyEnvironment();
+    await openSimulator(rulesView({ cases: CASES, caseResults: RESULTS }));
+    const user = userEvent.setup();
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    for (const name of ['Guardar como caso de prueba', 'Eliminar caso caso-a']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription(READ_ONLY_NOTE);
+    }
+    expect(
+      screen.getByRole('button', { name: 'Abrir en el simulador el caso caso-a' }),
+    ).toBeEnabled();
+    await user.click(within(group('C01A')).getByLabelText('No'));
+    expect(await screen.findByText(/Oculta por la regla c01a-no/)).toBeVisible();
+  });
 });

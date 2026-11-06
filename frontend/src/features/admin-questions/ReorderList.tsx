@@ -12,6 +12,8 @@ interface ReorderListProps<T> {
   editable: boolean;
   /** Año publicado: se muestran los botones de orden deshabilitados con la nota "Solo en borrador.". */
   locked?: boolean;
+  /** Id de un aviso de la página que explica el bloqueo; reemplaza la nota "Solo en borrador.". */
+  lockNoteId?: string;
   /** Guarda el orden pedido; resuelve true si el servidor lo aceptó. */
   onReorder: (ids: number[]) => Promise<boolean>;
 }
@@ -37,6 +39,7 @@ export function ReorderList<T>({
   renderItem,
   editable,
   locked = false,
+  lockNoteId,
   onReorder,
 }: ReorderListProps<T>) {
   const idPrefix = useId();
@@ -96,10 +99,10 @@ export function ReorderList<T>({
     }
   }
 
-  const lockedNoteId = `${idPrefix}-solo-borrador`;
+  const lockedNoteId = lockNoteId ?? `${idPrefix}-solo-borrador`;
   return (
     <>
-      {locked && (
+      {locked && !lockNoteId && (
         <p id={lockedNoteId} className="mt-4 text-sm text-ink-muted">
           Solo en borrador.
         </p>

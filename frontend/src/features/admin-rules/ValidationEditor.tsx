@@ -10,6 +10,8 @@ interface ValidationEditorProps {
   validations: Record<string, FieldValidation>;
   report?: AnalysisReport;
   disabled?: boolean;
+  /** Id del aviso que explica por qué no se puede guardar (solo lectura). */
+  describedBy?: string;
   onSave: (column: string, validation: FieldValidation) => Promise<void>;
   onDelete: (column: string) => Promise<void>;
 }
@@ -72,6 +74,7 @@ interface ValidationRowProps {
   validation: FieldValidation | undefined;
   report?: AnalysisReport;
   disabled: boolean;
+  describedBy?: string;
   onSave: ValidationEditorProps['onSave'];
   onDelete: ValidationEditorProps['onDelete'];
 }
@@ -81,6 +84,7 @@ function ValidationRow({
   validation,
   report,
   disabled,
+  describedBy,
   onSave,
   onDelete,
 }: ValidationRowProps) {
@@ -222,6 +226,7 @@ function ValidationRow({
             variant="secondary"
             aria-label={`Guardar validación de ${column}`}
             disabled={disabled}
+            aria-describedby={describedBy}
             onClick={() => void save()}
           >
             Guardar
@@ -231,6 +236,7 @@ function ValidationRow({
               variant="secondary"
               aria-label={`Quitar validación de ${column}`}
               disabled={disabled}
+              aria-describedby={describedBy}
               onClick={() => void remove()}
             >
               Quitar
@@ -249,6 +255,7 @@ export function ValidationEditor({
   validations,
   report,
   disabled = false,
+  describedBy,
   onSave,
   onDelete,
 }: ValidationEditorProps) {
@@ -267,6 +274,7 @@ export function ValidationEditor({
             validation={validation}
             report={report}
             disabled={disabled}
+            describedBy={describedBy}
             onSave={onSave}
             onDelete={onDelete}
           />
