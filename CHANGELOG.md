@@ -74,6 +74,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
     en el README y sección «Desviaciones de implementación (3c)» en el diseño de la Fase 3.
 
 ### Cambiado
+- `db/dev/schema.sql` lleva los tipos, longitudes y claves reales de las `FRM_*` (diccionario del
+  2026-11-06): `PREGUNTA` 1000, `ENCABEZADO` 500, `TEXTO` de ayudas 100, `NUMERAL` 5,
+  `FRM_ENCABEZADO.ANIO` NUMBER(4) y clave compuesta en `FRM_RTA_GRUPO`. Un volumen de Oracle de
+  desarrollo anterior debe recrearse.
+- Documentación: la base real es `WE8ISO8859P15` (no `AL32UTF8`), con sinónimos públicos, sin
+  secuencias ni disparadores en `FRM_*`, y el permiso que falta para que `columnas.sql` cree tablas.
 - El motivo de una corrección en los DELETE de saltos, validaciones y casos viaja en el cuerpo JSON
   y no en la query string (para que no llegue a los logs de acceso); nginx registra `/api/` sin
   query string.
@@ -103,6 +109,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   tabla `GRAL_AYUDAS` (DDL real). Recree el contenedor de Oracle de desarrollo.
 
 ### Corregido
+- Los textos del cuestionario respetan el límite de su columna real (pregunta 1000, encabezado 500,
+  palabra de ayuda 100, numeral 5) en lugar de 4000 bytes UTF-8: en producción daban ORA-12899.
+  El mensaje 422 nombra el campo y su máximo, y el editor avisa antes de enviar.
+- Los caracteres que la base (`WE8ISO8859P15`) no tiene —comillas tipográficas, rayas, puntos
+  suspensivos, viñetas, emojis— se guardaban como `?` sin error; ahora se guardan como `&#N;` y se
+  muestran como se escribieron, en textos del cuestionario, respuestas de texto y observaciones.
+  Las longitudes se miden en bytes de Latin-9 del valor ya convertido.
+- `frm.sql` rechaza al generarse un texto que no cabe en su columna real.
 - Las opciones de respuesta toman su valor de `FRM_RTA_GRUPO.VALOR`: la base real no tiene
   `FRM_RESPUESTA.VALOR` y la consulta anterior fallaba con ORA-00904 (el encuestado no vería
   opciones).

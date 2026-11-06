@@ -433,7 +433,8 @@ siguen vigentes.
    `EXIT FAILURE ROLLBACK` y la indicación de correrlo en una sesión nueva. El `NLS_CHARACTERSET` de
    origen va en la cabecera y en el manifiesto; si hay texto no ASCII, el primer bloque aborta con
    `ORA-20002` cuando el destino difiere (`UNISTR` sustituiría en silencio con `?`), y la importación
-   también lo compara. Hay que confirmar el juego de caracteres de producción (se espera `AL32UTF8`).
+   también lo compara. El juego de caracteres de producción es `WE8ISO8859P15` (confirmado el
+   2026-11-06; ver «Ajuste a la base real (2026-11-06)»): QA debe tener el mismo.
    `columnas.sql` lleva las columnas que el año estrena, con una cabecera aunque no haya ninguna.
 10. **Sin firma: la verificación es contra la base real.** «Verificable» (§8) se resolvió comprobando
     el paquete contra la base de producción y no con un HMAC: las columnas exigidas salen de la base y
@@ -507,5 +508,58 @@ El respaldo real de `DANE_DIRPEN` (16-oct-2026) corrigió dos supuestos del esqu
    - El encuestado sigue sin ver las ayudas (pendiente desde la Fase 2); editar definiciones es de
      la Fase 4.
 
-Siguen sin confirmar los tipos y longitudes de las `FRM_*` y cómo se generan sus ids. En desarrollo
-`FRM_PRE_AYUDA.COD_PRE_AYU` lleva clave primaria aunque el respaldo no muestre índice único.
+Los tipos, longitudes y la generación de ids quedaron confirmados el 2026-11-06 (sección
+siguiente). En desarrollo `FRM_PRE_AYUDA.COD_PRE_AYU` lleva clave primaria aunque la base real no
+muestre índice único.
+
+## Ajuste a la base real (2026-11-06)
+
+Consultas de solo lectura al diccionario de la base real (`db/verificacion/verificar-base-produccion.sql`,
+sin datos de personas) confirmaron:
+
+- **Juego de caracteres.** `NLS_CHARACTERSET = WE8ISO8859P15` (Latin-9, un byte por carácter),
+  `NLS_LENGTH_SEMANTICS = BYTE`, `NLS_NCHAR_CHARACTERSET = AL16UTF16`. No es `AL32UTF8` como se
+  suponía.
+- **Esquema.** Todas las tablas están en `DANE_DIRPEN`, con sinónimos públicos para las `FRM_*` y
+  `GRAL_AYUDAS` (que está en el mismo esquema).
+- **Ids.** No hay secuencias ni disparadores sobre `FRM_*`: `MAX+1` queda confirmado.
+- **Tipos y longitudes** (los lleva ahora `db/dev/schema.sql`): `FRM_PREGUNTA.PREGUNTA`
+  VARCHAR2(1000), `FRM_ENCABEZADO.ENCABEZADO` VARCHAR2(500) y `ANIO` **NUMBER(4)** (en
+  `FRM_CAP_PROY` es VARCHAR2(4)), `TEXTO` de `FRM_PRE_AYUDA` y `FRM_ENC_AYUDA` VARCHAR2(100),
+  `FRM_CAP_PROY.NUMERAL` VARCHAR2(5) y `CAPITULO` VARCHAR2(2), `FRM_CAP_PERIODO.NUMERAL`
+  VARCHAR2(10), `PROY` VARCHAR2(10), `FRM_RTA_GRUPO.ORDEN` VARCHAR2(2) y `VALOR` VARCHAR2(5) con
+  clave compuesta `(COD_GRUPO, GRUPO)`, `FRM_SALTO.VALOR_SALTO` NUMBER(1), `GRUPO` y `ORDEN`
+  NUMBER(3).
+- **Permisos del usuario de verificación.** DML sobre `FRM_*` y `GRAL_AYUDAS` y `ALTER ANY TABLE`,
+  pero no `CREATE ANY TABLE`: un `columnas.sql` que cree tablas nuevas en `DANE_DIRPEN` requiere ese
+  permiso o correrlo como `DANE_DIRPEN`.
+
+Decisiones:
+
+1. **Límite por campo.** Pregunta 1000, encabezado 500, palabra de ayuda 100 y numeral 5 (de
+   `FRM_CAP_PROY`; `FRM_CAP_PERIODO.NUMERAL`, de 10, recibe el mismo valor). Salen de
+   `FrmTable.maxBytes` y se miden en bytes de Latin-9 del valor ya guardado. Mensaje 422 por campo:
+   «El texto de la pregunta admite hasta 1000 caracteres (los caracteres especiales que se guardan
+   como código cuentan como varios).»; para el numeral, «El numeral admite hasta 5 caracteres.».
+   La validación de forma (`@Size`) baja de 4000 a 1000.
+2. **Caracteres fuera de Latin-9.** Oracle los cambiaría por `?` sin error. Al guardar, todo carácter
+   que no exista en ISO-8859-15 (comillas tipográficas, rayas, puntos suspensivos, viñetas, emojis)
+   se convierte en la entidad numérica `&#N;` (un emoji, una sola entidad), como el PHP heredado
+   guarda `&oacute;`; tildes, ñ, ü, €, ¿ y ¡ van tal cual. Una sola utilidad
+   (`util/Latin9Text`) lo hace para los textos administrables y para las respuestas de texto libre
+   y las observaciones del encuestado (tablas `EDIN_*`, cuyo límite sale de `ALL_TAB_COLUMNS`). La
+   lectura ya decodificaba entidades en los textos del cuestionario (`HtmlUtils`, que admite
+   `&#N;` fuera del plano básico); las respuestas guardadas se leen decodificando solo las
+   numéricas. El motivo de corrección (archivo de reglas, JSON en disco) no se toca.
+3. **`frm.sql`.** Sigue anotando el juego de caracteres de origen y abortando con `ORA-20002` si el
+   destino difiere cuando hay texto no ASCII; con `WE8ISO8859P15` en ambos lados
+   `TO_CHAR(UNISTR(' E9'))` da `é`. Además rechaza, antes de escribir el script, un texto que
+   supere su columna real medido como Latin-9.
+4. **`FRM_ENCABEZADO.ANIO` como NUMBER.** La copia de año y la fotografía lo envían como número; las
+   consultas que comparan con el año en texto siguen funcionando por conversión implícita. La
+   fotografía lee un `BigDecimal` en lugar de un texto, pero su hash es el mismo (`4:2026` en ambos
+   casos) y `frm.sql` declara esa variable como NUMBER.
+5. **Esquema de desarrollo.** Las `FRM_*` de `db/dev/schema.sql` llevan los tipos, longitudes y
+   claves reales, para que las pruebas den ORA-12899 donde producción lo daría. El contenedor de
+   pruebas es AL32UTF8 (la ñ ocupa dos bytes): las pruebas de longitud usan caracteres ASCII o
+   entidades, no la ñ en el borde.

@@ -114,7 +114,10 @@ La importación responde 413 si el ZIP pasa de 5 MB y 422 «Paquete rechazado» 
 
 Límites de `PUT .../answers`: como máximo 200 respuestas por página (400 «Envíe como máximo 200
 respuestas por página») y 4000 caracteres por valor (422 con «La respuesta es demasiado larga.» en
-`errors`). Las claves desconocidas se devuelven en `errors` recortadas a 30 caracteres.
+`errors`); además cada valor debe caber en su columna medido en bytes de Latin-9 tras convertir a
+`&#N;` lo que la base no admite (mismo 422). Los textos del cuestionario (`text` de las ediciones
+y preguntas nuevas) admiten hasta 1000 caracteres en la solicitud y el límite de su campo en el
+servicio (ver «Juego de caracteres y límites por campo»). Las claves desconocidas se devuelven en `errors` recortadas a 30 caracteres.
 `POST /finish` es idempotente: con las 9 páginas guardadas siempre devuelve el mismo radicado y
 `OBS` solo se escribe la primera vez que llega texto.
 
@@ -464,6 +467,26 @@ Cada cambio escribe una línea de auditoría (usuario, encuesta, año, operació
 nunca el texto de las preguntas). Los textos se guardan como texto plano, con `&`, `<` y `>`
 escapados en la base, y se muestran escapados.
 
+**Juego de caracteres y límites por campo.** La base real es `WE8ISO8859P15` (Latin-9, un byte por
+carácter, longitudes en bytes). Los caracteres de Latin-9 (tildes, ñ, ü, €, ¿, ¡) se guardan tal
+cual; los que Latin-9 no tiene (comillas tipográficas “ ”, rayas – —, puntos suspensivos …,
+viñetas •, emojis) se guardan como código `&#N;` y se muestran de nuevo como se escribieron: no se
+pierden ni se vuelven `?`. Eso aplica a los textos del cuestionario y a las respuestas de texto y
+observaciones del encuestado. Cada campo admite lo que su columna real, medido sobre el texto ya
+guardado (cada código cuenta todos sus caracteres, y `&` cuenta como `&amp;`):
+
+| Campo | Columna | Máximo |
+| :-- | :-- | :-- |
+| Texto de la pregunta | `FRM_PREGUNTA.PREGUNTA` | 1000 |
+| Encabezado | `FRM_ENCABEZADO.ENCABEZADO` | 500 |
+| Palabra enlazada a la ayuda | `FRM_PRE_AYUDA.TEXTO` | 100 |
+| Numeral de una pregunta nueva | `FRM_CAP_PROY.NUMERAL` | 5 |
+| Respuesta de texto u observaciones | columna de la tabla `EDIN_*` | el de la columna (`OBS`: 1100) |
+
+Más largo responde 422 con el máximo del campo, p. ej. «El texto de la pregunta admite hasta 1000
+caracteres (los caracteres especiales que se guardan como código cuentan como varios).». El editor
+avisa antes de enviar con un cálculo aproximado; el servidor decide.
+
 **Reglas, simulador y casos (Fase 3b).** Con un año en borrador, las pestañas **Reglas** y
 **Simulador** del año están junto a **Preguntas**. Un año publicado se puede consultar, no editar.
 
@@ -531,9 +554,10 @@ de solo lectura que ese usuario puede correr.
 2. **Antes de correr nada, verifique la base de destino** con
    `db/verificacion/verificar-base-produccion.sql` (solo lectura: consulta el diccionario de Oracle,
    no lee datos de encuestados). Confirma, entre otras cosas:
-   - el juego de caracteres (se espera `AL32UTF8`). Si `frm.sql` trae texto no ASCII y la base de
-     destino tiene otro, aborta con `ORA-20002` antes de escribir nada; si no abortara,
-     `TO_CHAR(UNISTR())` sustituiría en silencio con `?`;
+   - el juego de caracteres: debe coincidir con el de QA; producción es `WE8ISO8859P15`
+     (confirmado el 2026-11-06). Si `frm.sql` trae texto no ASCII y la base de destino tiene otro,
+     aborta con `ORA-20002` antes de escribir nada; si no abortara, `TO_CHAR(UNISTR())`
+     sustituiría en silencio con `?`;
    - que `GRAL_AYUDAS` está en el mismo esquema que las `FRM_*`;
    - tipos y longitudes de las columnas frente a `db/dev/schema.sql`;
    - que no hay secuencias ni disparadores que asignen los ids (la aplicación usa MAX+1);
@@ -634,25 +658,28 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
 - **Contraseñas en texto plano (D7).** La columna `PSW` es `VARCHAR2(8)` y no se puede cambiar sin DDL.
   Se comparan con `MessageDigest.isEqual` y nunca aparecen en logs ni respuestas. Plan de salida:
   ampliar `PSW` a `VARCHAR2(60)` y migrar a BCrypt.
-- **Esquema `FRM_*` parcialmente confirmado (2026-11-05).** Las columnas y claves salen del respaldo
-  real de `DANE_DIRPEN`; los tipos, longitudes y nulabilidad de las `FRM_*` siguen deducidos del PHP
-  (ver el [MER](docs/diagramas/mer-tablas-usadas.md)). `FRM_PRE_AYUDA` no tiene índice único en el
-  respaldo: la aplicación usa `COD_PRE_AYU` como clave.
+- **Esquema `FRM_*` confirmado (2026-11-06).** Tipos, longitudes y claves salen del diccionario de
+  la base real (ver el [MER](docs/diagramas/mer-tablas-usadas.md) y `db/dev/schema.sql`); base
+  `WE8ISO8859P15`. `FRM_PRE_AYUDA` no tiene índice único en la base real: la aplicación usa
+  `COD_PRE_AYU` como clave. Un volumen de Oracle de desarrollo creado antes de este ajuste conserva
+  las longitudes viejas (`CREATE TABLE IF NOT EXISTS` no altera tablas): recréelo.
+- **Base de pruebas en AL32UTF8.** El contenedor de pruebas no es Latin-9: un texto con ñ que cabe
+  en producción puede no caber allí. Las pruebas de longitud usan ASCII o entidades en el borde.
 - **Ayudas sin mostrar al encuestado.** La Fase 2 no incluyó las ayudas (palabra enlazada a una
   definición de `GRAL_AYUDAS`) en el formulario del encuestado; sigue pendiente. Editar las
   definiciones de `GRAL_AYUDAS` queda para la Fase 4 (administración de ayudas).
-- **Confirmar con el DDL real de QA cómo se generan los ids de FRM_* (secuencia/disparador) antes de
-  usar la administración en QA.** Mientras tanto los ids se calculan con `MAX+1` (decisión de la
-  Fase 3a, registrada al inicio de `db/dev/schema.sql`).
-- **DDL real de `FRM_*` por confirmar (Fase 3a).** Las listas de columnas de la copia de año ya
-  coinciden con el respaldo real; ids, nulabilidad y tipos siguen sin confirmar: confírmelos con el
-  DDL de QA antes de usar la administración allí.
+- **Ids de `FRM_*` con `MAX+1`.** La base real no tiene secuencias ni disparadores sobre `FRM_*`
+  (confirmado el 2026-11-06); QA debe ser igual.
+- **`columnas.sql` y tablas nuevas.** El usuario con que se verificó la base tiene DML sobre `FRM_*`
+  y `GRAL_AYUDAS` y `ALTER ANY TABLE`, pero no `CREATE ANY TABLE`: un `columnas.sql` que cree tablas
+  nuevas en `DANE_DIRPEN` requiere ese permiso o correrlo como `DANE_DIRPEN`.
 - **`orderGroup` en el árbol (seguimiento).** `AdminEntry` no expone el bloque de cada pregunta:
   "Subir"/"Bajar" se habilitan en los bordes de bloque y el servidor responde 422 al cruzarlos.
   Agregar `orderGroup` al contrato permitiría deshabilitarlos.
 - **Esquema en producción.** El SQL usa nombres de tabla sin calificar mientras la validación usa
   `DB_SCHEMA`; si el usuario de la aplicación no es el dueño (`DANE_DIRPEN`), hay que calificar los
-  nombres o crear sinónimos antes de desplegar.
+  nombres o crear sinónimos antes de desplegar. En la base real ya hay sinónimos públicos para las
+  `FRM_*` y `GRAL_AYUDAS` (2026-11-06); para las demás tablas no se confirmaron sinónimos.
 - **Filas huérfanas.** Desactivar una pregunta creada en el borrador deja sus filas de `FRM_*`
   (anotado para la Fase 3c).
 - **Reglas, simulador y casos (3b): seguimiento.**

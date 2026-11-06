@@ -1,10 +1,10 @@
 # MER — tablas usadas
 
-> Columnas de las `FRM_*` confirmadas con el respaldo real de DANE_DIRPEN (16-oct-2026; salen de
-> los INSERT y las claves de los índices únicos, porque el respaldo no trae sus CREATE TABLE).
-> `GRAL_AYUDAS` es el único DDL completo del respaldo. Siguen **sin confirmar**: los tipos y
-> longitudes de las `FRM_*`, la nulabilidad y cómo se generan los ids (secuencias o disparadores).
-> Aquí solo se listan las columnas que usa la aplicación.
+> Tipos, longitudes y claves de las `FRM_*` confirmados con el diccionario de la base real
+> (`DANE_DIRPEN`, 2026-11-06; juego de caracteres `WE8ISO8859P15`, longitudes en bytes). Sin
+> secuencias ni disparadores: los ids se generan con MAX+1. `FRM_RTA_GRUPO` tiene clave compuesta
+> `(COD_GRUPO, GRUPO)`. El DDL completo está en `db/dev/schema.sql`. Aquí solo se listan las
+> columnas que usa la aplicación.
 
 ```mermaid
 erDiagram
@@ -22,9 +22,11 @@ erDiagram
   FRM_ENC_AYUDA }o--o| GRAL_AYUDAS : "COD_AYU = COD"
   EDIN_MUESTRA ||--o| EDIN_20_CAP_B_UBICA : "C_C"
   FRM_CAP_PROY {
-    number COD_CAP_PROY
+    number COD_CAP_PROY "PK"
     number COD_PRE_GRUPO
-    varchar CAPITULO
+    varchar CAPITULO "VARCHAR2(2)"
+    varchar NUMERAL "VARCHAR2(5)"
+    varchar ANIO "VARCHAR2(4)"
   }
   FRM_PRE_GRUPO {
     number COD_PRE_GRUPO
@@ -33,20 +35,20 @@ erDiagram
     number ORDEN
   }
   FRM_PREGUNTA {
-    number COD_PRE
-    varchar PREGUNTA
-    varchar TIPO
+    number COD_PRE "PK"
+    varchar PREGUNTA "VARCHAR2(1000)"
+    varchar TIPO "VARCHAR2(1)"
   }
   FRM_CAP_PERIODO {
     number COD_CAP_PROY
-    varchar PROY
-    varchar ANIO
-    varchar NUMERAL
+    varchar PROY "VARCHAR2(10)"
+    number ANIO "NUMBER(4)"
+    varchar NUMERAL "VARCHAR2(10)"
   }
   FRM_SALTO {
     number COD_CAP_PROY
     number SALTO
-    number VALOR_SALTO
+    number VALOR_SALTO "NUMBER(1)"
   }
   FRM_OBJ_PRE {
     number COD_CAP_PROY
@@ -54,27 +56,27 @@ erDiagram
     number GRUPO
   }
   FRM_RTA_GRUPO {
-    number COD_GRUPO
-    number GRUPO
-    varchar ORDEN
-    varchar VALOR "valor de la opción"
+    number COD_GRUPO "PK compuesta"
+    number GRUPO "PK compuesta"
+    varchar ORDEN "VARCHAR2(2)"
+    varchar VALOR "valor de la opción, VARCHAR2(5)"
     number COD_RTA
   }
   FRM_RESPUESTA {
     number COD_RTA
-    varchar RESPUESTA "sin VALOR en la base real"
+    varchar RESPUESTA "VARCHAR2(500), sin VALOR"
   }
   FRM_PRE_AYUDA {
     number COD_PRE_AYU "clave natural"
     number COD_CAP_PROY
     number COD_AYU
-    varchar TEXTO "palabra enlazada"
+    varchar TEXTO "palabra enlazada, VARCHAR2(100)"
   }
   FRM_ENC_AYUDA {
     number COD_ENC_AYU "PK"
     number COD_ENC
     number COD_AYU
-    varchar TEXTO "palabra enlazada"
+    varchar TEXTO "palabra enlazada, VARCHAR2(100)"
   }
   GRAL_AYUDAS {
     varchar PROY
@@ -84,11 +86,11 @@ erDiagram
     number ANIO
   }
   FRM_ENCABEZADO {
-    number COD_ENC
+    number COD_ENC "PK"
     number COD_CAP_PROY
-    varchar TIPO
-    varchar ENCABEZADO
-    varchar ANIO
+    varchar TIPO "VARCHAR2(1)"
+    varchar ENCABEZADO "VARCHAR2(500)"
+    number ANIO "NUMBER(4)"
   }
   EDIN_MUESTRA {
     varchar C_C

@@ -19,7 +19,7 @@ sequenceDiagram
     QA->>QA: Fotografía de FRM_* del año + NLS_CHARACTERSET de origen
     QA-->>A: paquete-EDIN-AAAA-anio.zip (manifiesto.json, reglas.json, frm.sql, columnas.sql)
     A->>D: Entrega el ZIP por el canal acordado
-    D->>DB: Confirma NLS_CHARACTERSET (AL32UTF8) y ejecuta columnas.sql
+    D->>DB: Confirma NLS_CHARACTERSET (igual al de QA; producción es WE8ISO8859P15) y ejecuta columnas.sql
     D->>DB: Ejecuta frm.sql en sesión nueva (idempotente; ORA-20001 si un id es de otra fila, ORA-20002 si cambia el juego de caracteres)
     D->>P: Avisa que los scripts corrieron
     P->>PR: Paquetes → elegir el ZIP → "Verificar" (confirmar=false)
