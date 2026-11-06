@@ -11,5 +11,5 @@ import org.springframework.validation.annotation.Validated;
  * falta, queda en false (seguro por defecto).
  */
 @Validated
-@ConfigurationProperties("edi.admin")
+@ConfigurationProperties("app.admin")
 public record QuestionnaireWritesProperties(boolean questionnaireWritesEnabled) {}

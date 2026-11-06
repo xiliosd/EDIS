@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -68,6 +69,19 @@ class QuestionnaireWriteGuardTest {
   @Test
   void ignoresHandlersThatAreNotControllerMethods() throws Exception {
     assertThat(READ_ONLY.preHandle(request("POST"), response(), new Object())).isTrue();
+  }
+
+  @Test
+  void coversTheWholeAdminApiOnly() {
+    assertThat(QuestionnaireWriteGuard.covers(List.of("/api/v1/admin/years/{encuesta}"))).isTrue();
+    assertThat(QuestionnaireWriteGuard.covers(List.of("/api/v1/admin/environment"))).isTrue();
+    assertThat(
+            QuestionnaireWriteGuard.covers(
+                List.of("/api/v1/admin/questionnaire/{encuesta}/{anio}/rules/import")))
+        .isTrue();
+    assertThat(QuestionnaireWriteGuard.covers(List.of("/api/v1/survey/finish"))).isFalse();
+    assertThat(QuestionnaireWriteGuard.covers(List.of("/api/v1/auth/login"))).isFalse();
+    assertThat(QuestionnaireWriteGuard.covers(List.of("/api/v1/administrador"))).isFalse();
   }
 
   @Test

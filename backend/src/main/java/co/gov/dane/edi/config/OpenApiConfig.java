@@ -14,9 +14,15 @@ import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springdoc.core.customizers.OperationCustomizer;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 @Configuration
 public class OpenApiConfig {
@@ -26,8 +32,6 @@ public class OpenApiConfig {
   static final String READ_ONLY_DESCRIPTION =
       "Cuestionario de solo lectura en este ambiente: los cambios se hacen en QA y llegan con un"
           + " paquete de promoción";
-
-  private static final String ADMIN_CONTROLLERS = "co.gov.dane.edi.admin.controller";
 
   @Bean
   OpenAPI formularioOpenApi() {
@@ -52,14 +56,16 @@ public class OpenApiConfig {
   }
 
   /**
-   * Documenta el 403 de solo lectura con el mismo criterio de la compuerta, así el contrato no se
-   * desfasa cuando aparece una operación de escritura nueva.
+   * Documenta el 403 de solo lectura con el mismo criterio de la compuerta (rutas y métodos), así
+   * el contrato no se desfasa cuando aparece una operación de escritura nueva.
    */
   @Bean
-  OperationCustomizer readOnlyQuestionnaireResponse() {
+  OperationCustomizer readOnlyQuestionnaireResponse(
+      @Qualifier("requestMappingHandlerMapping")
+          ObjectProvider<RequestMappingHandlerMapping> handlerMappings) {
     return (operation, handler) -> {
-      if (ADMIN_CONTROLLERS.equals(handler.getBeanType().getPackageName())
-          && QuestionnaireWriteGuard.isWrite(handler)) {
+      if (QuestionnaireWriteGuard.isWrite(handler)
+          && QuestionnaireWriteGuard.covers(patternsOf(handlerMappings.getObject(), handler))) {
         if (operation.getResponses() == null) {
           operation.setResponses(new ApiResponses());
         }
@@ -80,5 +86,13 @@ public class OpenApiConfig {
       }
       return operation;
     };
+  }
+
+  private static Set<String> patternsOf(
+      RequestMappingHandlerMapping handlerMappings, HandlerMethod handler) {
+    return handlerMappings.getHandlerMethods().entrySet().stream()
+        .filter(entry -> entry.getValue().getMethod().equals(handler.getMethod()))
+        .flatMap(entry -> entry.getKey().getPatternValues().stream())
+        .collect(Collectors.toSet());
   }
 }

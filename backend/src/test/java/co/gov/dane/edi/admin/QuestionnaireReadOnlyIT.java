@@ -57,7 +57,7 @@ import tools.jackson.databind.json.JsonMapper;
  * de promoción siguen funcionando. El año 2027 publicado se arma con los servicios, por debajo de
  * la compuerta web, como lo dejaría un paquete ya importado.
  */
-@TestPropertySource(properties = "edi.admin.questionnaire-writes-enabled=false")
+@TestPropertySource(properties = "app.admin.questionnaire-writes-enabled=false")
 class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
 
   private static final String YEAR = "/api/v1/admin/questionnaire/EDIN/2027";
@@ -148,10 +148,10 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
         handlerMapping.getHandlerMethods().entrySet()) {
       HandlerMethod handler = entry.getValue();
       for (String pattern : entry.getKey().getPatternValues()) {
-        if (!isQuestionnaireAdmin(pattern)) {
+        if (!isWritableApi(pattern)) {
           continue;
         }
-        for (RequestMethod method : entry.getKey().getMethodsCondition().getMethods()) {
+        for (RequestMethod method : methodsOf(entry.getKey())) {
           if (method == RequestMethod.GET) {
             continue;
           }
@@ -194,7 +194,7 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
     Set<String> documented = new TreeSet<>();
     Set<String> writes = new TreeSet<>();
     for (String path : paths.propertyNames()) {
-      if (!isQuestionnaireAdmin(path)) {
+      if (!isWritableApi(path)) {
         continue;
       }
       for (String method : paths.get(path).propertyNames()) {
@@ -256,9 +256,21 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
     assertThat(snapshots.snapshot("EDIN", 2027)).isEqualTo(frmBefore);
   }
 
-  private static boolean isQuestionnaireAdmin(String pattern) {
-    return pattern.startsWith("/api/v1/admin/questionnaire/")
-        || pattern.startsWith("/api/v1/admin/years/");
+  /**
+   * Toda la API salvo la del encuestado y la de sesión: cualquier escritura que aparezca allí debe
+   * responder 403 o estar exceptuada de forma explícita. Fuera de /api solo quedan rutas del
+   * framework (/error) y de documentación (solo lectura).
+   */
+  private static boolean isWritableApi(String pattern) {
+    return pattern.startsWith("/api/")
+        && !pattern.startsWith("/api/v1/auth/")
+        && !pattern.startsWith("/api/v1/survey/");
+  }
+
+  /** Un mapeo sin métodos acepta cualquiera: se prueba como POST para no saltarlo. */
+  private static Set<RequestMethod> methodsOf(RequestMappingInfo info) {
+    Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
+    return methods.isEmpty() ? Set.of(RequestMethod.POST) : methods;
   }
 
   private static String concrete(String pattern) {

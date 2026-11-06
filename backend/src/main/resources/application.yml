@@ -58,8 +58,6 @@ app:
     swagger-public: ${SWAGGER_PUBLIC:false}
   receipt:
     key: ${RECEIPT_KEY}
-
-edi:
   admin:
     # false (por defecto) en producción: el cuestionario solo cambia en QA y llega con el paquete de
     # promoción. true en desarrollo y QA.
