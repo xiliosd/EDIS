@@ -59,6 +59,12 @@ app:
   receipt:
     key: ${RECEIPT_KEY}
 
+edi:
+  admin:
+    # false (por defecto) en producción: el cuestionario solo cambia en QA y llega con el paquete de
+    # promoción. true en desarrollo y QA.
+    questionnaire-writes-enabled: ${QUESTIONNAIRE_WRITES_ENABLED:false}
+
 springdoc:
   api-docs:
     enabled: ${SWAGGER_ENABLED:false}

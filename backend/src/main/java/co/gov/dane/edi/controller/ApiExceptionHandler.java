@@ -4,6 +4,7 @@ import co.gov.dane.edi.admin.InvalidRulesException;
 import co.gov.dane.edi.admin.PackageRejectedException;
 import co.gov.dane.edi.admin.PackageTooLargeException;
 import co.gov.dane.edi.admin.PublicationBlockedException;
+import co.gov.dane.edi.admin.QuestionnaireReadOnlyException;
 import co.gov.dane.edi.admin.SharedRowException;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
@@ -109,6 +110,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   ProblemDetail handlePackageTooLarge(PackageTooLargeException exception) {
     return problem(
         HttpStatus.CONTENT_TOO_LARGE, "Archivo demasiado grande", PackageTooLargeException.MESSAGE);
+  }
+
+  @ExceptionHandler(QuestionnaireReadOnlyException.class)
+  ProblemDetail handleQuestionnaireReadOnly(QuestionnaireReadOnlyException exception) {
+    return problem(
+        HttpStatus.FORBIDDEN, QuestionnaireReadOnlyException.TITLE, exception.getMessage());
   }
 
   @ExceptionHandler(SurveyNotAvailableException.class)

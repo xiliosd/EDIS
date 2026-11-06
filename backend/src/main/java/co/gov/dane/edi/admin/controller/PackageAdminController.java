@@ -1,5 +1,6 @@
 package co.gov.dane.edi.admin.controller;
 
+import co.gov.dane.edi.admin.AllowedInReadOnlyQuestionnaire;
 import co.gov.dane.edi.admin.PackageImportService;
 import co.gov.dane.edi.admin.PackageKind;
 import co.gov.dane.edi.admin.PromotionPackageService;
@@ -138,6 +139,8 @@ public class PackageAdminController {
           "El paquete no pasa una revisión; la propiedad differences lista lo que no coincide",
       content =
           @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  // Único cambio permitido en solo lectura: así recibe producción lo que se aprobó en QA.
+  @AllowedInReadOnlyQuestionnaire
   @PostMapping(
       path = "/import",
       consumes = MediaType.MULTIPART_FORM_DATA_VALUE,

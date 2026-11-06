@@ -24,6 +24,8 @@ services:
       SPRING_SQL_INIT_SCHEMA_LOCATIONS: file:/db/dev/schema.sql
       SPRING_SQL_INIT_DATA_LOCATIONS: file:/db/dev/data.sql
       RULES_SEED_DIR: /db/dev/rules-seed
+      # Desarrollo edita el cuestionario (y las E2E del administrador lo necesitan); producción no.
+      QUESTIONNAIRE_WRITES_ENABLED: "true"
     volumes:
       - ./db/dev:/db/dev:ro
       - rules-data:/data/rules

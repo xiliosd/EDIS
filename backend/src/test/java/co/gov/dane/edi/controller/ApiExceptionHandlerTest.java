@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import co.gov.dane.edi.admin.QuestionnaireReadOnlyException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.TooManyLoginAttemptsException;
 import co.gov.dane.edi.service.error.YearCreationFailedException;
@@ -103,6 +104,20 @@ class ApiExceptionHandlerTest {
         .andExpect(jsonPath("$.detail").value("El paquete supera 5 MB."));
   }
 
+  @Test
+  void readOnlyQuestionnaireIs403InSpanish() throws Exception {
+    mockMvc
+        .perform(get("/test/read-only"))
+        .andExpect(status().isForbidden())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.title").value("Cuestionario de solo lectura"))
+        .andExpect(
+            jsonPath("$.detail")
+                .value(
+                    "En este ambiente el cuestionario es de solo lectura: los cambios se hacen en"
+                        + " QA y llegan con un paquete de promoción."));
+  }
+
   record Payload(@NotBlank(message = "Ingrese su usuario") String username) {}
 
   @RestController
@@ -138,6 +153,11 @@ class ApiExceptionHandlerTest {
     @GetMapping("/test/too-large")
     void tooLarge() {
       throw new MaxUploadSizeExceededException(5_242_880);
+    }
+
+    @GetMapping("/test/read-only")
+    void readOnly() {
+      throw new QuestionnaireReadOnlyException();
     }
 
     @PostMapping("/test/validated")

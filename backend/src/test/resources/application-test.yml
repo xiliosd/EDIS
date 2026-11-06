@@ -20,6 +20,11 @@ app:
   receipt:
     key: clave-de-radicado-solo-para-pruebas-automatizadas
 
+edi:
+  admin:
+    # Las pruebas de edición necesitan escribir; QuestionnaireReadOnlyIT la apaga.
+    questionnaire-writes-enabled: true
+
 springdoc:
   api-docs:
     enabled: true
