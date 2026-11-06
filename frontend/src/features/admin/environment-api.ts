@@ -12,9 +12,10 @@ export function fetchAdminEnvironment(): Promise<AdminEnvironment> {
 }
 
 /**
- * true cuando el backend confirma que en este ambiente (producción) el cuestionario es de solo
- * lectura. Mientras carga o si la consulta falla se dejan los controles como siempre: el backend
- * igual rechaza la escritura con 403 y su mensaje se muestra donde se intentó.
+ * true cuando en este ambiente (producción) el cuestionario es de solo lectura. Si la consulta falla
+ * también: sin saber el modo, lo seguro es no ofrecer escribir. Mientras carga se dejan los
+ * controles como siempre, para no parpadear en desarrollo y QA; el backend igual rechaza la
+ * escritura con 403 y su mensaje se muestra donde se intentó.
  */
 export function useQuestionnaireReadOnly(): boolean {
   const query = useQuery({
@@ -23,5 +24,5 @@ export function useQuestionnaireReadOnly(): boolean {
     // El modo lo fija el despliegue: no cambia mientras la página está abierta.
     staleTime: Infinity,
   });
-  return query.data?.questionnaireWritesEnabled === false;
+  return query.isError || query.data?.questionnaireWritesEnabled === false;
 }

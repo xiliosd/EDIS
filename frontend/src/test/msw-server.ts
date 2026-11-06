@@ -12,6 +12,18 @@ export const server = setupServer(
   ),
 );
 
+/** No se pudo leer el modo del ambiente: el front lo trata como solo lectura. */
+export function failingEnvironment() {
+  server.use(
+    http.get('*/api/v1/admin/environment', () =>
+      HttpResponse.json(
+        { title: 'Error interno', status: 500, detail: 'Ocurrió un error inesperado.' },
+        { status: 500, headers: { 'Content-Type': 'application/problem+json' } },
+      ),
+    ),
+  );
+}
+
 /** Producción: el cuestionario es de solo lectura. */
 export function readOnlyEnvironment() {
   server.use(

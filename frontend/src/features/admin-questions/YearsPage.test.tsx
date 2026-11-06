@@ -3,7 +3,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readOnlyEnvironment, server } from '../../test/msw-server';
+import { failingEnvironment, readOnlyEnvironment, server } from '../../test/msw-server';
 import { API_BASE, draftView } from '../../test/questionnaire-fixtures';
 import { renderApp } from '../../test/render-app';
 
@@ -162,6 +162,28 @@ describe('YearsPage en un ambiente de solo lectura', () => {
     expect(create).toHaveAccessibleDescription(READ_ONLY_NOTE);
     // Los años se siguen consultando.
     expect(screen.getByRole('link', { name: '2027' })).toBeVisible();
+  });
+
+  it('treatsAnUnreadableEnvironmentAsReadOnly', async () => {
+    failingEnvironment();
+    server.use(http.get('*/api/v1/admin/years/EDIN', () => HttpResponse.json(YEARS)));
+    renderApp('/admin/cuestionario');
+
+    expect(await screen.findByRole('note')).toHaveTextContent(READ_ONLY_NOTE);
+    const create = await screen.findByRole('button', { name: 'Crear año' });
+    expect(create).toBeDisabled();
+    expect(create).toHaveAccessibleDescription(READ_ONLY_NOTE);
+  });
+
+  it('keepsCreateYearEnabledWhileTheEnvironmentLoads', async () => {
+    server.use(
+      http.get('*/api/v1/admin/environment', () => new Promise<never>(() => {})),
+      http.get('*/api/v1/admin/years/EDIN', () => HttpResponse.json(YEARS)),
+    );
+    renderApp('/admin/cuestionario');
+
+    expect(await screen.findByRole('button', { name: 'Crear año' })).toBeEnabled();
+    expect(screen.queryByText(READ_ONLY_NOTE)).not.toBeInTheDocument();
   });
 
   it('showsTheBackendMessageWhenTheServerRejectsTheWrite', async () => {
