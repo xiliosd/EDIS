@@ -2,6 +2,7 @@ package co.gov.dane.edi.admin;
 
 import static co.gov.dane.edi.support.CsrfTestSupport.realCsrf;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -375,6 +376,28 @@ class QuestionEditIT extends OracleIntegrationTest {
   }
 
   @Test
+  void charactersOutsideLatin9AreStoredAsNumericEntitiesAndReadBack() throws Exception {
+    String path = DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text";
+    edit(path, "{\"text\":\"“Gestión” – año 😀\",\"version\":1}")
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.page.entries[?(@.columnCode == 'C01A')].text").value("“Gestión” – año 😀"));
+    assertThat(storedTextOf(fixture.draftCapProy(C01A)))
+        .isEqualTo("&#8220;Gestión&#8221; &#8211; año &#128512;");
+    SurveyPage c1 = SurveyPage.find("C1").orElseThrow();
+    assertThat(questionnaire.pageEntries(c1, "EDIN", 2027).get(0).text())
+        .isEqualTo("“Gestión” – año 😀");
+
+    long help = fixture.draftHelp(1);
+    edit(DRAFT + "/help/" + help, "{\"text\":\"" + "a".repeat(93) + "–\",\"version\":2}")
+        .andExpect(status().isOk());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT TEXTO FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU = ?", String.class, help))
+        .isEqualTo("a".repeat(93) + "&#8211;");
+  }
+
+  @Test
   void blankOrOversizedTextIsRejected() throws Exception {
     String path = DRAFT + "/entries/" + fixture.draftCapProy(C01A) + "/text";
     edit(path, "{\"text\":\"\\u0007\\u0008\",\"version\":1}")
@@ -382,7 +405,27 @@ class QuestionEditIT extends OracleIntegrationTest {
         .andExpect(jsonPath("$.errors.text").value("El texto no puede quedar vacío."));
     edit(path, "{\"text\":\"" + "&".repeat(1000) + "\",\"version\":1}")
         .andExpect(status().isUnprocessableContent())
-        .andExpect(jsonPath("$.errors.text").value("El texto es demasiado largo."));
+        .andExpect(
+            jsonPath("$.errors.text")
+                .value(
+                    "El texto de la pregunta admite hasta 1000 caracteres (los caracteres"
+                        + " especiales que se guardan como código cuentan como varios)."));
+    // Más de 1000 caracteres escritos no llega al servicio.
+    edit(path, "{\"text\":\"" + "a".repeat(1001) + "\",\"version\":1}")
+        .andExpect(status().isBadRequest());
+    edit(
+            DRAFT + "/headers/" + fixture.draftHeader(1),
+            "{\"text\":\"" + "a".repeat(501) + "\",\"version\":1}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.errors.text", startsWith("El encabezado admite hasta 500 caracteres")));
+    edit(
+            DRAFT + "/help/" + fixture.draftHelp(1),
+            "{\"text\":\"" + "a".repeat(94) + "–\",\"version\":1}")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath(
+                "$.errors.text", startsWith("La palabra de ayuda admite hasta 100 caracteres")));
     edit(path, "{\"text\":\"  \",\"version\":1}").andExpect(status().isBadRequest());
     edit(path, "{\"text\":\"Hola\"}").andExpect(status().isBadRequest());
     assertThat(rulesFiles.load("EDIN", 2027).version()).isEqualTo(1);

@@ -14,7 +14,7 @@ public record NewQuestionRequest(
     @NotBlank(message = "Escriba el código de la columna.") String columnCode,
     @NotBlank(message = "Escriba el numeral.") String numeral,
     @NotBlank(message = "Escriba el texto.")
-        @Size(max = 4000, message = "El texto admite hasta 4000 caracteres.")
+        @Size(max = 1000, message = "El texto de la pregunta admite hasta 1000 caracteres.")
         String text,
     @NotNull(message = "Elija el tipo de respuesta.") InputType inputType,
     Integer optionGroup,

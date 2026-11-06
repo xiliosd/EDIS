@@ -142,7 +142,11 @@ public class YearCopyRepository {
     return mapping;
   }
 
-  /** Encabezados del año de origen (los de otros años de la misma pregunta no se copian). */
+  /**
+   * Encabezados del año de origen (los de otros años de la misma pregunta no se copian). En la base
+   * real FRM_ENCABEZADO.ANIO es NUMBER(4), no VARCHAR2 como FRM_CAP_PROY.ANIO: el año va como
+   * número. Los textos se copian tal cual: vienen de la misma columna, así que caben.
+   */
   Map<Long, Long> copyHeaders(
       String project, int fromYear, int year, Map<Long, Long> capProys, List<CopiedRange> copied) {
     List<Object[]> sources =
@@ -155,7 +159,7 @@ public class YearCopyRepository {
                 new Object[] {
                   rows.getLong(1), rows.getLong(2), rows.getString(3), rows.getString(4)
                 },
-            String.valueOf(fromYear),
+            fromYear,
             project,
             fromYear);
     Map<Long, Long> mapping = new LinkedHashMap<>();
@@ -164,10 +168,7 @@ public class YearCopyRepository {
     for (Object[] source : sources) {
       long id = next++;
       mapping.put((Long) source[0], id);
-      inserts.add(
-          new Object[] {
-            id, capProys.get((Long) source[1]), source[2], source[3], String.valueOf(year)
-          });
+      inserts.add(new Object[] {id, capProys.get((Long) source[1]), source[2], source[3], year});
     }
     batch(
         "INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO, ANIO)"
@@ -258,7 +259,7 @@ public class YearCopyRepository {
                 + " ORDER BY A.COD_ENC_AYU",
             (rows, rowNumber) ->
                 new Object[] {rows.getLong(1), rows.getObject(2), rows.getString(3)},
-            String.valueOf(fromYear),
+            fromYear,
             project,
             fromYear);
     List<Object[]> inserts = new ArrayList<>();

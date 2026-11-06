@@ -1,5 +1,6 @@
 package co.gov.dane.edi.admin;
 
+import co.gov.dane.edi.util.Latin9Text;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -27,7 +28,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class FrmScriptWriter {
 
-  /** Tope de VARCHAR2 con MAX_STRING_SIZE=STANDARD; el límite de 3a lo hace inalcanzable. */
+  /**
+   * Tope de VARCHAR2 con MAX_STRING_SIZE=STANDARD, para la variable del bloque. Cada columna tiene
+   * además su límite real ({@link FrmTable#maxBytes}), menor, que se comprueba antes.
+   */
   private static final int MAX_TEXT_BYTES = 4000;
 
   /** Largo máximo de una parte; con la asignación que la rodea la línea queda bajo 1000 bytes. */
@@ -179,6 +183,7 @@ public class FrmScriptWriter {
     List<String> fixed = new ArrayList<>(values);
     fixed.removeAll(correctable);
 
+    requireFits(table, row);
     script.append("DECLARE\n");
     script.append("  ROWS_WITH_ID PLS_INTEGER;\n");
     script.append("  MATCHING_ROWS PLS_INTEGER;\n");
@@ -242,6 +247,32 @@ public class FrmScriptWriter {
     script.append("  END IF;\n");
     script.append("END;\n");
     script.append("/\n");
+  }
+
+  /**
+   * Ningún texto del script puede superar su columna en la base real (WE8ISO8859P15, en bytes): el
+   * INSERT fallaría con ORA-12899 a mitad de la ejecución. Se mide como Latin-9 con entidades, la
+   * forma en que la aplicación guarda; un carácter ajeno a Latin-9 cuenta como su entidad.
+   */
+  private static void requireFits(FrmTable table, Map<String, Object> row) {
+    for (String column : table.columns()) {
+      if (row.get(column) instanceof String text && table.maxBytes(column).isPresent()) {
+        int limit = table.maxBytes(column).getAsInt();
+        int length = Latin9Text.storedLength(text);
+        if (length > limit) {
+          throw new IllegalStateException(
+              table.tableName()
+                  + "."
+                  + column
+                  + " supera "
+                  + limit
+                  + " bytes en Latin-9 ("
+                  + length
+                  + ") en la fila "
+                  + row.get(table.idColumn()));
+        }
+      }
+    }
   }
 
   /** Actualiza solo si algún texto difiere: una segunda ejecución no toca la fila. */

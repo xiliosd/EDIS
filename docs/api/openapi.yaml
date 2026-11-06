@@ -2108,7 +2108,7 @@ components:
           type: string
         text:
           type: string
-          maxLength: 4000
+          maxLength: 1000
           minLength: 0
         version:
           type: integer
@@ -2292,7 +2292,7 @@ components:
           format: int32
         text:
           type: string
-          maxLength: 4000
+          maxLength: 1000
           minLength: 0
         version:
           type: integer

@@ -36,17 +36,21 @@ class SurveyAnswerServiceTest {
       new AnswerColumn("X03", "NUMBER", 22, 0, false, null, null);
 
   @Test
-  void byteSemanticsCountsUtf8Bytes() {
+  void byteSemanticsCountsLatin9BytesAfterConversion() {
     assertThat(SurveyAnswerService.checkColumn("12", BYTES_2)).isEmpty();
-    assertThat(SurveyAnswerService.checkColumn("ñ", BYTES_2)).isEmpty();
-    assertThat(SurveyAnswerService.checkColumn("ññ", BYTES_2)).contains(RuleErrorCodes.TOO_LONG);
+    // La base real es WE8ISO8859P15: ñ y € ocupan un byte.
+    assertThat(SurveyAnswerService.checkColumn("ññ", BYTES_2)).isEmpty();
+    assertThat(SurveyAnswerService.checkColumn("€1", BYTES_2)).isEmpty();
     assertThat(SurveyAnswerService.checkColumn("123", BYTES_2)).contains(RuleErrorCodes.TOO_LONG);
+    // La comilla tipográfica se guarda como "&#8220;": 7 bytes.
+    assertThat(SurveyAnswerService.checkColumn("“", BYTES_2)).contains(RuleErrorCodes.TOO_LONG);
   }
 
   @Test
-  void charSemanticsCountsCharacters() {
+  void charSemanticsCountsTheConvertedText() {
     assertThat(SurveyAnswerService.checkColumn("ññ", CHARS_2)).isEmpty();
     assertThat(SurveyAnswerService.checkColumn("ñññ", CHARS_2)).contains(RuleErrorCodes.TOO_LONG);
+    assertThat(SurveyAnswerService.checkColumn("😀", CHARS_2)).contains(RuleErrorCodes.TOO_LONG);
   }
 
   @Test

@@ -2,6 +2,7 @@ package co.gov.dane.edi;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import co.gov.dane.edi.admin.FrmTable;
 import co.gov.dane.edi.support.OracleIntegrationTest;
 import java.util.List;
 import java.util.Map;
@@ -93,18 +94,19 @@ class DevDataIT extends OracleIntegrationTest {
                 "FRM_ENCABEZADO", List.of("COD_ENC", "COD_CAP_PROY", "TIPO", "ENCABEZADO", "ANIO")),
             Map.entry("FRM_PRE_AYUDA", List.of("COD_PRE_AYU", "COD_CAP_PROY", "COD_AYU", "TEXTO")),
             Map.entry("FRM_ENC_AYUDA", List.of("COD_ENC_AYU", "COD_ENC", "COD_AYU", "TEXTO")));
-    Map<String, String> primaryKeys =
+    // Diccionario de la base real (2026-11-06): FRM_RTA_GRUPO tiene clave compuesta.
+    Map<String, List<String>> primaryKeys =
         Map.ofEntries(
-            Map.entry("FRM_PREGUNTA", "COD_PRE"),
-            Map.entry("FRM_PRE_GRUPO", "COD_PRE_GRUPO"),
-            Map.entry("FRM_CAP_PROY", "COD_CAP_PROY"),
-            Map.entry("FRM_CAP_PERIODO", "ID_PERIODO"),
-            Map.entry("FRM_OBJ_PRE", "COD_OBJ_PRE"),
-            Map.entry("FRM_SALTO", "COD_SAL"),
-            Map.entry("FRM_RTA_GRUPO", "COD_GRUPO"),
-            Map.entry("FRM_ENCABEZADO", "COD_ENC"),
-            Map.entry("FRM_PRE_AYUDA", "COD_PRE_AYU"),
-            Map.entry("FRM_ENC_AYUDA", "COD_ENC_AYU"));
+            Map.entry("FRM_PREGUNTA", List.of("COD_PRE")),
+            Map.entry("FRM_PRE_GRUPO", List.of("COD_PRE_GRUPO")),
+            Map.entry("FRM_CAP_PROY", List.of("COD_CAP_PROY")),
+            Map.entry("FRM_CAP_PERIODO", List.of("ID_PERIODO")),
+            Map.entry("FRM_OBJ_PRE", List.of("COD_OBJ_PRE")),
+            Map.entry("FRM_SALTO", List.of("COD_SAL")),
+            Map.entry("FRM_RTA_GRUPO", List.of("COD_GRUPO", "GRUPO")),
+            Map.entry("FRM_ENCABEZADO", List.of("COD_ENC")),
+            Map.entry("FRM_PRE_AYUDA", List.of("COD_PRE_AYU")),
+            Map.entry("FRM_ENC_AYUDA", List.of("COD_ENC_AYU")));
     expected.forEach(
         (table, columns) -> {
           assertThat(columnsOf(table))
@@ -112,8 +114,49 @@ class DevDataIT extends OracleIntegrationTest {
               .containsExactlyInAnyOrderElementsOf(columns);
           assertThat(primaryKeyOf(table))
               .as("clave primaria de " + table)
-              .containsExactly(primaryKeys.get(table));
+              .containsExactlyElementsOf(primaryKeys.get(table));
         });
+  }
+
+  /**
+   * Los límites que aplica la aplicación ({@link FrmTable#maxBytes}) son los de las columnas del
+   * esquema de desarrollo, que copia el diccionario real: VARCHAR2 en BYTE y NUMBER en el resto.
+   */
+  @Test
+  void frmTextLimitsMatchTheSchema() {
+    for (FrmTable table : FrmTable.values()) {
+      for (String column : table.columns()) {
+        Map<String, Object> definition =
+            jdbc.queryForMap(
+                "SELECT DATA_TYPE, DATA_LENGTH, CHAR_USED FROM ALL_TAB_COLUMNS"
+                    + " WHERE TABLE_NAME = :table AND COLUMN_NAME = :column"
+                    + " AND OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')",
+                Map.of("table", table.tableName(), "column", column));
+        String name = table.tableName() + "." + column;
+        if (table.maxBytes(column).isPresent()) {
+          assertThat(definition.get("DATA_TYPE")).as(name).isEqualTo("VARCHAR2");
+          assertThat(((Number) definition.get("DATA_LENGTH")).intValue())
+              .as(name)
+              .isEqualTo(table.maxBytes(column).getAsInt());
+          assertThat(definition.get("CHAR_USED")).as(name).isEqualTo("B");
+        } else {
+          assertThat(definition.get("DATA_TYPE")).as(name).isEqualTo("NUMBER");
+        }
+      }
+    }
+  }
+
+  /** En la base real FRM_ENCABEZADO.ANIO es NUMBER(4), a diferencia de FRM_CAP_PROY.ANIO. */
+  @Test
+  void headerYearIsANumber() {
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT DATA_TYPE || '(' || DATA_PRECISION || ')' FROM ALL_TAB_COLUMNS"
+                    + " WHERE TABLE_NAME = 'FRM_ENCABEZADO' AND COLUMN_NAME = 'ANIO'"
+                    + " AND OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')",
+                Map.of(),
+                String.class))
+        .isEqualTo("NUMBER(4)");
   }
 
   // FRM_RESPUESTA real solo trae el texto; el valor de cada opción está en FRM_RTA_GRUPO.VALOR.

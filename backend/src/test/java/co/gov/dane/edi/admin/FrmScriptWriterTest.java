@@ -97,10 +97,36 @@ class FrmScriptWriterTest {
   }
 
   @Test
+  void rejectsTextLongerThanItsRealColumnInLatin9() {
+    // TEXTO de FRM_PRE_AYUDA es VARCHAR2(100 BYTE): 100 ñ caben (un byte cada una en Latin-9).
+    writer.write(
+        snapshotWith(FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 1, 101, 501, "ñ".repeat(100))),
+        PackageKind.ANIO,
+        SOURCE_CHARSET);
+    // 95 caracteres, pero la raya cuenta como su entidad "&#8211;": 101.
+    FrmSnapshot help =
+        snapshotWith(
+            FrmTable.PRE_AYUDA, row(FrmTable.PRE_AYUDA, 1, 101, 501, "a".repeat(94) + "–"));
+    assertThatThrownBy(() -> writer.write(help, PackageKind.ANIO, SOURCE_CHARSET))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("FRM_PRE_AYUDA.TEXTO supera 100");
+    FrmSnapshot header =
+        snapshotWith(
+            FrmTable.ENCABEZADO, row(FrmTable.ENCABEZADO, 5, 101, "E", "x".repeat(501), 2027));
+    assertThatThrownBy(() -> writer.write(header, PackageKind.CORRECCION, SOURCE_CHARSET))
+        .hasMessageContaining("FRM_ENCABEZADO.ENCABEZADO supera 500");
+    FrmSnapshot numeral =
+        snapshotWith(
+            FrmTable.CAP_PROY, row(FrmTable.CAP_PROY, 7, "C1", "C30A*.", 201, "EDIN", "2027"));
+    assertThatThrownBy(() -> writer.write(numeral, PackageKind.ANIO, SOURCE_CHARSET))
+        .hasMessageContaining("FRM_CAP_PROY.NUMERAL supera 5");
+  }
+
+  @Test
   void yearPackageRaisesOnDifferentRowCorrectionUpdates() {
     FrmSnapshot snapshot =
         snapshotWith(
-            FrmTable.ENCABEZADO, row(FrmTable.ENCABEZADO, 5, 101, "E", "Texto corregido", "2027"));
+            FrmTable.ENCABEZADO, row(FrmTable.ENCABEZADO, 5, 101, "E", "Texto corregido", 2027));
 
     String year = writer.write(snapshot, PackageKind.ANIO, SOURCE_CHARSET);
     String correction = writer.write(snapshot, PackageKind.CORRECCION, SOURCE_CHARSET);

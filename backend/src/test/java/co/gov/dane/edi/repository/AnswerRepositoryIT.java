@@ -47,6 +47,16 @@ class AnswerRepositoryIT extends OracleIntegrationTest {
   }
 
   @Test
+  void numericReferencesStoredForCharactersOutsideLatin9AreReadBackDecoded() {
+    // Así quedan en la base real (WE8ISO8859P15) la raya y lo demás que Latin-9 no tiene.
+    // B06 es VARCHAR2(10): "&#8211;1" ocupa 8. Solo se decodifican las numéricas; una entidad
+    // con nombre ("&lt") quedaría tal cual (ver Latin9TextTest).
+    answers.insertPage(Chapter.B, CODE, Map.of("B02", "1", "B06", "&#8211;1"));
+
+    assertThat(answers.findAnswers(Chapter.B, CODE, List.of("B06"))).containsEntry("B06", "–1");
+  }
+
+  @Test
   void tablesWithoutYearColumnStillGetARow() {
     answers.insertPage(Chapter.C, CODE, Map.of("C01A", "2", "C01B", "0"));
     assertThat(answers.findAnswers(Chapter.C, CODE, List.of("C01A", "C01B", "C13")))

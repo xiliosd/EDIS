@@ -12,6 +12,7 @@ import co.gov.dane.edi.support.HostileTexts;
 import co.gov.dane.edi.support.OracleIntegrationTest;
 import co.gov.dane.edi.support.SqlPlusRunner;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -201,18 +202,26 @@ class FrmScriptExecutionIT extends OracleIntegrationTest {
    */
   @Test
   void hostileTextsRoundTripThroughOracle() throws Exception {
-    List<long[]> slots = new ArrayList<>();
+    List<long[]> helpSlots = new ArrayList<>();
     original
         .rows()
         .get(FrmTable.PRE_AYUDA)
-        .forEach(row -> slots.add(slot(FrmTable.PRE_AYUDA, row)));
+        .forEach(row -> helpSlots.add(slot(FrmTable.PRE_AYUDA, row)));
+    List<long[]> questionSlots = new ArrayList<>();
     original.rows().get(FrmTable.PREGUNTA).stream()
         .filter(row -> ((BigDecimal) row.get("COD_PRE")).longValue() >= DraftYearFixture.OFFSET)
-        .forEach(row -> slots.add(slot(FrmTable.PREGUNTA, row)));
+        .forEach(row -> questionSlots.add(slot(FrmTable.PREGUNTA, row)));
     // Oracle Free (AL32UTF8) guarda el NUL tal cual: entra en la prueba como un texto más.
-    assertThat(oracleKeepsNul(slots.get(slots.size() - 1))).isTrue();
+    assertThat(oracleKeepsNul(questionSlots.get(questionSlots.size() - 1))).isTrue();
     List<String> texts = new ArrayList<>(HostileTexts.all());
-    assertThat(slots).hasSizeGreaterThanOrEqualTo(texts.size());
+    // TEXTO de FRM_PRE_AYUDA es VARCHAR2(100 BYTE): los textos largos van a PREGUNTA (1000).
+    List<long[]> slots = new ArrayList<>();
+    for (String text : texts) {
+      boolean fitsHelp = text.getBytes(StandardCharsets.UTF_8).length <= 100;
+      List<long[]> source = fitsHelp && !helpSlots.isEmpty() ? helpSlots : questionSlots;
+      assertThat(source).as("faltan filas para los textos hostiles").isNotEmpty();
+      slots.add(source.remove(0));
+    }
     for (int index = 0; index < texts.size(); index++) {
       writeText(slots.get(index), texts.get(index));
     }

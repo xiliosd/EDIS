@@ -1,12 +1,11 @@
 -- DECISION (Fase 3a): los identificadores de las tablas FRM_* se generan con MAX+1 dentro de
--- la misma transaccion de escritura (ver Tarea 5). El respaldo real de DANE_DIRPEN (16-oct-2026)
--- no trae secuencias ni disparadores para FRM_*, pero tampoco sus CREATE TABLE: sigue sin
--- confirmar si en produccion existe otra forma de generar los ids.
--- Esquema solo para desarrollo y pruebas. Las COLUMNAS de las FRM_* (nombres y orden) estan
--- confirmadas con los INSERT del respaldo real y las claves con sus indices unicos; los TIPOS y
--- LONGITUDES de las FRM_* siguen DEDUCIDOS del PHP heredado (spec §4.2). GRAL_AYUDAS es el unico
--- DDL completo del respaldo y se copia tal cual. Requiere Oracle 23ai (IF NOT EXISTS) para poder
--- ejecutarse en cada arranque del contexto de pruebas.
+-- la misma transaccion de escritura (ver Tarea 5). El diccionario de la base real (2026-11-06)
+-- confirma que FRM_* no tiene secuencias ni disparadores.
+-- Esquema solo para desarrollo y pruebas. Las FRM_* llevan los tipos, longitudes y claves reales
+-- (consultas al diccionario del 2026-11-06); GRAL_AYUDAS es el DDL completo del respaldo. Requiere
+-- Oracle 23ai (IF NOT EXISTS) para poder ejecutarse en cada arranque del contexto de pruebas.
+-- IF NOT EXISTS no altera una tabla ya creada: un volumen de desarrollo con las FRM_* anteriores
+-- debe recrearse para tomar las longitudes nuevas.
 CREATE TABLE IF NOT EXISTS EDIN_MUESTRA (
   ANIO VARCHAR2(8), COD_ENT VARCHAR2(10), COD_DEPTO VARCHAR2(2), C_C VARCHAR2(11),
   NOM_APE VARCHAR2(200), ATV NUMBER(1), TC1 NUMBER(1), LGN VARCHAR2(8), PSW VARCHAR2(8)
@@ -20,49 +19,58 @@ CREATE TABLE IF NOT EXISTS EDIN_20_CAP_B_UBICA (
   B01 NUMBER(3), B02 VARCHAR2(1), B03 VARCHAR2(1), B04 VARCHAR2(2), B05 VARCHAR2(2),
   B06 VARCHAR2(10), COMPLETA VARCHAR2(1), ANIO VARCHAR2(8), B07 VARCHAR2(2), B08 VARCHAR2(2)
 );
+-- FRM_*: tipos, longitudes y claves del diccionario de la base real (DANE_DIRPEN, 2026-11-06).
+-- Alli NLS_CHARACTERSET = WE8ISO8859P15 y NLS_LENGTH_SEMANTICS = BYTE: cada VARCHAR2 se mide en
+-- bytes de Latin-9. Esta base de pruebas es AL32UTF8 (la ñ ocupa 2 bytes): las pruebas de
+-- longitud no deben depender de eso; la aplicacion mide como Latin-9 (util/Latin9Text).
 CREATE TABLE IF NOT EXISTS FRM_PREGUNTA (
-  COD_PRE NUMBER(10) PRIMARY KEY, PREGUNTA VARCHAR2(4000), TIPO VARCHAR2(1)
+  COD_PRE NUMBER(10) PRIMARY KEY, PREGUNTA VARCHAR2(1000 BYTE), TIPO VARCHAR2(1 BYTE)
 );
 CREATE TABLE IF NOT EXISTS FRM_PRE_GRUPO (
-  COD_PRE_GRUPO NUMBER(10) PRIMARY KEY, GRUPO NUMBER(5), ORDEN NUMBER(5), COD_PRE NUMBER(10)
+  COD_PRE_GRUPO NUMBER(10) PRIMARY KEY, GRUPO NUMBER(3), ORDEN NUMBER(3), COD_PRE NUMBER
 );
 CREATE TABLE IF NOT EXISTS FRM_CAP_PROY (
-  COD_CAP_PROY NUMBER(10) PRIMARY KEY, CAPITULO VARCHAR2(5), NUMERAL VARCHAR2(20),
-  COD_PRE_GRUPO NUMBER(10), PROY VARCHAR2(20), ANIO VARCHAR2(4)
+  COD_CAP_PROY NUMBER(10) PRIMARY KEY, CAPITULO VARCHAR2(2 BYTE), NUMERAL VARCHAR2(5 BYTE),
+  COD_PRE_GRUPO NUMBER(10), PROY VARCHAR2(10 BYTE), ANIO VARCHAR2(4 BYTE)
 );
 CREATE TABLE IF NOT EXISTS FRM_CAP_PERIODO (
-  ID_PERIODO NUMBER(10) PRIMARY KEY, ANIO NUMBER(4), PROY VARCHAR2(20),
-  COD_CAP_PROY NUMBER(10), NUMERAL VARCHAR2(20)
+  ID_PERIODO NUMBER(10) PRIMARY KEY, ANIO NUMBER(4), PROY VARCHAR2(10 BYTE),
+  COD_CAP_PROY NUMBER(10), NUMERAL VARCHAR2(10 BYTE)
 );
 CREATE TABLE IF NOT EXISTS FRM_SALTO (
-  COD_SAL NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), SALTO NUMBER(3), VALOR_SALTO NUMBER(3)
+  COD_SAL NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), SALTO NUMBER(3), VALOR_SALTO NUMBER(1)
 );
-CREATE TABLE IF NOT EXISTS FRM_OBJETO (COD_OBJ NUMBER(3), DESCRIPCION VARCHAR2(50));
+CREATE TABLE IF NOT EXISTS FRM_OBJETO (
+  COD_OBJ NUMBER(10) PRIMARY KEY, DESCRIPCION VARCHAR2(100 BYTE)
+);
 CREATE TABLE IF NOT EXISTS FRM_OBJ_PRE (
-  COD_OBJ_PRE NUMBER(10) PRIMARY KEY, COD_GRUPO NUMBER(10), GRUPO NUMBER(5), COD_OBJ NUMBER(3),
+  COD_OBJ_PRE NUMBER(10) PRIMARY KEY, COD_GRUPO NUMBER(10), GRUPO NUMBER(3), COD_OBJ NUMBER(10),
   COD_CAP_PROY NUMBER(10)
 );
--- Columnas confirmadas con el respaldo real: FRM_RESPUESTA no tiene VALOR (va en FRM_RTA_GRUPO).
-CREATE TABLE IF NOT EXISTS FRM_RESPUESTA (COD_RTA NUMBER(10), RESPUESTA VARCHAR2(500));
-CREATE TABLE IF NOT EXISTS FRM_RTA_GRUPO (
-  COD_GRUPO NUMBER(10) PRIMARY KEY, GRUPO NUMBER(5), ORDEN VARCHAR2(5), VALOR VARCHAR2(10),
-  COD_RTA NUMBER(10)
+-- FRM_RESPUESTA no tiene VALOR (va en FRM_RTA_GRUPO).
+CREATE TABLE IF NOT EXISTS FRM_RESPUESTA (
+  COD_RTA NUMBER(10) PRIMARY KEY, RESPUESTA VARCHAR2(500 BYTE)
 );
+-- Clave compuesta (COD_GRUPO, GRUPO), como en la base real.
+CREATE TABLE IF NOT EXISTS FRM_RTA_GRUPO (
+  COD_GRUPO NUMBER(10) NOT NULL, GRUPO NUMBER(3) NOT NULL, ORDEN VARCHAR2(2 BYTE),
+  VALOR VARCHAR2(5 BYTE), COD_RTA NUMBER(10),
+  CONSTRAINT FRM_RTA_GRUPO_PK PRIMARY KEY (COD_GRUPO, GRUPO)
+);
+-- ANIO es NUMBER(4) aqui, a diferencia de FRM_CAP_PROY.ANIO (VARCHAR2(4)).
 CREATE TABLE IF NOT EXISTS FRM_ENCABEZADO (
-  COD_ENC NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), TIPO VARCHAR2(1),
-  ENCABEZADO VARCHAR2(4000), ANIO VARCHAR2(4)
+  COD_ENC NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), TIPO VARCHAR2(1 BYTE),
+  ENCABEZADO VARCHAR2(500 BYTE), ANIO NUMBER(4)
 );
 -- Ayudas: TEXTO es la palabra o frase de la pregunta (o del encabezado) que se vuelve enlace y
--- COD_AYU apunta a GRAL_AYUDAS.COD, donde esta la definicion. En el respaldo FRM_PRE_AYUDA no
--- tiene indice unico visible; aqui COD_PRE_AYU lleva clave primaria porque es su clave natural y
--- la aplicacion la direcciona.
+-- COD_AYU apunta a GRAL_AYUDAS.COD, donde esta la definicion.
 CREATE TABLE IF NOT EXISTS FRM_PRE_AYUDA (
   COD_PRE_AYU NUMBER(10) PRIMARY KEY, COD_CAP_PROY NUMBER(10), COD_AYU NUMBER(10),
-  TEXTO VARCHAR2(4000)
+  TEXTO VARCHAR2(100 BYTE)
 );
 CREATE TABLE IF NOT EXISTS FRM_ENC_AYUDA (
   COD_ENC_AYU NUMBER(10) PRIMARY KEY, COD_ENC NUMBER(10), COD_AYU NUMBER(10),
-  TEXTO VARCHAR2(4000)
+  TEXTO VARCHAR2(100 BYTE)
 );
 -- DDL real del respaldo. COD es unico en toda la tabla aunque haya PROY y ANIO.
 CREATE TABLE IF NOT EXISTS GRAL_AYUDAS (

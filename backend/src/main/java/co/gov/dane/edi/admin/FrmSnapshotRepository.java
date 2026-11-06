@@ -36,7 +36,6 @@ public class FrmSnapshotRepository {
   }
 
   public FrmSnapshot snapshot(String project, int year) {
-    String yearText = String.valueOf(year);
     Map<FrmTable, List<Map<String, Object>>> rows = new EnumMap<>(FrmTable.class);
     rows.put(
         FrmTable.PREGUNTA,
@@ -60,7 +59,7 @@ public class FrmSnapshotRepository {
         read(
             FrmTable.ENCABEZADO,
             "ANIO = ? AND COD_CAP_PROY IN (" + CAP_PROYS + ")",
-            yearText,
+            year,
             project,
             year));
     rows.put(
@@ -71,7 +70,7 @@ public class FrmSnapshotRepository {
         read(FrmTable.OBJ_PRE, "COD_CAP_PROY IN (" + CAP_PROYS + ")", project, year));
     rows.put(
         FrmTable.ENC_AYUDA,
-        read(FrmTable.ENC_AYUDA, "COD_ENC IN (" + HEADERS + ")", yearText, project, year));
+        read(FrmTable.ENC_AYUDA, "COD_ENC IN (" + HEADERS + ")", year, project, year));
     return new FrmSnapshot(project, year, rows);
   }
 

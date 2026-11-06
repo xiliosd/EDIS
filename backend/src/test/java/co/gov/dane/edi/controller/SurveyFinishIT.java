@@ -87,9 +87,19 @@ class SurveyFinishIT extends OracleIntegrationTest {
   }
 
   @Test
+  void observationsOutsideLatin9AreStoredAsNumericEntities() throws Exception {
+    saveAllPagesDirectly();
+    finish("{\"observations\":\"“Gracias” – año 😀\"}").andExpect(status().isOk());
+    assertThat(storedObservations()).isEqualTo("&#8220;Gracias&#8221; &#8211; año &#128512;");
+  }
+
+  @Test
   void observationsThatDoNotFitInBytesAreRejectedWith422() throws Exception {
     saveAllPagesDirectly();
-    finish("{\"observations\":\"" + "ñ".repeat(700) + "\"}")
+    // 200 caracteres, pero cada comilla tipográfica se guarda como "&#8220;": 1400 bytes en
+    // Latin-9.
+    // No se usa la ñ: en la base real (Latin-9) ocupa un byte y esta base de pruebas es AL32UTF8.
+    finish("{\"observations\":\"" + "“".repeat(200) + "\"}")
         .andExpect(status().isUnprocessableEntity())
         .andExpect(
             jsonPath("$.errors.observations")

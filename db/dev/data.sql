@@ -59,9 +59,9 @@ INSERT INTO FRM_RESPUESTA (COD_RTA, RESPUESTA) VALUES
 INSERT INTO FRM_RTA_GRUPO (COD_GRUPO, GRUPO, COD_RTA, ORDEN, VALOR) VALUES
   (1, 10, 3, '10', '3'), (2, 10, 1, '1', '1'), (3, 10, 2, '2', '2');
 INSERT INTO FRM_ENCABEZADO (COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO, ANIO) VALUES
-  (1, 101, 'E', 'Ubicaci&oacute;n laboral', '2026'),
-  (2, 101, 'S', '<b>Datos del empleo</b>', '2026'),
-  (3, 101, 'E', 'Encabezado 2025', '2025');
+  (1, 101, 'E', 'Ubicaci&oacute;n laboral', 2026),
+  (2, 101, 'S', '<b>Datos del empleo</b>', 2026),
+  (3, 101, 'E', 'Encabezado 2025', 2025);
 
 -- Cuestionario FICTICIO de las páginas C1–H1: un combo Sí/No por página (dos en C1, con salto genérico).
 INSERT INTO FRM_PREGUNTA (COD_PRE, PREGUNTA, TIPO) VALUES

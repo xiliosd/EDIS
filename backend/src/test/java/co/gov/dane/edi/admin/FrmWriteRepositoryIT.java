@@ -91,7 +91,7 @@ class FrmWriteRepositoryIT extends OracleIntegrationTest {
   private void insertCap(long cap, long group, String project, String year) {
     jdbc.update(
         "INSERT INTO FRM_CAP_PROY (COD_CAP_PROY, CAPITULO, NUMERAL, COD_PRE_GRUPO, PROY, ANIO)"
-            + " VALUES (?, 'ZZ1', 'Z.', ?, ?, ?)",
+            + " VALUES (?, 'ZZ', 'Z.', ?, ?, ?)",
         cap,
         group,
         project,

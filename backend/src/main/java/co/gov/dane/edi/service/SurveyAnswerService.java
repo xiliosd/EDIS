@@ -19,7 +19,7 @@ import co.gov.dane.edi.rules.RuleEvaluator;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
-import java.nio.charset.StandardCharsets;
+import co.gov.dane.edi.util.Latin9Text;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -106,13 +106,14 @@ public class SurveyAnswerService {
             : CONTROL_CHARACTERS.matcher(observations.replace("\r\n", "\n")).replaceAll("").strip();
     // OBS se escribe una sola vez (D18): repetir la llamada no la modifica.
     if (!text.isEmpty() && answers.findObservations(respondentCode) == null) {
-      // @Size cuenta unidades UTF-16, pero OBS puede medirse en bytes: se evita el ORA-12899.
+      // @Size cuenta lo escrito, pero OBS se mide en bytes de Latin-9 tras convertir a entidades
+      // lo que la base no admite: se evita el ORA-12899.
       AnswerColumn observationsColumn =
           answerColumns.findColumnDetails(tables.activeTableFor(Chapter.H)).get("OBS");
       if (observationsColumn != null && checkColumn(text, observationsColumn).isPresent()) {
         throw new AnswerValidationException(Map.of("observations", OBSERVATIONS_TOO_LONG_MESSAGE));
       }
-      if (answers.saveObservations(respondentCode, text) == 0) {
+      if (answers.saveObservations(respondentCode, Latin9Text.encode(text)) == 0) {
         // OBS estaba en NULL y nada se actualizó: falta la fila de H. Sin texto ni C_C en el log.
         LOGGER.warn("Las observaciones no se guardaron: ninguna fila de H se actualizó");
       }
@@ -173,7 +174,8 @@ public class SurveyAnswerService {
     for (String column : items) {
       String value = combined.get(column);
       boolean empty = evaluation.disabled().contains(column) || value == null || value.isBlank();
-      values.put(column, empty ? EMPTY_VALUE : value.strip());
+      // La base es WE8ISO8859P15: lo que Latin-9 no tiene se guarda como &#N; (no como "?").
+      values.put(column, empty ? EMPTY_VALUE : Latin9Text.encode(value.strip()));
     }
     write(respondentCode, page, values, items);
     return new PageSaveResult(page.code(), page.next().map(SurveyPage::code).orElse(null));
@@ -224,15 +226,17 @@ public class SurveyAnswerService {
     return column == null ? Optional.empty() : checkColumn(value, column);
   }
 
-  /** Rechaza lo que Oracle no aceptaría o redondearía (ORA-12899, ORA-01438). */
+  /**
+   * Rechaza lo que Oracle no aceptaría o redondearía (ORA-12899, ORA-01438). Un texto se mide como
+   * quedará guardado en la base real (WE8ISO8859P15): ya convertido con {@link Latin9Text}, un byte
+   * por carácter, sea la columna en BYTE o en CHAR.
+   */
   public static Optional<String> checkColumn(String value, AnswerColumn column) {
     if (!"NUMBER".equals(column.dataType())) {
-      // Sin CHAR_USED = 'C' la longitud es en bytes: "ññ" ocupa 4 en AL32UTF8.
-      boolean tooLong =
-          column.charSemantics()
-              ? value.codePointCount(0, value.length()) > column.charLength()
-              : value.getBytes(StandardCharsets.UTF_8).length > column.dataLength();
-      return tooLong ? Optional.of(RuleErrorCodes.TOO_LONG) : Optional.empty();
+      int allowed = column.charSemantics() ? column.charLength() : column.dataLength();
+      return Latin9Text.fits(value, allowed)
+          ? Optional.empty()
+          : Optional.of(RuleErrorCodes.TOO_LONG);
     }
     if (!NUMBER.matcher(value).matches()) {
       return Optional.of(RuleErrorCodes.INVALID_TYPE);

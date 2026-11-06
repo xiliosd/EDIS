@@ -86,8 +86,10 @@ class SurveyAnswerIT extends OracleIntegrationTest {
     save("D1", "{\"answers\":{\"D01A\":\"1\",\"D05\":\"123\"}}")
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.errors.D05").value("La respuesta es demasiado larga."));
-    // D05 es VARCHAR2(2) en bytes: "ññ" son 2 caracteres pero 4 bytes (ORA-12899, no 503).
-    save("D1", "{\"answers\":{\"D01A\":\"1\",\"D05\":\"ññ\"}}")
+    // D05 es VARCHAR2(2) en bytes: "“1" son 2 caracteres pero la comilla tipográfica se guarda
+    // como "&#8220;" (ORA-12899, no 503). Se evita la ñ: en Latin-9 cabe, pero esta base de pruebas
+    // es AL32UTF8.
+    save("D1", "{\"answers\":{\"D01A\":\"1\",\"D05\":\"“1\"}}")
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.errors.D05").value("La respuesta es demasiado larga."));
   }

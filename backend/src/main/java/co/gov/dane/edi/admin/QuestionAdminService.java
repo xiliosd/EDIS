@@ -26,7 +26,7 @@ import co.gov.dane.edi.service.error.InvalidEditException;
 import co.gov.dane.edi.service.error.ReferencedByRulesException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.util.ColumnCodeResolver;
-import java.nio.charset.StandardCharsets;
+import co.gov.dane.edi.util.Latin9Text;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,8 +62,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class QuestionAdminService {
 
   private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cc}&&[^\\n\\t]]");
-  private static final int MAX_STORED_BYTES = 4000;
-  private static final Pattern NUMERAL = Pattern.compile("[0-9A-Za-z_.* ]{1,20}");
+  private static final int MAX_NUMERAL_LENGTH = FrmTable.CAP_PROY.maxBytes("NUMERAL").orElseThrow();
+  private static final Pattern NUMERAL = Pattern.compile("[0-9A-Za-z_.* ]+");
 
   private final YearCatalogService years;
   private final RulesFileRepository rulesFiles;
@@ -113,7 +113,7 @@ public class QuestionAdminService {
       int version,
       String user,
       String reason) {
-    String plain = normalize(text);
+    String plain = normalize(text, EditableText.QUESTION);
     years.requireEditable(survey, year, EditKind.CORRECTION, reason);
     CapProyRef ref = requireCapProy(capProyId, survey, year);
     String yearText = String.valueOf(year);
@@ -140,7 +140,7 @@ public class QuestionAdminService {
 
   public AdminEditResult editHeader(
       String survey, int year, long codEnc, String text, int version, String user, String reason) {
-    String plain = normalize(text);
+    String plain = normalize(text, EditableText.HEADER);
     years.requireEditable(survey, year, EditKind.CORRECTION, reason);
     String yearText = String.valueOf(year);
     long capProyId =
@@ -176,7 +176,7 @@ public class QuestionAdminService {
       int version,
       String user,
       String reason) {
-    String plain = normalize(text);
+    String plain = normalize(text, EditableText.HELP_WORD);
     years.requireEditable(survey, year, EditKind.CORRECTION, reason);
     long capProyId =
         lookup
@@ -268,7 +268,7 @@ public class QuestionAdminService {
       String survey, int year, String pageCode, NewQuestionRequest request, String user) {
     SurveyPage page = requirePage(pageCode);
     years.requireEditable(survey, year, EditKind.STRUCTURAL, null);
-    String plain = normalize(request.text());
+    String plain = normalize(request.text(), EditableText.QUESTION);
     String numeral = validateNewQuestion(request);
     String code = request.columnCode().strip();
     NewColumn definition = definitionOf(request);
@@ -433,6 +433,12 @@ public class QuestionAdminService {
           "columnCode", "El código de columna debe empezar con una letra mayúscula (2 a 30).");
     }
     String numeral = request.numeral().strip();
+    // FRM_CAP_PROY.NUMERAL es VARCHAR2(5) en la base real; FRM_CAP_PERIODO.NUMERAL (10) recibe el
+    // mismo valor.
+    if (numeral.length() > MAX_NUMERAL_LENGTH) {
+      throw new InvalidEditException(
+          "numeral", "El numeral admite hasta " + MAX_NUMERAL_LENGTH + " caracteres.");
+    }
     if (!NUMERAL.matcher(numeral).matches()
         || !ColumnCodeResolver.fromNumeral(numeral).filter(code::equals).isPresent()) {
       throw new InvalidEditException(
@@ -654,20 +660,22 @@ public class QuestionAdminService {
   }
 
   /**
-   * Texto plano a su forma guardada: sin caracteres de control, recortado y con solo {@code &},
-   * {@code <} y {@code >} escapados. La lectura (quitar etiquetas y luego decodificar entidades) lo
-   * devuelve tal cual lo escribió la persona.
+   * Texto plano a su forma guardada: sin caracteres de control, recortado, con solo {@code &},
+   * {@code <} y {@code >} escapados y lo que Latin-9 no tiene como entidad numérica ({@link
+   * Latin9Text}). La lectura (quitar etiquetas y luego decodificar entidades) lo devuelve tal cual
+   * lo escribió la persona. El límite es el de la columna real, medido sobre la forma guardada.
    */
-  static String normalize(String text) {
+  static String normalize(String text, EditableText field) {
     String stripped = CONTROL_CHARACTERS.matcher(text == null ? "" : text).replaceAll("").strip();
     if (stripped.isEmpty()) {
       throw new InvalidEditException("text", "El texto no puede quedar vacío.");
     }
     String escaped = stripped.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-    if (escaped.getBytes(StandardCharsets.UTF_8).length > MAX_STORED_BYTES) {
-      throw new InvalidEditException("text", "El texto es demasiado largo.");
+    String stored = Latin9Text.encode(escaped);
+    if (Latin9Text.storedLength(stored) > field.maxBytes()) {
+      throw new InvalidEditException("text", field.tooLongMessage());
     }
-    return escaped;
+    return stored;
   }
 
   /** Reglas cuyo destino queda ahora antes de la pregunta que las dispara, dentro de la página. */

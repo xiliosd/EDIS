@@ -3,6 +3,7 @@ package co.gov.dane.edi.repository;
 import co.gov.dane.edi.admin.AnswerTableResolver;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.Chapter;
+import co.gov.dane.edi.util.Latin9Text;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -65,7 +66,8 @@ public class AnswerRepository {
             (row, i) -> {
               Map<String, String> values = new HashMap<>();
               for (String column : safe) {
-                String value = row.getString(column);
+                // Lo que Latin-9 no tiene se guardó como &#N;: se devuelve el texto escrito.
+                String value = Latin9Text.decodeNumericReferences(row.getString(column));
                 if (value != null) {
                   values.put(column, value);
                 }

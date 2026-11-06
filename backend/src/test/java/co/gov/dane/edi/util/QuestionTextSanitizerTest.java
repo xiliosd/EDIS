@@ -30,6 +30,14 @@ class QuestionTextSanitizerTest {
   }
 
   @Test
+  void decodesNumericEntitiesStoredForCharactersOutsideLatin9() {
+    assertThat(QuestionTextSanitizer.toPlainText("&#8220;Gesti&oacute;n&#8221; &#8211; &#128512;"))
+        .isEqualTo("“Gestión” – 😀");
+    assertThat(QuestionTextSanitizer.toPlainText("&amp;#8220; literal"))
+        .isEqualTo("&#8220; literal");
+  }
+
+  @Test
   void returnsEmptyTextForNull() {
     assertThat(QuestionTextSanitizer.toPlainText(null)).isEmpty();
   }

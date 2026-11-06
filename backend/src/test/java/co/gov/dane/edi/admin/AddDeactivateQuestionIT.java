@@ -211,6 +211,12 @@ class AddDeactivateQuestionIT extends OracleIntegrationTest {
     rejected("C1", newQuestion("c30a", "C30A.", "x", "TEXT", null, null), "columnCode");
     rejected("C1", newQuestion("C30A; DROP", "C30A.", "x", "TEXT", null, null), "columnCode");
     rejected("C1", newQuestion("C30A", "C31A.", "x", "TEXT", null, null), "numeral");
+    // FRM_CAP_PROY.NUMERAL es VARCHAR2(5) en la base real: "C30A*." (6) no cabe.
+    add("C1", newQuestion("C30A", "C30A*.", "x", "TEXT", null, null))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errors.numeral").value("El numeral admite hasta 5 caracteres."));
+    // Un texto de pregunta que, con entidades, supera 1000 bytes de Latin-9.
+    rejected("C1", newQuestion("C30A", "C30A.", "“".repeat(143), "TEXT", null, null), "text");
     // Grupos de opciones.
     rejected("C1", newQuestion("C30A", "C30A.", "x", "SINGLE_CHOICE", 9999, null), "optionGroup");
     rejected("C1", newQuestion("C30A", "C30A.", "x", "SINGLE_CHOICE", null, null), "optionGroup");
