@@ -58,6 +58,17 @@ public final class Latin9Text {
     return encoded == null ? text : encoded.toString();
   }
 
+  /**
+   * Forma guardada de un texto libre del encuestado (respuesta u observaciones). Antes de
+   * convertir, cada {@code &#} que escribió la persona pasa a {@code &#38;#}: así {@link
+   * #decodeNumericReferences} devuelve el literal (p. ej. "&#8220;" escrito a mano) y no la comilla
+   * que representaría. Solo se escapa esa secuencia: el resto del texto queda como lo leen hoy los
+   * analistas en las tablas EDIN_*.
+   */
+  public static String encodeAnswer(String text) {
+    return text == null ? null : encode(text.replace("&#", "&#38;#"));
+  }
+
   /** Bytes que el texto ocupará en una columna Latin-9 una vez convertido con {@link #encode}. */
   public static int storedLength(String text) {
     // Todo lo que queda tras convertir es un carácter de Latin-9: un byte cada uno.

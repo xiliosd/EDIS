@@ -86,6 +86,12 @@ public class AnswerRepository {
     return rows != null && rows > 0;
   }
 
+  /**
+   * Primera fila del encuestado en la tabla del capítulo.
+   *
+   * <p>Contrato: cada valor llega ya en su forma guardada ({@link Latin9Text}) y cabe en su
+   * columna; este repositorio no convierte ni mide.
+   */
   public void insertPage(Chapter chapter, String respondentCode, Map<String, String> values) {
     List<String> safe = requireWritableColumns(chapter, values.keySet());
     List<String> names = new ArrayList<>(List.of("C_C", "ESTADO", "TC"));
@@ -112,7 +118,12 @@ public class AnswerRepository {
         parameters);
   }
 
-  /** Escritura única (D16): solo actualiza si la columna guarda de la página sigue en NULL. */
+  /**
+   * Escritura única (D16): solo actualiza si la columna guarda de la página sigue en NULL.
+   *
+   * <p>Contrato: cada valor llega ya en su forma guardada ({@link Latin9Text}) y cabe en su
+   * columna; este repositorio no convierte ni mide.
+   */
   public int updatePage(
       Chapter chapter, String respondentCode, Map<String, String> values, String guardColumn) {
     List<String> safe = requireWritableColumns(chapter, values.keySet());
@@ -163,6 +174,12 @@ public class AnswerRepository {
         .get(OBSERVATIONS_COLUMN);
   }
 
+  /**
+   * Escribe OBS solo si sigue en NULL (D18).
+   *
+   * <p>Contrato: {@code text} llega ya en su forma guardada ({@link Latin9Text#encodeAnswer}) y
+   * cabe en OBS; este repositorio no convierte ni mide.
+   */
   public int saveObservations(String respondentCode, String text) {
     return jdbc.update(
         "UPDATE "

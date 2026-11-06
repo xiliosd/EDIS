@@ -39,6 +39,9 @@ public enum FrmTable {
       List.of("COD_OBJ_PRE", "COD_GRUPO", "GRUPO", "COD_OBJ", "COD_CAP_PROY"),
       List.of(),
       Map.of()),
+  // En la base real la clave de FRM_RTA_GRUPO es compuesta (COD_GRUPO, GRUPO): COD_GRUPO solo no
+  // es único. idColumn() no sirve aquí para MAX+1 (FrmIdAllocator lo rechaza), ni entra en la
+  // fotografía (FrmSnapshot.TABLES) ni en frm.sql; la aplicación solo lee esta tabla.
   RTA_GRUPO(
       "FRM_RTA_GRUPO",
       List.of("COD_GRUPO", "GRUPO", "ORDEN", "VALOR", "COD_RTA"),

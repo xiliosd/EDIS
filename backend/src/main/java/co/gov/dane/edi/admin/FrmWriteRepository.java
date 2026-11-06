@@ -108,7 +108,8 @@ public class FrmWriteRepository {
    * Inserta una pregunta propia del año: FRM_PREGUNTA, FRM_PRE_GRUPO, el nuevo orden de las
    * siguientes del mismo bloque ({@code reorder}: FRM_CAP_PROY a su nuevo ORDEN, con copia al
    * escribir), FRM_CAP_PROY, FRM_CAP_PERIODO y FRM_OBJ_PRE, en el orden de bloqueo documentado.
-   * Devuelve el COD_CAP_PROY nuevo.
+   * Devuelve el COD_CAP_PROY nuevo. El texto y el numeral cumplen el mismo contrato que {@link
+   * #updateQuestionText}: forma guardada y dentro de su columna.
    */
   public long insertQuestion(NewQuestion question, Map<Long, Integer> reorder) {
     long questionId = ids.next(FrmTable.PREGUNTA);
@@ -191,7 +192,13 @@ public class FrmWriteRepository {
         "periodo de la pregunta " + capProyId);
   }
 
-  /** Texto de una pregunta ya privada: obtenga {@code codPre} de {@link #copyQuestionForYear}. */
+  /**
+   * Texto de una pregunta ya privada: obtenga {@code codPre} de {@link #copyQuestionForYear}.
+   *
+   * <p>Contrato: el texto llega ya en su forma guardada (escapado y convertido con {@link
+   * co.gov.dane.edi.util.Latin9Text}) y cabe en su columna ({@link FrmTable#maxBytes}); este
+   * repositorio no convierte ni mide.
+   */
   public void updateQuestionText(long codPre, String plainText) {
     requireOne(
         jdbc.update(
@@ -204,6 +211,10 @@ public class FrmWriteRepository {
   /**
    * Cambia el encabezado solo si pertenece únicamente a esta pareja (encuesta, año): su ANIO
    * coincide y su FRM_CAP_PROY no lo usa otra pareja.
+   *
+   * <p>Contrato: el texto llega ya en su forma guardada (escapado y convertido con {@link
+   * co.gov.dane.edi.util.Latin9Text}) y cabe en su columna ({@link FrmTable#maxBytes}); este
+   * repositorio no convierte ni mide.
    *
    * @throws NoSuchElementException si el encabezado no existe
    * @throws SharedRowException si lo usa otro año o encuesta
@@ -233,6 +244,10 @@ public class FrmWriteRepository {
    * Cambia la palabra enlazada (TEXTO) de la ayuda {@code codPreAyu} solo si su FRM_CAP_PROY
    * pertenece únicamente a esta pareja (encuesta, año). COD_AYU, la referencia a la definición en
    * GRAL_AYUDAS, no cambia.
+   *
+   * <p>Contrato: el texto llega ya en su forma guardada (escapado y convertido con {@link
+   * co.gov.dane.edi.util.Latin9Text}) y cabe en su columna ({@link FrmTable#maxBytes}); este
+   * repositorio no convierte ni mide.
    *
    * @throws NoSuchElementException si la ayuda no existe
    * @throws SharedRowException si la usa otro año o encuesta

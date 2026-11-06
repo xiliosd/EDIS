@@ -47,6 +47,15 @@ class SurveyAnswerServiceTest {
   }
 
   @Test
+  void measuresTheStrippedValueThatIsStored() {
+    // Se guarda recortado: los espacios finales no cuentan frente al límite.
+    assertThat(SurveyAnswerService.checkColumn("12   ", BYTES_2)).isEmpty();
+    assertThat(SurveyAnswerService.checkColumn("  ñ€\t ", BYTES_2)).isEmpty();
+    // Un "&#" escrito a mano se guarda como "&#38;#": cuenta así.
+    assertThat(SurveyAnswerService.checkColumn("&#", BYTES_2)).contains(RuleErrorCodes.TOO_LONG);
+  }
+
+  @Test
   void charSemanticsCountsTheConvertedText() {
     assertThat(SurveyAnswerService.checkColumn("ññ", CHARS_2)).isEmpty();
     assertThat(SurveyAnswerService.checkColumn("ñññ", CHARS_2)).contains(RuleErrorCodes.TOO_LONG);

@@ -91,6 +91,18 @@ class Latin9TextTest {
   }
 
   @Test
+  void answerKeepsALiteralNumericReferenceTypedByTheRespondent() {
+    String typed = "Escribí &#8220; a mano y “esta” de verdad & fin";
+
+    String stored = Latin9Text.encodeAnswer(typed);
+
+    assertThat(stored).isEqualTo("Escribí &#38;#8220; a mano y &#8220;esta&#8221; de verdad & fin");
+    assertThat(Latin9Text.decodeNumericReferences(stored)).isEqualTo(typed);
+    assertThat(Latin9Text.encodeAnswer("sin cambios & ñ")).isEqualTo("sin cambios & ñ");
+    assertThat(Latin9Text.encodeAnswer(null)).isNull();
+  }
+
+  @Test
   void handlesNull() {
     assertThat(Latin9Text.encode(null)).isNull();
     assertThat(Latin9Text.decodeNumericReferences(null)).isNull();

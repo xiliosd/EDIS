@@ -113,7 +113,7 @@ public class SurveyAnswerService {
       if (observationsColumn != null && checkColumn(text, observationsColumn).isPresent()) {
         throw new AnswerValidationException(Map.of("observations", OBSERVATIONS_TOO_LONG_MESSAGE));
       }
-      if (answers.saveObservations(respondentCode, Latin9Text.encode(text)) == 0) {
+      if (answers.saveObservations(respondentCode, Latin9Text.encodeAnswer(text)) == 0) {
         // OBS estaba en NULL y nada se actualizó: falta la fila de H. Sin texto ni C_C en el log.
         LOGGER.warn("Las observaciones no se guardaron: ninguna fila de H se actualizó");
       }
@@ -175,7 +175,7 @@ public class SurveyAnswerService {
       String value = combined.get(column);
       boolean empty = evaluation.disabled().contains(column) || value == null || value.isBlank();
       // La base es WE8ISO8859P15: lo que Latin-9 no tiene se guarda como &#N; (no como "?").
-      values.put(column, empty ? EMPTY_VALUE : Latin9Text.encode(value.strip()));
+      values.put(column, empty ? EMPTY_VALUE : Latin9Text.encodeAnswer(value.strip()));
     }
     write(respondentCode, page, values, items);
     return new PageSaveResult(page.code(), page.next().map(SurveyPage::code).orElse(null));
@@ -227,14 +227,15 @@ public class SurveyAnswerService {
   }
 
   /**
-   * Rechaza lo que Oracle no aceptaría o redondearía (ORA-12899, ORA-01438). Un texto se mide como
-   * quedará guardado en la base real (WE8ISO8859P15): ya convertido con {@link Latin9Text}, un byte
-   * por carácter, sea la columna en BYTE o en CHAR.
+   * Rechaza lo que Oracle no aceptaría o redondearía (ORA-12899, ORA-01438). Un texto se mide
+   * exactamente como se guarda en la base real (WE8ISO8859P15): recortado y convertido con {@link
+   * Latin9Text#encodeAnswer}, un byte por carácter, sea la columna en BYTE o en CHAR. Medir lo
+   * mismo que se guarda evita que unos espacios finales rechacen un valor que sí cabe.
    */
   public static Optional<String> checkColumn(String value, AnswerColumn column) {
     if (!"NUMBER".equals(column.dataType())) {
       int allowed = column.charSemantics() ? column.charLength() : column.dataLength();
-      return Latin9Text.fits(value, allowed)
+      return Latin9Text.encodeAnswer(value.strip()).length() <= allowed
           ? Optional.empty()
           : Optional.of(RuleErrorCodes.TOO_LONG);
     }

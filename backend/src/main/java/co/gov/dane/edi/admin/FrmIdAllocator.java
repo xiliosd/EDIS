@@ -20,6 +20,10 @@ public class FrmIdAllocator {
   }
 
   public long next(FrmTable table) {
+    if (table == FrmTable.RTA_GRUPO) {
+      // Clave compuesta (COD_GRUPO, GRUPO): MAX(COD_GRUPO) + 1 no identifica una fila.
+      throw new IllegalArgumentException("FRM_RTA_GRUPO no tiene id propio para MAX+1");
+    }
     if (!TransactionSynchronizationManager.isActualTransactionActive()) {
       throw new IllegalStateException("La asignación de ids requiere una transacción activa");
     }

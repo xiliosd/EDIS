@@ -92,13 +92,19 @@ class FrmIdAllocatorIT extends OracleIntegrationTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  /** Todas las tablas con id propio; FRM_RTA_GRUPO (clave compuesta) se rechaza. */
   @Test
-  void worksOnEveryTableOfTheEnum() {
+  void worksOnEveryTableWithItsOwnId() {
     new TransactionTemplate(transactionManager)
         .executeWithoutResult(
             status -> {
               for (FrmTable table : FrmTable.values()) {
-                assertThat(allocator.next(table)).isPositive();
+                if (table == FrmTable.RTA_GRUPO) {
+                  assertThatThrownBy(() -> allocator.next(table))
+                      .isInstanceOf(IllegalArgumentException.class);
+                } else {
+                  assertThat(allocator.next(table)).isPositive();
+                }
               }
             });
   }
