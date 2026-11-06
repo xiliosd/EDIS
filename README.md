@@ -304,9 +304,10 @@ cuerpo JSON de la petición, nunca en la URL. nginx registra `/api/` con `$uri` 
 Los proxies o balanceadores que estén delante **no deben registrar cuerpos de petición**.
 
 **Usuario de base de datos de producción.** Solo `SELECT` sobre `FRM_*`: nunca `INSERT`, `UPDATE`
-ni DDL. Los scripts del paquete (`columnas.sql`, `frm.sql`) los ejecuta un DBA con su propio
-usuario; confirme antes `NLS_CHARACTERSET` (se espera `AL32UTF8`). El procedimiento completo está en
-Usage/Examples, «Paso a producción, paso a paso».
+ni DDL. Los scripts del paquete (`columnas.sql`, `frm.sql`) los ejecuta la persona técnica
+responsable (no se cuenta con un DBA) con un usuario que tenga permisos de escritura sobre
+`DANE_DIRPEN`; confirme antes la base con `db/verificacion/verificar-base-produccion.sql`. El
+procedimiento completo está en Usage/Examples, «Paso a producción, paso a paso».
 
 **`CORS_ALLOWED_ORIGIN` y nginx.** Debe ser exactamente el origen público con el que el navegador abre
 la aplicación (esquema + host + puerto), incluso cuando entra por nginx. nginx reenvía
@@ -521,16 +522,25 @@ completan el ciclo del año.
 
 **Paso a producción, paso a paso.** La aplicación en producción **solo lee** `FRM_*`: su usuario de
 base de datos tiene `SELECT` y nada más sobre esas tablas, así que `columnas.sql` y `frm.sql` los
-corre una persona técnica (DBA) con su propio usuario.
+corre la persona técnica responsable con un usuario que tenga permisos de escritura sobre
+`DANE_DIRPEN`. No se cuenta con apoyo de un DBA: cada verificación de la base se hace con consultas
+de solo lectura que ese usuario puede correr.
 
 1. **En QA.** Publique el año (o guarde las correcciones) y, en **Paquetes**, descargue el paquete.
    Si la lista de publicación ya no pasa, la descarga responde 422 con la lista: arregle y repita.
-2. **Antes de correr nada, el DBA confirma el juego de caracteres de producción** (se espera
-   `AL32UTF8`):
-   `SELECT value FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET';`.
-   Si `frm.sql` trae texto no ASCII y la base de destino tiene otro, aborta con `ORA-20002` antes de
-   escribir nada; si no abortara, `TO_CHAR(UNISTR())` sustituiría en silencio con `?`.
-3. **El DBA ejecuta `columnas.sql`** (las columnas nuevas, si hay) y luego **`frm.sql`**, cada uno en
+2. **Antes de correr nada, verifique la base de destino** con
+   `db/verificacion/verificar-base-produccion.sql` (solo lectura: consulta el diccionario de Oracle,
+   no lee datos de encuestados). Confirma, entre otras cosas:
+   - el juego de caracteres (se espera `AL32UTF8`). Si `frm.sql` trae texto no ASCII y la base de
+     destino tiene otro, aborta con `ORA-20002` antes de escribir nada; si no abortara,
+     `TO_CHAR(UNISTR())` sustituiría en silencio con `?`;
+   - que `GRAL_AYUDAS` está en el mismo esquema que las `FRM_*`;
+   - tipos y longitudes de las columnas frente a `db/dev/schema.sql`;
+   - que no hay secuencias ni disparadores que asignen los ids (la aplicación usa MAX+1);
+   - qué permisos tiene el usuario con que se correrán los scripts.
+
+   Si algo no coincide, no ejecute los scripts: anote la diferencia y ajuste la aplicación primero.
+3. **La persona técnica ejecuta `columnas.sql`** (las columnas nuevas, si hay) y luego **`frm.sql`**, cada uno en
    una sesión nueva de SQL*Plus. `frm.sql` es ASCII puro, idempotente (inserta lo que falta, no
    toca lo que ya está igual) y se detiene con `ORA-20001` y reversión si un id lo ocupa otra fila:
    no renumera en silencio. `GRAL_AYUDAS` no viaja en el paquete: si al destino le falta la

@@ -456,8 +456,10 @@ siguen vigentes.
     petición de 5 MB más cabeceras del multipart; `spring.servlet.multipart.max-request-size` es
     6 MB); el resto de `/api/` conserva 1 MB. Por estar dentro de una `location` regex, `BACKEND_URL`
     debe ser `esquema://host:puerto` sin ruta.
-14. **Producción solo lee `FRM_*`.** Su usuario de base de datos tiene `SELECT`; un DBA ejecuta
-    `columnas.sql` y `frm.sql` con su propio usuario antes de importar (README, «Paso a producción»).
+14. **Producción solo lee `FRM_*`.** Su usuario de base de datos tiene `SELECT`; la persona técnica
+    responsable ejecuta `columnas.sql` y `frm.sql` con un usuario con permisos de escritura antes de
+    importar (README, «Paso a producción»). No se cuenta con un DBA (2026-11-06): las verificaciones
+    de la base se hacen con `db/verificacion/verificar-base-produccion.sql`, de solo lectura.
 15. **Las cachés se limpian al importar.** Importar (también un paquete ya importado) hace `evict` de
     preguntas, reglas y tablas sin reiniciar.
 16. **E2E.** `frontend/e2e/admin-publicar.spec.ts` desactiva `B99` (pregunta ficticia de

@@ -1,15 +1,16 @@
 # Secuencia — promover un año o una corrección de QA a producción
 
 La aplicación **nunca** escribe `FRM_*` ni ejecuta DDL en producción: su usuario solo tiene `SELECT`
-sobre `FRM_*`. La persona técnica (DBA) ejecuta `columnas.sql` y `frm.sql` con su propio usuario, y
-después se importa el paquete. La importación no autentica el ZIP con una firma: lo verifica contra
+sobre `FRM_*`. La persona técnica responsable (no hay DBA) verifica la base con
+`db/verificacion/verificar-base-produccion.sql`, ejecuta `columnas.sql` y `frm.sql` con un usuario con
+permisos de escritura, y después se importa el paquete. La importación no autentica el ZIP con una firma: lo verifica contra
 la base real de producción.
 
 ```mermaid
 sequenceDiagram
     actor A as Administrador (QA)
     participant QA as Aplicación en QA
-    actor D as Persona técnica (DBA)
+    actor D as Persona técnica
     participant DB as Oracle de producción
     actor P as Administrador (producción)
     participant PR as Aplicación en producción
