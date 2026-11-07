@@ -52,7 +52,7 @@ ni migran usuarios.
 | ROL PHP | Rol nuevo | Reportes | Novedades | Claves |
 |---|---|---|---|---|
 | 1 (ingeniero encargado) | `ADMIN_NACIONAL` (+ `ADMIN_CUESTIONARIO`) | Todos, todos los departamentos | No (solo el reporte) | Generar y descargar |
-| 2 (territorial) | `ADMIN_TERRITORIAL` | Todos, solo su `COD_DPTO` | Registrar, modificar, eliminar en su departamento | No |
+| 2 (territorial) | `ADMIN_TERRITORIAL` | Todos, solo sus departamentos | Registrar, modificar, eliminar en sus departamentos | No |
 | 3 y 4 (operativo central) | `ADMIN_OPERATIVO` | Todos, todos los departamentos | No (solo el reporte) | No |
 
 - Todo se valida en el servidor; un departamento ajeno o una acción no permitida responde 403.
