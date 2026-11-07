@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import co.gov.dane.edi.admin.AnswerTableResolver;
+import co.gov.dane.edi.admin.dto.AdminHeader;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.model.ChapterDetail;
@@ -20,7 +21,9 @@ import co.gov.dane.edi.model.InputType;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SectionHeader;
 import co.gov.dane.edi.model.SurveyPage;
+import co.gov.dane.edi.model.TermHelp;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
+import co.gov.dane.edi.repository.HelpRow;
 import co.gov.dane.edi.repository.QuestionnaireRepository;
 import co.gov.dane.edi.repository.QuestionnaireRow;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
@@ -69,10 +72,23 @@ class QuestionnaireServiceTest {
                 new QuestionnaireRow(2, 102, "Nivel", "L", "B02*.", 10, 2, "3", 1),
                 new QuestionnaireRow(
                     4, 104, "Nueva <b>sin</b> columna", "L", "B99*.", 10, null, null, 1)));
-    when(questionnaire.findHeaders(anyCollection()))
+    when(questionnaire.findAdminHeaders(anyCollection(), anyString()))
         .thenReturn(
             Map.of(
-                101L, List.of(new SectionHeader(HeaderKind.HEADING, "Ubicaci&oacute;n laboral"))));
+                101L, List.of(new AdminHeader(7, HeaderKind.HEADING, "Ubicaci&oacute;n laboral"))));
+    when(questionnaire.findQuestionHelp(anyCollection()))
+        .thenReturn(
+            Map.of(
+                102L,
+                List.of(
+                    new HelpRow(102, "Niv&eacute;l", true, "T&iacute;tulo", "<p>Uno<br>dos</p>"),
+                    new HelpRow(102, "sin definici&oacute;n", false, null, null),
+                    new HelpRow(102, " <b> </b> ", true, "Vac&iacute;a", "Sin palabra"),
+                    new HelpRow(102, "vac&iacute;a", true, " ", "<p></p>"),
+                    new HelpRow(102, "Nivel", true, null, "Solo definici&oacute;n"))));
+    when(questionnaire.findHeaderHelp(List.of(7L)))
+        .thenReturn(
+            Map.of(7L, List.of(new HelpRow(7, "laboral", true, "Lugar", "Definici&oacute;n"))));
     when(questionnaire.findOptions(anyCollection()))
         .thenReturn(Map.of(10, List.of(new AnswerOption("2", "T&eacute;cnico"))));
     service =
@@ -111,6 +127,30 @@ class QuestionnaireServiceTest {
     assertThat(item.answer().options()).extracting(AnswerOption::label).containsExactly("Técnico");
     assertThat(item.legacySkip().count()).isEqualTo(2);
     assertThat(item.legacySkip().triggerValue()).isEqualTo("3");
+  }
+
+  @Test
+  void mapsQuestionHelpAsPlainTextInOrderSkippingUnusableOnes() {
+    QuestionnaireEntry item = service.getChapter("B", false).entries().get(1);
+    assertThat(item.help())
+        .containsExactly(
+            new TermHelp("Nivél", "Título", "Uno\ndos"),
+            new TermHelp("Nivel", "", "Solo definición"));
+  }
+
+  @Test
+  void mapsHeaderHelpByHeaderKeyAndLeavesOtherEntriesWithoutHelp() {
+    List<QuestionnaireEntry> entries = service.getChapter("B", false).entries();
+    assertThat(entries.get(0).headers().get(0).help())
+        .containsExactly(new TermHelp("laboral", "Lugar", "Definición"));
+    assertThat(entries.get(0).help()).isEmpty();
+  }
+
+  @Test
+  void loadsHelpOncePerPage() {
+    service.pageEntries(SurveyPage.find("B1").orElseThrow());
+    verify(questionnaire, times(1)).findQuestionHelp(List.of(101L, 102L, 104L));
+    verify(questionnaire, times(1)).findHeaderHelp(List.of(7L));
   }
 
   @Test

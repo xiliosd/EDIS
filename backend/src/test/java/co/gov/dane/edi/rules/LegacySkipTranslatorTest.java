@@ -23,7 +23,8 @@ class LegacySkipTranslatorTest {
         "t",
         List.of(),
         new AnswerSpec(InputType.SINGLE_CHOICE, column, ColumnStatus.ACTIVE, List.of()),
-        skip);
+        skip,
+        List.of());
   }
 
   private static QuestionnaireEntry text(String column) {
@@ -36,12 +37,13 @@ class LegacySkipTranslatorTest {
         "t",
         List.of(),
         new AnswerSpec(InputType.TEXT, column, ColumnStatus.ACTIVE, List.of()),
-        null);
+        null,
+        List.of());
   }
 
   private static QuestionnaireEntry statement() {
     return new QuestionnaireEntry(
-        1, "C1", EntryKind.STATEMENT, "C1.", "C1.", "t", List.of(), null, null);
+        1, "C1", EntryKind.STATEMENT, "C1.", "C1.", "t", List.of(), null, null, List.of());
   }
 
   @Test

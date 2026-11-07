@@ -63,7 +63,8 @@ class Edin2026RulesTest {
                       column,
                       ColumnStatus.ACTIVE,
                       List.<AnswerOption>of()),
-                  skip));
+                  skip,
+                  List.of()));
       COLUMNS_BY_PAGE.computeIfAbsent(page, key -> new ArrayList<>()).add(column);
     }
     List<SkipRule> legacy = new ArrayList<>();

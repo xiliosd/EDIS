@@ -36,7 +36,8 @@ class SurveyProgressServiceTest {
         "Pregunta ficticia",
         List.of(),
         new AnswerSpec(InputType.SINGLE_CHOICE, column, ColumnStatus.ACTIVE, List.of()),
-        null);
+        null,
+        List.of());
   }
 
   @Test

@@ -2579,6 +2579,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SectionHeader"
+        help:
+          type: array
+          items:
+            $ref: "#/components/schemas/TermHelp"
         id:
           type: integer
           format: int64
@@ -2758,6 +2762,10 @@ components:
     SectionHeader:
       type: object
       properties:
+        help:
+          type: array
+          items:
+            $ref: "#/components/schemas/TermHelp"
         kind:
           type: string
           enum:
@@ -2869,6 +2877,15 @@ components:
         version:
           type: integer
           format: int32
+    TermHelp:
+      type: object
+      properties:
+        definition:
+          type: string
+        term:
+          type: string
+        title:
+          type: string
     TestCase:
       type: object
       properties:

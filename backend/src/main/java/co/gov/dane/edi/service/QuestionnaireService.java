@@ -2,6 +2,7 @@ package co.gov.dane.edi.service;
 
 import co.gov.dane.edi.admin.AnswerTableResolver;
 import co.gov.dane.edi.admin.AnswerTableResolver.ResolvedTable;
+import co.gov.dane.edi.admin.dto.AdminHeader;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.AnswerSpec;
@@ -15,7 +16,9 @@ import co.gov.dane.edi.model.LegacySkip;
 import co.gov.dane.edi.model.QuestionnaireEntry;
 import co.gov.dane.edi.model.SectionHeader;
 import co.gov.dane.edi.model.SurveyPage;
+import co.gov.dane.edi.model.TermHelp;
 import co.gov.dane.edi.repository.AnswerColumnRepository;
+import co.gov.dane.edi.repository.HelpRow;
 import co.gov.dane.edi.repository.QuestionnaireRepository;
 import co.gov.dane.edi.repository.QuestionnaireRow;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
@@ -165,10 +168,13 @@ public class QuestionnaireService {
             ? questionnaire.findRowsByPage(pageCode)
             : questionnaire.findRowsByPage(pageCode, surveyCode, String.valueOf(year));
     List<Long> entryIds = rows.stream().map(QuestionnaireRow::entryId).toList();
-    Map<Long, List<SectionHeader>> headers =
-        active
-            ? questionnaire.findHeaders(entryIds)
-            : questionnaire.findHeaders(entryIds, String.valueOf(year));
+    String yearText = active ? survey.yearText() : String.valueOf(year);
+    Map<Long, List<AdminHeader>> headers = questionnaire.findAdminHeaders(entryIds, yearText);
+    // Ayudas de toda la página en dos consultas (preguntas y encabezados), no una por pregunta.
+    Map<Long, List<HelpRow>> questionHelp = questionnaire.findQuestionHelp(entryIds);
+    Map<Long, List<HelpRow>> headerHelp =
+        questionnaire.findHeaderHelp(
+            headers.values().stream().flatMap(List::stream).map(AdminHeader::codEnc).toList());
     Map<Integer, List<AnswerOption>> options =
         questionnaire.findOptions(
             rows.stream()
@@ -177,7 +183,11 @@ public class QuestionnaireService {
                 .distinct()
                 .toList());
     return rows.stream()
-        .map(row -> new PageRow(row, toEntry(pageCode, row, headers, options, columns)))
+        .map(
+            row ->
+                new PageRow(
+                    row,
+                    toEntry(pageCode, row, headers, questionHelp, headerHelp, options, columns)))
         .filter(built -> includePendingColumns || !isPending(built.entry()))
         .toList();
   }
@@ -189,14 +199,22 @@ public class QuestionnaireService {
   private static QuestionnaireEntry toEntry(
       String pageCode,
       QuestionnaireRow row,
-      Map<Long, List<SectionHeader>> headers,
+      Map<Long, List<AdminHeader>> headers,
+      Map<Long, List<HelpRow>> questionHelp,
+      Map<Long, List<HelpRow>> headerHelp,
       Map<Integer, List<AnswerOption>> options,
       Set<String> columns) {
     String numeral = row.numeral() == null ? "" : row.numeral().strip();
     List<SectionHeader> entryHeaders =
         headers.getOrDefault(row.entryId(), List.of()).stream()
-            .map(h -> new SectionHeader(h.kind(), QuestionTextSanitizer.toPlainText(h.text())))
+            .map(
+                h ->
+                    new SectionHeader(
+                        h.kind(),
+                        QuestionTextSanitizer.toPlainText(h.text()),
+                        toTermHelp(headerHelp.get(h.codEnc()))))
             .toList();
+    List<TermHelp> help = toTermHelp(questionHelp.get(row.entryId()));
     String text = QuestionTextSanitizer.toPlainText(row.text());
     if (STATEMENT_TYPE.equals(row.type())) {
       return new QuestionnaireEntry(
@@ -208,7 +226,8 @@ public class QuestionnaireService {
           text,
           entryHeaders,
           null,
-          null);
+          null,
+          help);
     }
     Optional<String> column = ColumnCodeResolver.fromNumeral(numeral);
     ColumnStatus status =
@@ -238,6 +257,29 @@ public class QuestionnaireService {
         text,
         entryHeaders,
         answer,
-        legacySkip);
+        legacySkip,
+        help);
+  }
+
+  /**
+   * Ayudas en texto plano, en el orden de la base. Como en el PHP heredado, una ayuda sin
+   * definición en GRAL_AYUDAS no muestra nada, y tampoco una sin palabra que enlazar o con título y
+   * definición vacíos: el encuestado no debe abrir un panel en blanco.
+   */
+  static List<TermHelp> toTermHelp(List<HelpRow> rows) {
+    if (rows == null) {
+      return List.of();
+    }
+    return rows.stream()
+        .filter(HelpRow::hasDefinition)
+        .map(
+            row ->
+                new TermHelp(
+                    QuestionTextSanitizer.toPlainText(row.term()),
+                    QuestionTextSanitizer.toPlainText(row.title()),
+                    QuestionTextSanitizer.toPlainParagraphs(row.description())))
+        .filter(help -> !help.term().isEmpty())
+        .filter(help -> !help.title().isEmpty() || !help.definition().isEmpty())
+        .toList();
   }
 }

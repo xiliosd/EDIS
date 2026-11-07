@@ -1,10 +1,12 @@
 package co.gov.dane.edi.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.assertj.core.api.InstanceOfAssertFactories.list;
 
+import co.gov.dane.edi.admin.dto.AdminHeader;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.HeaderKind;
-import co.gov.dane.edi.model.SectionHeader;
 import co.gov.dane.edi.support.OracleIntegrationTest;
 import java.util.List;
 import java.util.Map;
@@ -41,11 +43,45 @@ class QuestionnaireRepositoryIT extends OracleIntegrationTest {
 
   @Test
   void returnsHeadersOfTheActiveYearSubtitlesFirst() {
-    Map<Long, List<SectionHeader>> headers = questionnaire.findHeaders(List.of(101L, 102L));
+    Map<Long, List<AdminHeader>> headers =
+        questionnaire.findAdminHeaders(List.of(101L, 102L), "2026");
     assertThat(headers.get(101L))
-        .extracting(SectionHeader::kind)
+        .extracting(AdminHeader::kind)
         .containsExactly(HeaderKind.SUBTITLE, HeaderKind.HEADING);
     assertThat(headers).doesNotContainKey(102L);
+  }
+
+  @Test
+  void returnsQuestionAndHeaderHelpAsStoredWithTheirDefinition() {
+    assertThat(questionnaire.findQuestionHelp(List.of(101L, 102L)))
+        .containsOnlyKeys(101L)
+        .extractingByKey(101L)
+        .asInstanceOf(list(HelpRow.class))
+        .containsExactly(
+            new HelpRow(
+                101,
+                "desempeña",
+                true,
+                "Desempe&ntilde;o",
+                "<p>Definici&oacute;n <b>ficticia</b> de desempe&ntilde;o.</p>"));
+    assertThat(questionnaire.findHeaderHelp(List.of(1L, 2L)).get(1L))
+        .extracting(HelpRow::term, HelpRow::hasDefinition)
+        .containsExactly(tuple("laboral", true));
+  }
+
+  @Test
+  void helpWithoutDefinitionIsReturnedFlaggedAndInOrder() {
+    jdbc.update(
+        "INSERT INTO FRM_PRE_AYUDA (COD_PRE_AYU, COD_CAP_PROY, COD_AYU, TEXTO)"
+            + " VALUES (991, 102, 9999, 'Nivel'), (990, 102, 501, 'otra')",
+        Map.of());
+    try {
+      assertThat(questionnaire.findQuestionHelp(List.of(102L)).get(102L))
+          .extracting(HelpRow::term, HelpRow::hasDefinition, HelpRow::title)
+          .containsExactly(tuple("otra", true, "Desempe&ntilde;o"), tuple("Nivel", false, null));
+    } finally {
+      jdbc.update("DELETE FROM FRM_PRE_AYUDA WHERE COD_PRE_AYU IN (990, 991)", Map.of());
+    }
   }
 
   @Test
@@ -71,7 +107,9 @@ class QuestionnaireRepositoryIT extends OracleIntegrationTest {
 
   @Test
   void emptyInputsDoNotHitTheDatabase() {
-    assertThat(questionnaire.findHeaders(List.of())).isEmpty();
+    assertThat(questionnaire.findAdminHeaders(List.of(), "2026")).isEmpty();
+    assertThat(questionnaire.findQuestionHelp(List.of())).isEmpty();
+    assertThat(questionnaire.findHeaderHelp(List.of())).isEmpty();
     assertThat(questionnaire.findOptions(List.of())).isEmpty();
   }
 

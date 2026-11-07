@@ -6,7 +6,6 @@ import co.gov.dane.edi.admin.dto.AdminHelpDefinition;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.AnswerOption;
 import co.gov.dane.edi.model.HeaderKind;
-import co.gov.dane.edi.model.SectionHeader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -37,14 +36,6 @@ public class QuestionnaireRepository {
        ORDER BY G.GRUPO, G.ORDEN
       """;
 
-  private static final String HEADERS =
-      """
-      SELECT COD_CAP_PROY, TIPO, ENCABEZADO
-        FROM FRM_ENCABEZADO
-       WHERE COD_CAP_PROY IN (:entryIds) AND ANIO = :yearText
-       ORDER BY COD_CAP_PROY, TIPO DESC, COD_ENC
-      """;
-
   private static final String ADMIN_HEADERS =
       """
       SELECT COD_ENC, COD_CAP_PROY, TIPO, ENCABEZADO
@@ -62,6 +53,16 @@ public class QuestionnaireRepository {
         LEFT JOIN GRAL_AYUDAS D ON D.COD = A.COD_AYU
        WHERE A.COD_CAP_PROY IN (:entryIds)
        ORDER BY A.COD_CAP_PROY, A.COD_PRE_AYU
+      """;
+
+  // Igual que HELP pero para encabezados; el LEFT JOIN deja ver las ayudas sin definición.
+  private static final String HEADER_HELP =
+      """
+      SELECT A.COD_ENC_AYU, A.COD_ENC, A.TEXTO, D.COD AS DEFINICION, D.TITULO, D.DESCRIPCION
+        FROM FRM_ENC_AYUDA A
+        LEFT JOIN GRAL_AYUDAS D ON D.COD = A.COD_AYU
+       WHERE A.COD_ENC IN (:headerIds)
+       ORDER BY A.COD_ENC, A.COD_ENC_AYU
       """;
 
   private static final String RAW_TEXTS =
@@ -121,33 +122,9 @@ public class QuestionnaireRepository {
                 row.getObject("COD_OBJ", Integer.class)));
   }
 
-  /** Oracle admite hasta 1000 valores en IN; una página del cuestionario tiene muchos menos. */
-  public Map<Long, List<SectionHeader>> findHeaders(Collection<Long> entryIds) {
-    return findHeaders(entryIds, survey.yearText());
-  }
-
-  public Map<Long, List<SectionHeader>> findHeaders(Collection<Long> entryIds, String yearText) {
-    Map<Long, List<SectionHeader>> headers = new LinkedHashMap<>();
-    if (entryIds.isEmpty()) {
-      return headers;
-    }
-    MapSqlParameterSource parameters =
-        new MapSqlParameterSource().addValue("entryIds", entryIds).addValue("yearText", yearText);
-    jdbc.query(
-        HEADERS,
-        parameters,
-        row -> {
-          HeaderKind kind =
-              HEADING_TYPE.equals(row.getString("TIPO")) ? HeaderKind.HEADING : HeaderKind.SUBTITLE;
-          headers
-              .computeIfAbsent(row.getLong("COD_CAP_PROY"), ignored -> new ArrayList<>())
-              .add(new SectionHeader(kind, row.getString("ENCABEZADO")));
-        });
-    return headers;
-  }
-
   /**
-   * Encabezados con su clave COD_ENC (el editor los direcciona); texto tal como está en la base.
+   * Encabezados con su clave COD_ENC (el editor y las ayudas de encabezado la usan); texto tal como
+   * está en la base. Oracle admite hasta 1000 valores en IN; una página tiene muchos menos.
    */
   public Map<Long, List<AdminHeader>> findAdminHeaders(Collection<Long> entryIds, String yearText) {
     Map<Long, List<AdminHeader>> headers = new LinkedHashMap<>();
@@ -192,6 +169,39 @@ public class QuestionnaireRepository {
                       ? null
                       : new AdminHelpDefinition(
                           row.getString("TITULO"), row.getString("DESCRIPCION"))));
+        });
+    return help;
+  }
+
+  /** Todas las ayudas de cada pregunta (FRM_PRE_AYUDA) en orden de COD_PRE_AYU, en una consulta. */
+  public Map<Long, List<HelpRow>> findQuestionHelp(Collection<Long> entryIds) {
+    return findHelpRows(HELP, "entryIds", entryIds, "COD_CAP_PROY");
+  }
+
+  /** Todas las ayudas de cada encabezado (FRM_ENC_AYUDA, por COD_ENC) en orden de COD_ENC_AYU. */
+  public Map<Long, List<HelpRow>> findHeaderHelp(Collection<Long> headerIds) {
+    return findHelpRows(HEADER_HELP, "headerIds", headerIds, "COD_ENC");
+  }
+
+  private Map<Long, List<HelpRow>> findHelpRows(
+      String sql, String parameter, Collection<Long> ownerIds, String ownerColumn) {
+    Map<Long, List<HelpRow>> help = new LinkedHashMap<>();
+    if (ownerIds.isEmpty()) {
+      return help;
+    }
+    jdbc.query(
+        sql,
+        new MapSqlParameterSource(parameter, ownerIds),
+        row -> {
+          long owner = row.getLong(ownerColumn);
+          help.computeIfAbsent(owner, ignored -> new ArrayList<>())
+              .add(
+                  new HelpRow(
+                      owner,
+                      row.getString("TEXTO"),
+                      row.getObject("DEFINICION") != null,
+                      row.getString("TITULO"),
+                      row.getString("DESCRIPCION")));
         });
     return help;
   }

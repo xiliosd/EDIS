@@ -40,5 +40,32 @@ class QuestionTextSanitizerTest {
   @Test
   void returnsEmptyTextForNull() {
     assertThat(QuestionTextSanitizer.toPlainText(null)).isEmpty();
+    assertThat(QuestionTextSanitizer.toPlainParagraphs(null)).isEmpty();
+  }
+
+  @Test
+  void paragraphsAndLineBreaksBecomeNewLines() {
+    assertThat(
+            QuestionTextSanitizer.toPlainParagraphs(
+                "<p>Definici&oacute;n <b>uno</b>.</p><P class=\"x\">Segunda<br/>l&iacute;nea</P>"))
+        .isEqualTo("Definición uno.\n\nSegunda\nlínea");
+  }
+
+  @Test
+  void paragraphsDoNotLeaveMoreThanOneBlankLine() {
+    assertThat(QuestionTextSanitizer.toPlainParagraphs("<p>A</p><p></p><br><br><p>B</p>"))
+        .isEqualTo("A\n\nB");
+  }
+
+  @Test
+  void paragraphTextKeepsEscapedMarkupAsLiteralText() {
+    assertThat(QuestionTextSanitizer.toPlainParagraphs("<p>&lt;p&gt;no es etiqueta&#8221;</p>"))
+        .isEqualTo("<p>no es etiqueta”");
+  }
+
+  @Test
+  void otherTagsStartingWithPAreNotParagraphs() {
+    assertThat(QuestionTextSanitizer.toPlainParagraphs("Uno <pre>dos</pre> <param>tres"))
+        .isEqualTo("Uno dos tres");
   }
 }
