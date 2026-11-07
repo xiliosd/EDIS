@@ -5,6 +5,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [Sin publicar]
 
 ### Agregado
+- Ayudas visibles para el encuestado (pendiente de la Fase 2): el detalle de página
+  (`GET /api/v1/survey/pages/{pagina}`) trae `help` (`term`, `title`, `definition` en texto plano)
+  por pregunta y por encabezado desde `FRM_PRE_AYUDA`, `FRM_ENC_AYUDA` y `GRAL_AYUDAS`, sin las que
+  no tienen definición. En el formulario, la primera aparición del término es un botón que abre la
+  definición debajo del texto ("Cerrar ayuda" o Escape la cierran); si no aparece, se agrega
+  "Ayuda: término". El nombre accesible del campo no cambia y abrir una ayuda no toca la respuesta.
+  `axe-core` 4.13.0 pasa a devDependency fijada del frontend para revisar las ayudas en las pruebas.
 - Modo de solo lectura del cuestionario para producción (`QUESTIONNAIRE_WRITES_ENABLED`,
   propiedad `app.admin.questionnaire-writes-enabled`, por defecto `false`): toda escritura de la API
   de administración (`/api/v1/admin/**`, hoy las que escriben `FRM_*` o el archivo de reglas)

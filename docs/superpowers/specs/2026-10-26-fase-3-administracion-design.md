@@ -505,8 +505,8 @@ El respaldo real de `DANE_DIRPEN` (16-oct-2026) corrigió dos supuestos del esqu
      al destino le falta alguna definición (mismo patrón que la verificación del juego de
      caracteres: lo más simple y no deja enlaces sin definición); la importación lo verifica de
      nuevo y responde 422 con «Falta la definición COD_AYU n en GRAL_AYUDAS.» en `differences`.
-   - El encuestado sigue sin ver las ayudas (pendiente desde la Fase 2); editar definiciones es de
-     la Fase 4.
+   - El encuestado ve las ayudas desde el 2026-11-07 (cierre del pendiente de la Fase 2; ver
+     «Desviación: ayudas del encuestado» en el spec general); editar definiciones es de la Fase 4.
 
 Los tipos, longitudes y la generación de ids quedaron confirmados el 2026-11-06 (sección
 siguiente). En desarrollo `FRM_PRE_AYUDA.COD_PRE_AYU` lleva clave primaria aunque la base real no

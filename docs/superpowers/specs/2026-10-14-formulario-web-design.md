@@ -400,3 +400,16 @@ Cada fase tiene su propio plan de implementación.
 - `overrides` de `playwright-core` 1.63.0 en el frontend para alinear `@axe-core/playwright`.
 - El bloqueo por intentos es en memoria (por instancia); la mitigación real contra inundación es rate
   limiting en el proxy o balanceador.
+
+## Desviación: ayudas del encuestado (2026-11-07)
+
+La sección 6.1 preveía un ícono (i) con popover. Se implementó, en cambio, lo que hacía el PHP
+heredado pero accesible: la primera aparición de la palabra de `FRM_PRE_AYUDA` / `FRM_ENC_AYUDA`
+en el texto es un botón con estilo de enlace (`aria-expanded`, `aria-controls`) que abre la
+definición de `GRAL_AYUDAS` en un panel justo debajo del texto, no flotante (en el celular un
+popover tapa la pregunta). Escape y "Cerrar ayuda" lo cierran y devuelven el foco; si la palabra no
+aparece se agrega "Ayuda: palabra". La API entrega `help: [{ term, title, definition }]` por
+pregunta y por encabezado, en texto plano (`<p>` y `<br>` como saltos de línea), solo con las
+ayudas que tienen definición y leídas en lote por página dentro de la caché del cuestionario. Con
+ayudas, el campo lleva `aria-label` con el texto completo de la pregunta para que el botón no
+altere su nombre accesible.

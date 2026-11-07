@@ -43,7 +43,7 @@ Prefijo `/api/v1`; errores en RFC 7807 (`application/problem+json`). Swagger UI 
 | `GET` | `/api/v1/survey/chapters/{chapterCode}` | Consulta un capítulo con sus preguntas |
 | `GET` | `/api/v1/survey/progress` | Avance por página (`finished`: las 9 guardadas) |
 | `GET` | `/api/v1/survey/rules` | Reglas vigentes (saltos y validaciones) |
-| `GET` | `/api/v1/survey/pages/{pagina}` | Consulta una página con sus respuestas guardadas |
+| `GET` | `/api/v1/survey/pages/{pagina}` | Consulta una página con sus respuestas guardadas y las ayudas (`help`) de cada pregunta y encabezado |
 | `PUT` | `/api/v1/survey/pages/{pagina}/answers` | Guarda una página, una sola vez |
 | `POST` | `/api/v1/survey/finish` | Registra las observaciones opcionales; entrega el radicado |
 
@@ -446,6 +446,16 @@ guardadas.
    "Enviar observaciones". Mientras no se registren, el inicio ofrece "Agregar observaciones
    (opcional)"; el radicado es siempre el mismo.
 
+**Ayudas.** Una palabra o frase subrayada en el texto de una pregunta, enunciado o encabezado es
+una ayuda (`FRM_PRE_AYUDA` / `FRM_ENC_AYUDA` con su definición de `GRAL_AYUDAS`, como los enlaces
+del PHP heredado). Al activarla se abre, justo debajo del texto, un panel con el título y la
+definición; "Cerrar ayuda" o la tecla Escape lo cierran y devuelven el foco a la palabra. Se
+enlaza solo la primera aparición; si la palabra no está en el texto, aparece después un botón
+"Ayuda: palabra". Abrir una ayuda no marca ni cambia la respuesta, y las ayudas sin definición en
+`GRAL_AYUDAS` no se muestran. En los datos ficticios, B1 tiene la ayuda «desempeña» en el
+enunciado y «laboral» en el encabezado. El simulador de reglas usa los mismos campos y también las
+muestra en las preguntas.
+
 Si la sesión vence al guardar una página, la aplicación lo avisa con un enlace para ingresar de
 nuevo y conserva las respuestas de esa página en `sessionStorage` (solo los valores, nunca el
 `C_C`) hasta volver a abrirla en la misma pestaña. Si entretanto otra pestaña ingresa o cierra
@@ -686,9 +696,10 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
   las longitudes viejas (`CREATE TABLE IF NOT EXISTS` no altera tablas): recréelo.
 - **Base de pruebas en AL32UTF8.** El contenedor de pruebas no es Latin-9: un texto con ñ que cabe
   en producción puede no caber allí. Las pruebas de longitud usan ASCII o entidades en el borde.
-- **Ayudas sin mostrar al encuestado.** La Fase 2 no incluyó las ayudas (palabra enlazada a una
-  definición de `GRAL_AYUDAS`) en el formulario del encuestado; sigue pendiente. Editar las
-  definiciones de `GRAL_AYUDAS` queda para la Fase 4 (administración de ayudas).
+- **Definiciones de ayudas sin editor.** El encuestado ya ve las ayudas (2026-11-07), pero editar
+  las definiciones de `GRAL_AYUDAS` (título y descripción) queda para la Fase 4 (administración de
+  ayudas); hoy se cambian en la base. Al cambiarlas directamente en la base, la caché del
+  cuestionario las muestra al reiniciar el backend o tras la siguiente edición o importación.
 - **Ids de `FRM_*` con `MAX+1`.** La base real no tiene secuencias ni disparadores sobre `FRM_*`
   (confirmado el 2026-11-06); QA debe ser igual.
 - **El usuario de la aplicación en producción tiene más permisos de los necesarios
