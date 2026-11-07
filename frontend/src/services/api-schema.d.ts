@@ -992,6 +992,7 @@ export interface components {
         QuestionnaireEntry: {
             answer?: components["schemas"]["AnswerSpec"];
             headers?: components["schemas"]["SectionHeader"][];
+            help?: components["schemas"]["TermHelp"][];
             /** Format: int64 */
             id?: number;
             /** @enum {string} */
@@ -1079,6 +1080,7 @@ export interface components {
             year?: number;
         };
         SectionHeader: {
+            help?: components["schemas"]["TermHelp"][];
             /** @enum {string} */
             kind?: "HEADING" | "SUBTITLE";
             text?: string;
@@ -1134,6 +1136,11 @@ export interface components {
             };
             /** Format: int32 */
             version?: number;
+        };
+        TermHelp: {
+            definition?: string;
+            term?: string;
+            title?: string;
         };
         TestCase: {
             esperado?: components["schemas"]["ExpectedOutcome"];

@@ -12,7 +12,8 @@ import { messageFor } from './answer-error-messages';
 import { ErrorSummary } from './ErrorSummary';
 import { LOGIN_PATH } from '../auth/use-session';
 import { clearDraft, hasRecoverableDraft, saveDraft, takeDraft } from './page-drafts';
-import { QuestionField, type PageValues } from './questions/QuestionField';
+import { HelpText } from './help/TermHelp';
+import { fieldId, QuestionField, type PageValues } from './questions/QuestionField';
 import { evaluate, type RuleSet } from './rules/rule-evaluator';
 import { SavedPageSummary } from './SavedPageSummary';
 import {
@@ -308,22 +309,39 @@ function PageForm({ page, rules, onConflict }: PageFormProps) {
       <div className="mt-6 grid gap-6">
         {entries.map((entry) => (
           <div key={entry.id}>
-            {(entry.headers ?? []).map((header, index) =>
-              header.kind === 'HEADING' ? (
-                <h2 key={index} className="mb-2 text-xl font-semibold">
-                  {header.text}
-                </h2>
-              ) : (
-                <h3 key={index} className="mb-2 text-lg font-medium">
-                  {header.text}
-                </h3>
-              ),
+            {(entry.headers ?? []).map((header, index) => (
+              <div key={index} className="mb-2">
+                <HelpText
+                  as={header.kind === 'HEADING' ? 'h2' : 'h3'}
+                  className={
+                    header.kind === 'HEADING' ? 'text-xl font-semibold' : 'text-lg font-medium'
+                  }
+                  idPrefix={`encabezado-${entry.id}-${index}`}
+                  text={header.text ?? ''}
+                  help={header.help}
+                />
+              </div>
+            ))}
+            {entry.kind === 'STATEMENT' && (
+              <HelpText
+                as="p"
+                className="font-semibold"
+                idPrefix={`enunciado-${entry.id}`}
+                text={itemLabel(entry)}
+                help={entry.help}
+                searchFrom={(entry.label ?? '').length}
+              />
             )}
-            {entry.kind === 'STATEMENT' && <p className="font-semibold">{itemLabel(entry)}</p>}
             {isActiveItem(entry) &&
               (disabled.has(entry.answer?.columnCode ?? '') ? (
                 <div className="rounded-lg border border-dashed border-ink-muted/40 p-3 text-ink-muted">
-                  <p>{itemLabel(entry)}</p>
+                  <HelpText
+                    as="p"
+                    idPrefix={`${fieldId(entry.answer?.columnCode ?? '')}-no-aplica`}
+                    text={itemLabel(entry)}
+                    help={entry.help}
+                    searchFrom={(entry.label ?? '').length}
+                  />
                   <p className="text-sm">No aplica según sus respuestas anteriores.</p>
                 </div>
               ) : (

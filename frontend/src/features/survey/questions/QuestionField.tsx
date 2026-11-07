@@ -1,4 +1,5 @@
 import type { Control, UseFormRegister } from 'react-hook-form';
+import { useTermHelp } from '../help/TermHelp';
 import type { RuleSet } from '../rules/rule-evaluator';
 import type { QuestionnaireEntry } from '../survey-api';
 import { CheckboxQuestion } from './CheckboxQuestion';
@@ -19,6 +20,16 @@ export interface QuestionProps {
 
 export function fieldId(column: string): string {
   return `campo-${column}`;
+}
+
+/** Ayudas del texto de la pregunta; el término se busca después del numeral. */
+export function useQuestionHelp({ entry, column, label }: QuestionProps, text = label) {
+  return useTermHelp({
+    idPrefix: fieldId(column),
+    text,
+    help: entry.help,
+    searchFrom: (entry.label ?? '').length,
+  });
 }
 
 export function QuestionField(props: QuestionProps) {

@@ -1,15 +1,25 @@
-import type { InputHTMLAttributes, Ref } from 'react';
+import type { InputHTMLAttributes, ReactNode, Ref } from 'react';
 
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   id: string;
-  label: string;
+  label: ReactNode;
+  /** Contenido entre la etiqueta y el campo (p. ej. las ayudas de una pregunta). */
+  afterLabel?: ReactNode;
   error?: string;
   /** Indicación breve bajo el campo, ligada con aria-describedby. */
   hint?: string;
   ref?: Ref<HTMLInputElement>;
 }
 
-export function TextField({ id, label, error, hint, ref, ...inputProps }: TextFieldProps) {
+export function TextField({
+  id,
+  label,
+  afterLabel,
+  error,
+  hint,
+  ref,
+  ...inputProps
+}: TextFieldProps) {
   const errorId = `${id}-error`;
   const hintId = `${id}-hint`;
   const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ');
@@ -18,6 +28,7 @@ export function TextField({ id, label, error, hint, ref, ...inputProps }: TextFi
       <label htmlFor={id} className="block text-sm font-medium">
         {label}
       </label>
+      {afterLabel}
       <input
         id={id}
         ref={ref}
