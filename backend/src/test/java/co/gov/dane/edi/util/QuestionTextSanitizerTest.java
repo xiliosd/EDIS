@@ -52,6 +52,12 @@ class QuestionTextSanitizerTest {
   }
 
   @Test
+  void rawNewLinesCollapseToSpacesLikeLegacyHtml() {
+    assertThat(QuestionTextSanitizer.toPlainParagraphs("<p>Uno\r\ndos\ntres<br>cuatro</p>"))
+        .isEqualTo("Uno dos tres\ncuatro");
+  }
+
+  @Test
   void paragraphsDoNotLeaveMoreThanOneBlankLine() {
     assertThat(QuestionTextSanitizer.toPlainParagraphs("<p>A</p><p></p><br><br><p>B</p>"))
         .isEqualTo("A\n\nB");

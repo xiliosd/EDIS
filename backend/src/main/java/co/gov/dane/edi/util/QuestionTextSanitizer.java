@@ -16,18 +16,21 @@ public final class QuestionTextSanitizer {
 
   private static final Pattern PARAGRAPH_TAG = Pattern.compile("(?i)</?p(?:\\s[^>]*)?/?>");
   private static final Pattern EXTRA_BLANK_LINES = Pattern.compile("\n{3,}");
+  private static final Pattern RAW_LINE_BREAK = Pattern.compile("\r?\n|\r");
 
   private QuestionTextSanitizer() {}
 
   /**
    * Como {@link #toPlainText}, pero cada párrafo ({@code <p>}) queda separado por una línea en
-   * blanco: las definiciones de GRAL_AYUDAS son varios párrafos y el encuestado debe verlos así.
+   * blanco: las definiciones de GRAL_AYUDAS son varios párrafos y el encuestado debe verlos así. Un
+   * salto escrito tal cual (sin {@code <br>}) es un espacio, como lo mostraba el HTML del PHP.
    */
   public static String toPlainParagraphs(String legacyText) {
     if (legacyText == null) {
       return "";
     }
-    String withParagraphBreaks = PARAGRAPH_TAG.matcher(legacyText).replaceAll("\n");
+    String withoutRawBreaks = RAW_LINE_BREAK.matcher(legacyText).replaceAll(" ");
+    String withParagraphBreaks = PARAGRAPH_TAG.matcher(withoutRawBreaks).replaceAll("\n");
     return EXTRA_BLANK_LINES.matcher(toPlainText(withParagraphBreaks)).replaceAll("\n\n");
   }
 

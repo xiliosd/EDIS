@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { http, HttpResponse } from 'msw';
@@ -70,12 +70,18 @@ const PAGE = {
     item('C01A', '¿Ficticia C01A sobre el cargo?', [help('cargo'), help('vínculo')]),
     item('C01B', 'Lista ficticia C01B del nivel', [help('nivel')], 'SINGLE_CHOICE', MANY_OPTIONS),
     item('C01C', 'Casilla ficticia de teletrabajo', [help('teletrabajo')], 'CHECKBOX', []),
-    item('C01T', 'Años en la entidad', [help('entidad')], 'TEXT', []),
+    item('C01T', 'Años en la entidad', [help('entidad'), help('entre')], 'TEXT', []),
   ],
   answers: {},
 };
 
-const RULES = { encuesta: 'EDIN', anio: 2026, version: 1, saltos: [], validaciones: {} };
+const RULES = {
+  encuesta: 'EDIN',
+  anio: 2026,
+  version: 1,
+  saltos: [],
+  validaciones: { C01T: { tipo: 'entero', min: 0, max: 60 } },
+};
 
 beforeEach(() => {
   server.use(
@@ -118,7 +124,7 @@ describe('Ayudas del encuestado', () => {
     expect(within(panel).getByText('Título de cargo')).toBeVisible();
     expect(within(panel).getByText('Definición de cargo.')).toBeVisible();
 
-    await userEvent.click(within(panel).getByRole('button', { name: 'Cerrar ayuda' }));
+    await userEvent.click(within(panel).getByRole('button', { name: 'Cerrar ayuda: cargo' }));
 
     expect(panel).not.toBeVisible();
     expect(term).toHaveAttribute('aria-expanded', 'false');
@@ -129,7 +135,7 @@ describe('Ayudas del encuestado', () => {
     const group = await openPage();
     const term = within(group).getByRole('button', { name: 'cargo' });
     await userEvent.click(term);
-    within(panelOf(term)).getByRole('button', { name: 'Cerrar ayuda' }).focus();
+    within(panelOf(term)).getByRole('button', { name: 'Cerrar ayuda: cargo' }).focus();
 
     await userEvent.keyboard('{Escape}');
 
@@ -161,7 +167,9 @@ describe('Ayudas del encuestado', () => {
     expect(
       screen.getByRole('checkbox', { name: 'C01C Casilla ficticia de teletrabajo' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'C01T Años en la entidad' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'C01T Años en la entidad (entre 0 y 60)' }),
+    ).toBeInTheDocument();
   });
 
   it('el clic en el término no marca ni enfoca la respuesta', async () => {
@@ -196,6 +204,63 @@ describe('Ayudas del encuestado', () => {
     expect(screen.getByText(/Enunciado sobre el/)).toContainElement(
       screen.getByRole('button', { name: 'desempeño' }),
     );
+  });
+
+  it('Escape también cierra desde cualquier punto dentro del panel', async () => {
+    const group = await openPage();
+    const term = within(group).getByRole('button', { name: 'cargo' });
+    await userEvent.click(term);
+
+    fireEvent.keyDown(within(panelOf(term)).getByText('Definición de cargo.'), { key: 'Escape' });
+
+    expect(panelOf(term)).not.toBeVisible();
+    expect(term).toHaveFocus();
+  });
+
+  it('cada «Cerrar ayuda» nombra su término cuando hay varias abiertas', async () => {
+    await openPage();
+    await userEvent.click(screen.getByRole('button', { name: 'cargo' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ayuda: vínculo' }));
+
+    expect(screen.getByRole('button', { name: 'Cerrar ayuda: cargo' })).toHaveTextContent(
+      'Cerrar ayuda',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar ayuda: vínculo' }));
+
+    expect(screen.getByRole('button', { name: 'Ayuda: vínculo' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Cerrar ayuda: cargo' })).toBeVisible();
+  });
+
+  it('no enlaza un término dentro del rango de una pregunta numérica', async () => {
+    await openPage();
+    const label = screen.getByText(/Años en la/, { selector: 'label' });
+
+    expect(label).toHaveTextContent('C01T Años en la entidad (entre 0 y 60)');
+    expect(within(label).queryByRole('button', { name: 'entre' })).not.toBeInTheDocument();
+    expect(within(label).getByRole('button', { name: 'entidad' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ayuda: entre' })).toBeInTheDocument();
+  });
+
+  it('muestra como texto literal el marcado que traiga una ayuda', async () => {
+    const script = '<script>alert(1)</script>';
+    server.use(
+      http.get('*/api/v1/survey/pages/C1', () =>
+        HttpResponse.json({
+          ...PAGE,
+          entries: [
+            item('C01A', `¿Ficticia ${script}?`, [help(script, `Título ${script}`, script)]),
+          ],
+        }),
+      ),
+    );
+    await openPage();
+    const term = screen.getByRole('button', { name: script });
+
+    await userEvent.click(term);
+
+    expect(within(panelOf(term)).getByText(`Título ${script}`)).toBeVisible();
+    expect(within(panelOf(term)).getByText(script)).toBeVisible();
+    expect(document.querySelector('script')).toBeNull();
   });
 
   it('no tiene violaciones de axe con las ayudas abiertas y cerradas', async () => {

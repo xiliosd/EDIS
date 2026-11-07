@@ -12,19 +12,23 @@ function rangeHint(min?: number | null, max?: number | null): string {
 }
 
 export function TextQuestion(props: QuestionProps) {
-  const { column, label, error, register, rules } = props;
+  const { column, error, register, rules } = props;
   const validation = rules?.validaciones?.[column];
   const numeric = validation?.tipo === 'entero' || validation?.tipo === 'decimal';
-  const { content, details, accessibleName } = useQuestionHelp(
-    props,
-    `${label}${rangeHint(validation?.min, validation?.max)}`,
-  );
+  // El término se busca solo en la pregunta: nunca dentro de "(entre 15 y 99)".
+  const hint = rangeHint(validation?.min, validation?.max);
+  const { content, details, accessibleName } = useQuestionHelp(props);
   return (
     <TextField
       id={fieldId(column)}
-      label={content}
+      label={
+        <>
+          {content}
+          {hint}
+        </>
+      }
       afterLabel={details}
-      aria-label={accessibleName}
+      aria-label={accessibleName && `${accessibleName}${hint}`}
       error={error}
       inputMode={numeric ? (validation?.tipo === 'entero' ? 'numeric' : 'decimal') : undefined}
       maxLength={validation?.longitudMax ?? undefined}

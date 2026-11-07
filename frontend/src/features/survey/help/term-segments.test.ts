@@ -42,6 +42,14 @@ describe('splitByTerms', () => {
     });
   });
 
+  it('como el str_replace heredado, enlaza el término aunque esté dentro de otra palabra', () => {
+    expect(splitByTerms('Edad en años', ['año']).segments).toEqual([
+      { kind: 'text', text: 'Edad en ' },
+      { kind: 'term', text: 'año', helpIndex: 0 },
+      { kind: 'text', text: 's' },
+    ]);
+  });
+
   it('un término vacío nunca se enlaza', () => {
     expect(splitByTerms('Texto', [''])).toEqual({
       segments: [{ kind: 'text', text: 'Texto' }],

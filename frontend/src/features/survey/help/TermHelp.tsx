@@ -76,7 +76,7 @@ export function useTermHelp({
   }
 
   function closeOnEscape(index: number) {
-    return (event: KeyboardEvent<HTMLButtonElement>) => {
+    return (event: KeyboardEvent<HTMLElement>) => {
       if (event.key === 'Escape' && openHelp.includes(index)) {
         event.preventDefault();
         close(index);
@@ -122,19 +122,28 @@ export function useTermHelp({
         </p>
       )}
       {items.map((item, index) => (
+        // Escape cierra desde cualquier punto del panel (no solo desde un botón). El panel no es
+        // interactivo: solo recibe, por burbujeo, el Escape de lo que tiene el foco dentro de él.
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
         <div
           key={index}
           id={panelIdOf(idPrefix, index)}
+          role="group"
+          aria-labelledby={`${panelIdOf(idPrefix, index)}-titulo`}
           hidden={!openHelp.includes(index)}
+          onKeyDown={closeOnEscape(index)}
           className="mt-2 rounded-lg border border-primary/40 bg-surface-muted p-3 text-base font-normal text-ink"
         >
-          <p className="font-semibold">{item.title || item.term}</p>
+          <p id={`${panelIdOf(idPrefix, index)}-titulo`} className="font-semibold">
+            {item.title || item.term}
+          </p>
           {item.definition && <p className="mt-1 whitespace-pre-line">{item.definition}</p>}
           <Button
             variant="secondary"
             className="mt-3"
+            // El texto visible va primero: varios paneles abiertos se distinguen por el término.
+            aria-label={`Cerrar ayuda: ${item.term ?? ''}`}
             onClick={() => close(index)}
-            onKeyDown={closeOnEscape(index)}
           >
             Cerrar ayuda
           </Button>
