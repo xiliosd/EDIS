@@ -1,10 +1,12 @@
 package co.gov.dane.edi.operation.report;
 
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_COMPLETE;
+import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_DEPARTMENT_NO_CATALOG;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_INACTIVE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_INCOMPLETE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_ANTIOQUIA;
 import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_ATLANTICO;
+import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_NO_CATALOG;
 import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_VALLE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.ENTITY_AT_SIGN;
 import static co.gov.dane.edi.support.OperationalSampleFixture.ENTITY_EDID;
@@ -300,6 +302,55 @@ class CoverageServiceIT extends OracleIntegrationTest {
     assertThat(after).isEqualTo(before);
     assertTotals(after, 9, 2, 2, 2);
     // Las filas repetidas las borra clearFixture (clear elimina los capítulos por rango de C_C).
+  }
+
+  @Test
+  void noveltyAfterStartingCountsAsNoveltyNotIncomplete() {
+    fixture.loadEdgeCases(survey.year());
+
+    EntityCoverage mixed = entity(department(report(ReportSurvey.GENERAL), 5), ENTITY_MIXED);
+
+    // Base 9,2,2,2 más el caso 15 (B07 sin H06 y con novedad) y el 16 (novedad sin empezar).
+    assertTotals(mixed.totals(), 11, 4, 2, 2);
+    assertTotals(mixed.webLevels().get(0).totals(), 4, 1, 1, 0);
+  }
+
+  @Test
+  void departmentOutsideTheCatalogIsCountedWithAGeneratedName() {
+    fixture.loadEdgeCases(survey.year());
+    OperationalAccess everything = new OperationalAccess(true, List.of(), false, true);
+
+    CoverageReport report = service.coverage(everything, ReportSurvey.GENERAL, survey.year(), null);
+
+    DepartmentCoverage withoutCatalog = department(report, DEPARTMENT_NO_CATALOG);
+    assertThat(withoutCatalog.name()).isEqualTo("Departamento " + DEPARTMENT_NO_CATALOG);
+    assertTotals(withoutCatalog.totals(), 1, 0, 1, 0);
+    assertThat(report.departments())
+        .extracting(DepartmentCoverage::name)
+        .doesNotContainNull()
+        .contains("DEPARTMENT_ANTIOQUIA (ficticio)");
+    // Mismo funcionario que listan los reportes nominales con el mismo alcance.
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM EDIN_MUESTRA WHERE C_C = ? AND ATV = 1",
+                Integer.class,
+                CASE_DEPARTMENT_NO_CATALOG))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void departmentsAreOrderedWithSpanishCollation() {
+    jdbc.update(
+        "UPDATE GRAL_DEPARTAMENTOS SET NOM_DEPTO = ? WHERE COD_DEPTO = ?",
+        "Área Ficticia",
+        DEPARTMENT_VALLE);
+
+    CoverageReport report = report(ReportSurvey.GENERAL);
+
+    // Con orden binario "Área" iría después de "DEPARTMENT_..."; en español va primero.
+    assertThat(report.departments())
+        .extracting(DepartmentCoverage::code)
+        .containsExactly(DEPARTMENT_VALLE, DEPARTMENT_ANTIOQUIA, DEPARTMENT_ATLANTICO);
   }
 
   @Test

@@ -322,7 +322,8 @@ class NoveltyServiceIT extends OracleIntegrationTest {
                 EnumSet.of(Role.ADMIN_NACIONAL, Role.ADMIN_TERRITORIAL),
                 "5"));
     assertThat(combined.allDepartments()).isTrue();
-    assertThat(combined.canManageNovelties()).isTrue();
+    // Punto 15 de la ola final: con alcance completo tampoco se anuncia la gestión.
+    assertThat(combined.canManageNovelties()).isFalse();
 
     assertThatThrownBy(
             () ->

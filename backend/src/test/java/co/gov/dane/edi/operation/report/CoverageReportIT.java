@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.operation.OperationalAccessService;
+import co.gov.dane.edi.operation.OperationalTime;
 import co.gov.dane.edi.security.Role;
 import co.gov.dane.edi.security.SessionPrincipal;
 import co.gov.dane.edi.security.SessionTokenService;
@@ -18,7 +19,6 @@ import co.gov.dane.edi.support.OracleIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.io.ByteArrayInputStream;
 import java.time.Clock;
-import java.time.LocalDate;
 import java.util.EnumSet;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -130,7 +130,7 @@ class CoverageReportIT extends OracleIntegrationTest {
                 COVERAGE + "/excel?encuesta=EDI&departamento=5")
             .andExpect(status().isOk())
             .andReturn();
-    String today = LocalDate.now(clock).toString();
+    String today = OperationalTime.today(clock).toString();
     assertThat(result.getResponse().getContentType()).isEqualTo(XLSX);
     assertThat(result.getResponse().getHeader(HttpHeaders.CACHE_CONTROL)).contains("no-store");
     assertThat(result.getResponse().getHeader(HttpHeaders.CONTENT_DISPOSITION))

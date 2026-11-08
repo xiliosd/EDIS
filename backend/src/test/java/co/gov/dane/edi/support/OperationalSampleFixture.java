@@ -65,6 +65,21 @@ public final class OperationalSampleFixture {
   /** Número de filas de la muestra que inserta {@link #load(int)}. */
   public static final int CASE_COUNT = 14;
 
+  /** Casos límite de {@link #loadEdgeCases(int)}: B07 sin H06 y con novedad (cuenta novedad). */
+  public static final String CASE_NOVELTY_AFTER_START = "900000015";
+
+  /** Otra causa guardada con referencias numéricas, como la escribe el formulario heredado. */
+  public static final String CASE_ENCODED_OTHER_CAUSE = "900000016";
+
+  /** Funcionario completo en un departamento que no está en GRAL_DEPARTAMENTOS. */
+  public static final String CASE_DEPARTMENT_NO_CATALOG = "900000017";
+
+  /** Código de departamento ficticio sin fila en GRAL_DEPARTAMENTOS. */
+  public static final int DEPARTMENT_NO_CATALOG = 98;
+
+  public static final String ENCODED_OTHER_CAUSE_TEXT = "&#8220;Motivo ficticio&#8221; citado";
+  public static final String DECODED_OTHER_CAUSE_TEXT = "“Motivo ficticio” citado";
+
   public static final String FORMULA_NAME = "=SUMA(1;2)";
   public static final String OTHER_CAUSE_TEXT = "Motivo ficticio de otra causa";
 
@@ -292,6 +307,63 @@ public final class OperationalSampleFixture {
                 ENTITY_AT_SIGN,
                 "1",
                 2,
+                1,
+                1,
+                null,
+                null,
+                true,
+                true,
+                true));
+    for (SampleCase sampleCase : cases) {
+      insertSample(year, sampleCase);
+    }
+  }
+
+  /**
+   * Agrega, sobre {@link #load(int)}, tres casos límite que no entran en la carga base para no
+   * alterar las cifras que ya verifican las demás pruebas: {@link #CASE_NOVELTY_AFTER_START}
+   * (Antioquia, nivel 1, web), {@link #CASE_ENCODED_OTHER_CAUSE} (Antioquia, nivel 2, web, otra
+   * causa) y {@link #CASE_DEPARTMENT_NO_CATALOG} (departamento {@value #DEPARTMENT_NO_CATALOG},
+   * completo). {@link #clear(int)} también los borra.
+   */
+  public void loadEdgeCases(int year) {
+    List<SampleCase> cases =
+        List.of(
+            new SampleCase(
+                CASE_NOVELTY_AFTER_START,
+                "Persona Ficticia 15",
+                DEPARTMENT_ANTIOQUIA,
+                ENTITY_MIXED,
+                "1",
+                1,
+                1,
+                1,
+                NOVELTY_COMMON,
+                null,
+                true,
+                true,
+                false),
+            new SampleCase(
+                CASE_ENCODED_OTHER_CAUSE,
+                "Persona Ficticia 16",
+                DEPARTMENT_ANTIOQUIA,
+                ENTITY_MIXED,
+                "1",
+                2,
+                1,
+                1,
+                NOVELTY_OTHER_CAUSE,
+                ENCODED_OTHER_CAUSE_TEXT,
+                true,
+                false,
+                false),
+            new SampleCase(
+                CASE_DEPARTMENT_NO_CATALOG,
+                "Persona Ficticia 17",
+                DEPARTMENT_NO_CATALOG,
+                ENTITY_MIXED,
+                "1",
+                1,
                 1,
                 1,
                 null,

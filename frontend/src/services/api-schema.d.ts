@@ -679,7 +679,7 @@ export interface paths {
         };
         /**
          * Cobertura en Excel
-         * @description Hojas Cobertura (por entidad y nivel, con total por departamento) y Consolidado nacional. Mismas reglas de acceso que el reporte en pantalla.
+         * @description Hoja Cobertura (por entidad y nivel, con total por departamento) y una hoja de consolidado: "Consolidado nacional" solo con alcance completo (todos los departamentos) y "Consolidado del alcance" cuando se filtra o el usuario solo ve sus departamentos. Mismas reglas de acceso que el reporte en pantalla.
          */
         get: operations["reportCoverageExcel"];
         put?: never;

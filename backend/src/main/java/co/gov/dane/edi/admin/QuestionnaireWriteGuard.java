@@ -47,7 +47,8 @@ public class QuestionnaireWriteGuard implements HandlerInterceptor {
     if (!writesEnabled) {
       LOGGER.info(
           "Cuestionario en solo lectura: la administración no escribe FRM_* ni el archivo de"
-              + " reglas; solo se importan paquetes de promoción.");
+              + " reglas; solo se importan paquetes de promoción y se permiten las escrituras"
+              + " operativas (cortes de cobertura, novedades y claves).");
     }
   }
 

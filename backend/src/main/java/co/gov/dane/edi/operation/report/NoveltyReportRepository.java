@@ -3,6 +3,7 @@ package co.gov.dane.edi.operation.report;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.operation.report.dto.NoveltyReportRow;
+import co.gov.dane.edi.util.Latin9Text;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +73,7 @@ public class NoveltyReportRepository {
               row.getObject("LEVEL_CODE", Integer.class),
               row.getBigDecimal("NOVELTY_CODE").intValue(),
               row.getString("NOVELTY_NAME"),
-              row.getString("OTHER_CAUSE"),
+              Latin9Text.decodeNumericReferences(row.getString("OTHER_CAUSE")),
               SampleStatus.COMPLETE.name().equals(row.getString("STATUS")));
         });
   }

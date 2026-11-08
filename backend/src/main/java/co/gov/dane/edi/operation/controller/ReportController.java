@@ -4,6 +4,7 @@ import co.gov.dane.edi.admin.AllowedInReadOnlyQuestionnaire;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.operation.OperationalAccess;
 import co.gov.dane.edi.operation.OperationalAccessService;
+import co.gov.dane.edi.operation.OperationalTime;
 import co.gov.dane.edi.operation.excel.XlsxWriter;
 import co.gov.dane.edi.operation.report.CoverageCut;
 import co.gov.dane.edi.operation.report.CoverageCutService;
@@ -33,7 +34,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.http.CacheControl;
@@ -62,7 +62,6 @@ public class ReportController {
   public static final String XLSX =
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   private static final String PROBLEM = "application/problem+json";
-  private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
   private static final int MAX_PAGE_SIZE = 100;
 
   private final OperationalAccessService accessService;
@@ -143,8 +142,10 @@ public class ReportController {
       operationId = "reportCoverageExcel",
       summary = "Cobertura en Excel",
       description =
-          "Hojas Cobertura (por entidad y nivel, con total por departamento) y Consolidado"
-              + " nacional. Mismas reglas de acceso que el reporte en pantalla.")
+          "Hoja Cobertura (por entidad y nivel, con total por departamento) y una hoja de"
+              + " consolidado: \"Consolidado nacional\" solo con alcance completo (todos los"
+              + " departamentos) y \"Consolidado del alcance\" cuando se filtra o el usuario"
+              + " solo ve sus departamentos. Mismas reglas de acceso que el reporte en pantalla.")
   @ApiResponse(
       responseCode = "200",
       description = "Archivo .xlsx",
@@ -165,7 +166,8 @@ public class ReportController {
     CoverageReport report = buildCoverage(reportSurvey, year, departmentCode, jwt);
     byte[] content = xlsxWriter.write(CoverageExcel.sheets(report));
     String fileName =
-        fileName("cobertura", reportSurvey, report.year(), departmentCode, LocalDate.now(clock));
+        fileName(
+            "cobertura", reportSurvey, report.year(), departmentCode, OperationalTime.today(clock));
     return excelResponse(content, fileName);
   }
 
@@ -250,7 +252,7 @@ public class ReportController {
             reportSurvey,
             reportYear,
             departmentCode,
-            LocalDate.now(clock.withZone(BOGOTA)));
+            OperationalTime.today(clock));
     return excelResponse(content, fileName);
   }
 
@@ -309,11 +311,7 @@ public class ReportController {
     return excelResponse(
         content,
         fileName(
-            "novedades",
-            reportSurvey,
-            reportYear,
-            departmentCode,
-            LocalDate.now(clock.withZone(BOGOTA))));
+            "novedades", reportSurvey, reportYear, departmentCode, OperationalTime.today(clock)));
   }
 
   @Operation(
@@ -377,7 +375,7 @@ public class ReportController {
             reportSurvey,
             reportYear,
             departmentCode,
-            LocalDate.now(clock.withZone(BOGOTA))));
+            OperationalTime.today(clock)));
   }
 
   @Operation(

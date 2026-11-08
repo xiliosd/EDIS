@@ -4,6 +4,7 @@ import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.model.Chapter;
 import co.gov.dane.edi.operation.report.dto.PersonStatusRow;
 import co.gov.dane.edi.operation.report.dto.StatusFilter;
+import co.gov.dane.edi.util.Latin9Text;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -137,7 +138,7 @@ public class OperationalStatusRepository {
             : null,
         noveltyCode == null ? null : noveltyCode.intValue(),
         row.getString("NOVELTY_NAME"),
-        row.getString("OTHER_CAUSE"),
+        Latin9Text.decodeNumericReferences(row.getString("OTHER_CAUSE")),
         List.copyOf(missing));
   }
 

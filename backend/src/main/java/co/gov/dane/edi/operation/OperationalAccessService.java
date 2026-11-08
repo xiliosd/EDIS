@@ -59,7 +59,9 @@ public class OperationalAccessService {
     boolean operative = principal.roles().contains(Role.ADMIN_OPERATIVO);
     boolean territorial = principal.roles().contains(Role.ADMIN_TERRITORIAL);
     if (national || operative) {
-      return new OperationalAccess(true, departments.findAll(), territorial, national);
+      // Ruling 8: gestionar novedades es solo sobre departamentos explícitos; con alcance completo
+      // no se gestiona aunque el usuario también sea territorial.
+      return new OperationalAccess(true, departments.findAll(), false, national);
     }
     if (territorial) {
       return new OperationalAccess(false, territorialDepartments(principal), true, false);

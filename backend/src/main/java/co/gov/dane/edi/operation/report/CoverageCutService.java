@@ -3,6 +3,7 @@ package co.gov.dane.edi.operation.report;
 import co.gov.dane.edi.admin.AdminAudit;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.operation.OperationalAccess;
+import co.gov.dane.edi.operation.OperationalTime;
 import co.gov.dane.edi.operation.report.dto.CoverageReport;
 import co.gov.dane.edi.operation.report.dto.CutRequest;
 import co.gov.dane.edi.operation.report.dto.CutSummary;
@@ -50,7 +51,7 @@ public class CoverageCutService {
     CoverageReport report =
         coverageService.coverage(access, request.encuesta(), year, departmentCode);
     // Ruling 6: el id y la fecha visibles van en hora de Bogotá, no en UTC.
-    OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(CoverageCut.BOGOTA);
+    OffsetDateTime now = OperationalTime.now(clock);
     CoverageCut cut =
         new CoverageCut(
             newId(now), request.encuesta(), year, departmentCode, username, now, report);

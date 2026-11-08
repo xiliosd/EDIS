@@ -1,6 +1,8 @@
 package co.gov.dane.edi.operation.report;
 
 import co.gov.dane.edi.config.SurveyProperties;
+import co.gov.dane.edi.model.Chapter;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,7 +11,8 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Una sola consulta agrupada sobre la muestra con el estado de cada funcionario (criterio único,
- * {@link SampleStatus#STATUS_CASE}). Los nombres de tabla llegan ya validados por {@code
+ * {@link SampleStatus#STATUS_CASE}), con los mismos joins y filtro que los listados nominales
+ * ({@link SampleQueryParts}). Los nombres de tabla llegan ya validados por {@code
  * AnswerTableResolver} y {@code SurveyProperties}; todo valor va como parámetro.
  */
 @Repository
@@ -57,48 +60,42 @@ public class CoverageRepository {
       ReportSurvey reportSurvey,
       List<Integer> departments) {
     Map<String, Object> parameters = new HashMap<>();
-    parameters.put("year", String.valueOf(year));
     StringBuilder sql =
         new StringBuilder(
-            "SELECT d.COD_DEPTO AS DEPARTMENT_CODE, d.NOM_DEPTO AS DEPARTMENT_NAME,"
-                + " TO_NUMBER(m.COD_ENT) AS ENTITY_CODE, e.ENTIDAD AS ENTITY_NAME,"
+            "SELECT TO_NUMBER(m.COD_DEPTO) AS DEPARTMENT_CODE, d.NOM_DEPTO AS DEPARTMENT_NAME,"
+                + " TO_NUMBER(m.COD_ENT) AS ENTITY_CODE, ent.ENTIDAD AS ENTITY_NAME,"
                 + " m.AREA_TRA AS LEVEL_CODE, m.TC1 AS CHANNEL, ");
     sql.append(SampleStatus.STATUS_CASE).append(" AS STATUS, COUNT(*) AS TOTAL FROM ");
     sql.append(survey.sampleTableName()).append(" m");
-    // Los capítulos no tienen PK/UNIQUE en C_C: una fila repetida inflaría COUNT(*), por eso se
-    // une una subconsulta agregada por C_C (una fila por funcionario).
-    sql.append(" LEFT JOIN (SELECT C_C, MAX(B07) AS B07 FROM ")
-        .append(chapterBTable)
-        .append(" GROUP BY C_C) b ON b.C_C = m.C_C");
-    sql.append(" LEFT JOIN (SELECT C_C, MAX(H06) AS H06 FROM ")
-        .append(chapterHTable)
-        .append(" GROUP BY C_C) h ON h.C_C = m.C_C");
-    sql.append(" JOIN GRAL_DEPARTAMENTOS d ON d.COD_DEPTO = TO_NUMBER(m.COD_DEPTO)");
-    sql.append(" LEFT JOIN GRAL_ENTI e ON e.COD_ENT = TO_NUMBER(m.COD_ENT)");
-    sql.append(" WHERE m.ANIO = :year AND m.ATV = 1");
-    if (reportSurvey.encCode() != null) {
-      sql.append(" AND m.ENC = :enc");
-      parameters.put("enc", reportSurvey.encCode());
-    }
-    if (departments != null) {
-      sql.append(" AND d.COD_DEPTO IN (:departments)");
-      parameters.put("departments", departments);
-    }
+    Map<Chapter, String> chapterTables = new EnumMap<>(Chapter.class);
+    chapterTables.put(Chapter.B, chapterBTable);
+    chapterTables.put(Chapter.H, chapterHTable);
+    SampleQueryParts.appendChapterJoins(sql, chapterTables);
+    // LEFT JOIN: un COD_DEPTO fuera del catálogo debe contar igual que en Novedades y Claves.
+    sql.append(" LEFT JOIN GRAL_DEPARTAMENTOS d ON d.COD_DEPTO = TO_NUMBER(m.COD_DEPTO)");
+    SampleQueryParts.appendEntityJoin(sql);
+    SampleQueryParts.appendSampleFilter(sql, parameters, year, reportSurvey, departments, null);
     sql.append(
-        " GROUP BY d.COD_DEPTO, d.NOM_DEPTO, TO_NUMBER(m.COD_ENT), e.ENTIDAD, m.AREA_TRA, m.TC1, ");
+        " GROUP BY TO_NUMBER(m.COD_DEPTO), d.NOM_DEPTO, TO_NUMBER(m.COD_ENT), ent.ENTIDAD,"
+            + " m.AREA_TRA, m.TC1, ");
     sql.append(SampleStatus.STATUS_CASE);
     return jdbc.query(
         sql.toString(),
         parameters,
-        (row, index) ->
-            new CoverageRow(
-                row.getInt("DEPARTMENT_CODE"),
-                row.getString("DEPARTMENT_NAME"),
-                row.getLong("ENTITY_CODE"),
-                row.getString("ENTITY_NAME"),
-                row.getObject("LEVEL_CODE", Integer.class),
-                row.getObject("CHANNEL", Integer.class),
-                SampleStatus.valueOf(row.getString("STATUS")),
-                row.getLong("TOTAL")));
+        (row, index) -> {
+          int departmentCode = row.getInt("DEPARTMENT_CODE");
+          String departmentName = row.getString("DEPARTMENT_NAME");
+          return new CoverageRow(
+              departmentCode,
+              departmentName == null || departmentName.isBlank()
+                  ? "Departamento " + departmentCode
+                  : departmentName,
+              row.getLong("ENTITY_CODE"),
+              row.getString("ENTITY_NAME"),
+              row.getObject("LEVEL_CODE", Integer.class),
+              row.getObject("CHANNEL", Integer.class),
+              SampleStatus.valueOf(row.getString("STATUS")),
+              row.getLong("TOTAL"));
+        });
   }
 }

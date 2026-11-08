@@ -20,7 +20,7 @@ public class DepartmentAccessRepository {
       "SELECT DISTINCT D.COD_DEPTO, D.NOM_DEPTO FROM GRAL_TERRITORIAL_ACCESO A"
           + " JOIN GRAL_USUARIOS_ADM U ON TO_CHAR(U.COD_USUA) = TO_CHAR(A.COD_USUA)"
           + " JOIN GRAL_DEPARTAMENTOS D ON D.COD_DEPTO = A.COD_DEPTO"
-          + " WHERE UPPER(TO_CHAR(U.COD_USUA)) = UPPER(:username) AND U.PROY LIKE :userProject"
+          + " WHERE TO_CHAR(U.COD_USUA) = :username AND U.PROY LIKE :userProject"
           + " AND (',' || REPLACE(A.PROY, ' ', '') || ',') LIKE :surveyList"
           + " ORDER BY D.COD_DEPTO";
 

@@ -4,6 +4,7 @@ import co.gov.dane.edi.admin.AllowedInReadOnlyQuestionnaire;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.operation.OperationalAccess;
 import co.gov.dane.edi.operation.OperationalAccessService;
+import co.gov.dane.edi.operation.OperationalTime;
 import co.gov.dane.edi.operation.excel.XlsxWriter;
 import co.gov.dane.edi.operation.keys.SampleKeysExcel;
 import co.gov.dane.edi.operation.keys.SampleKeysRepository.CredentialRow;
@@ -23,8 +24,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.Clock;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -50,7 +49,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class SampleKeysController {
 
   private static final String PROBLEM = "application/problem+json";
-  private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
 
   private final SampleKeysService keysService;
   private final OperationalAccessService accessService;
@@ -168,7 +166,7 @@ public class SampleKeysController {
             ReportSurvey.GENERAL,
             keysYear,
             departmentCode,
-            LocalDate.now(clock.withZone(BOGOTA))));
+            OperationalTime.today(clock)));
   }
 
   private int yearOrDefault(Integer year) {

@@ -2,13 +2,17 @@ package co.gov.dane.edi.operation.report;
 
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_COMPLETE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_COMPLETE_WITH_NOVELTY;
+import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_DEPARTMENT_NO_CATALOG;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_DMC_WITH_KEY;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_EDID_COMPLETE;
+import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_ENCODED_OTHER_CAUSE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_INCOMPLETE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NOT_STARTED;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NOVELTY_NOT_STARTED;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NOVELTY_OTHER_CAUSE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NO_CATALOG_WITH_KEY;
+import static co.gov.dane.edi.support.OperationalSampleFixture.DECODED_OTHER_CAUSE_TEXT;
+import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_NO_CATALOG;
 import static co.gov.dane.edi.support.OperationalSampleFixture.OTHER_CAUSE_TEXT;
 import static co.gov.dane.edi.support.OperationalSampleFixture.USER_OPERATIVE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.USER_TERRITORIAL_MULTI;
@@ -176,6 +180,31 @@ class NoveltyAndPerformanceReportIT extends OracleIntegrationTest {
           .isEqualTo(LocalDate.of(survey.year(), 3, 10));
       assertThat(row.getCell(FIRST_CHAPTER_COLUMN + 1).getStringCellValue()).isEqualTo("09:01:00");
     }
+  }
+
+  @Test
+  void otherCauseIsDecodedInNoveltiesJsonAndExcel() throws Exception {
+    fixture.loadEdgeCases(survey.year());
+
+    JsonNode rows = json(asOperative(NOVELTIES, "?departamento=5"));
+    assertThat(rowOf(rows, CASE_ENCODED_OTHER_CAUSE).get("otherCause").asText())
+        .isEqualTo(DECODED_OTHER_CAUSE_TEXT);
+    try (XSSFWorkbook workbook = open(asOperative(NOVELTIES + "/excel", "?departamento=5"))) {
+      Row encoded =
+          rowByCode(workbook.getSheet("Novedades"), CASE_ENCODED_OTHER_CAUSE, NOVELTY_CODE_COLUMN);
+      assertThat(encoded.getCell(9).getStringCellValue()).isEqualTo(DECODED_OTHER_CAUSE_TEXT);
+    }
+  }
+
+  @Test
+  void noveltyInADepartmentOutsideTheCatalogKeepsAGeneratedName() throws Exception {
+    fixture.loadEdgeCases(survey.year());
+    jdbc.update("UPDATE EDIN_MUESTRA SET IDFNOV = 3 WHERE C_C = ?", CASE_DEPARTMENT_NO_CATALOG);
+
+    JsonNode row = rowOf(json(asOperative(NOVELTIES, "")), CASE_DEPARTMENT_NO_CATALOG);
+
+    assertThat(row.get("departmentName").asText())
+        .isEqualTo("Departamento " + DEPARTMENT_NO_CATALOG);
   }
 
   @Test

@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.lang.reflect.Method;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,6 +21,16 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
 
 class QuestionnaireWriteGuardTest {
+
+  @Test
+  @ExtendWith(OutputCaptureExtension.class)
+  void startupMessageSaysOperationalWritesStillWork(CapturedOutput output) {
+    new QuestionnaireWriteGuard(new QuestionnaireWritesProperties(false));
+
+    assertThat(output.getAll())
+        .contains("Cuestionario en solo lectura")
+        .contains("cortes de cobertura, novedades y claves");
+  }
 
   private static final QuestionnaireWriteGuard READ_ONLY =
       new QuestionnaireWriteGuard(new QuestionnaireWritesProperties(false));

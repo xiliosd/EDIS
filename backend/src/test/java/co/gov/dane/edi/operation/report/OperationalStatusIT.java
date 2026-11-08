@@ -5,15 +5,19 @@ import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_COMPLETE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_COMPLETE_WITH_NOVELTY;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_DMC_WITH_KEY;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_EDID_COMPLETE;
+import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_ENCODED_OTHER_CAUSE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_FORMULA_NAME;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_INACTIVE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_INCOMPLETE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NOT_STARTED;
+import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NOVELTY_AFTER_START;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NOVELTY_NOT_STARTED;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NOVELTY_OTHER_CAUSE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NO_CATALOG_WITH_KEY;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NO_KEY_DMC;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_NO_KEY_WEB;
+import static co.gov.dane.edi.support.OperationalSampleFixture.DECODED_OTHER_CAUSE_TEXT;
+import static co.gov.dane.edi.support.OperationalSampleFixture.ENCODED_OTHER_CAUSE_TEXT;
 import static co.gov.dane.edi.support.OperationalSampleFixture.ENTITY_NO_CATALOG;
 import static co.gov.dane.edi.support.OperationalSampleFixture.FORMULA_NAME;
 import static co.gov.dane.edi.support.OperationalSampleFixture.OTHER_CAUSE_TEXT;
@@ -263,6 +267,37 @@ class OperationalStatusIT extends OracleIntegrationTest {
     }
   }
 
+  @Test
+  void noveltyAfterStartingIsNoveltyNotIncomplete() throws Exception {
+    fixture.loadEdgeCases(survey.year());
+
+    assertThat(codes("NOVELTY")).contains(CASE_NOVELTY_AFTER_START);
+    assertThat(codes("INCOMPLETE")).doesNotContain(CASE_NOVELTY_AFTER_START);
+    JsonNode row = rowOf(page("estado=ALL"), CASE_NOVELTY_AFTER_START);
+    assertThat(row.get("status").asText()).isEqualTo("NOVELTY");
+    assertThat(chaptersOf(row)).doesNotContain("B").contains("H");
+  }
+
+  @Test
+  void otherCauseIsDecodedInJsonAndExcel() throws Exception {
+    fixture.loadEdgeCases(survey.year());
+
+    JsonNode row = rowOf(page("estado=NOVELTY"), CASE_ENCODED_OTHER_CAUSE);
+    assertThat(row.get("otherCause").asText()).isEqualTo(DECODED_OTHER_CAUSE_TEXT);
+    try (XSSFWorkbook workbook = open(excel("departamento=5&estado=NOVELTY"))) {
+      Sheet sheet = workbook.getSheet("Estado operativo");
+      assertThat(sheet.getRow(1).getCell(10).getStringCellValue()).isEqualTo("Otra causa");
+      Row encoded =
+          dataRows(sheet).stream()
+              .filter(candidate -> CASE_ENCODED_OTHER_CAUSE.equals(text(candidate, 2)))
+              .findFirst()
+              .orElseThrow();
+      assertThat(text(encoded, 10))
+          .isEqualTo(DECODED_OTHER_CAUSE_TEXT)
+          .isNotEqualTo(ENCODED_OTHER_CAUSE_TEXT);
+    }
+  }
+
   // ---- utilidades -------------------------------------------------------------------------
 
   private List<String> codes(String statusFilter) throws Exception {
@@ -301,6 +336,10 @@ class OperationalStatusIT extends OracleIntegrationTest {
     List<String> chapters = new ArrayList<>();
     row.get("missingChapters").forEach(chapter -> chapters.add(chapter.asText()));
     return chapters;
+  }
+
+  private static String text(Row row, int column) {
+    return row.getCell(column) == null ? null : row.getCell(column).getStringCellValue();
   }
 
   private static List<Row> dataRows(Sheet sheet) {

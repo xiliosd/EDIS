@@ -30,8 +30,16 @@ public class SampleKeysRepository {
   /** Elegibles por departamento (código 0 si la muestra no lo tiene). */
   public record DepartmentRow(int code, String name, long eligible, long withKey) {}
 
-  /** Fila pendiente bloqueada: su ROWID distingue filas con la misma cédula en el año. */
-  public record PendingRow(String rowId, String respondentCode) {}
+  /**
+   * Fila pendiente bloqueada: su ROWID distingue filas con la misma cédula en el año. {@code
+   * toString} no muestra la cédula.
+   */
+  public record PendingRow(String rowId, String respondentCode) {
+    @Override
+    public String toString() {
+      return "PendingRow[rowId=" + rowId + ", cedula=oculta]";
+    }
+  }
 
   /** Usuario y clave nuevos para una fila pendiente. {@code toString} no muestra la clave. */
   public record Assignment(PendingRow row, String login, String password) {

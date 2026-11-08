@@ -10,6 +10,7 @@ import co.gov.dane.edi.operation.report.dto.CoverageTotals;
 import co.gov.dane.edi.operation.report.dto.DepartmentCoverage;
 import co.gov.dane.edi.operation.report.dto.EntityCoverage;
 import co.gov.dane.edi.operation.report.dto.LevelCoverage;
+import java.text.Collator;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +35,7 @@ public class CoverageService {
   private static final List<Integer> LEVELS = List.of(1, 2, 3);
   private static final String COMPLETE_FROM = "B07";
   private static final String COMPLETE_TO = "H06";
+  private static final Locale SPANISH_COLOMBIA = Locale.forLanguageTag("es-CO");
 
   /** Años cuyos capítulos B y H ya se comprobaron: solo se guarda lo afirmativo. */
   private final Set<Integer> verifiedYears = ConcurrentHashMap.newKeySet();
@@ -84,9 +87,7 @@ public class CoverageService {
     List<DepartmentCoverage> departments =
         byDepartment.values().stream()
             .map(this::departmentCoverage)
-            .sorted(
-                Comparator.comparing(DepartmentCoverage::name)
-                    .thenComparingInt(DepartmentCoverage::code))
+            .sorted(departmentOrder())
             .toList();
     CoverageTotals national =
         departments.stream()
@@ -106,6 +107,14 @@ public class CoverageService {
         coversAllDepartments,
         national,
         levelTotals(rows));
+  }
+
+  /** Por nombre en español (tildes y mayúsculas no alteran el orden) y luego por código. */
+  private static Comparator<DepartmentCoverage> departmentOrder() {
+    Collator collator = Collator.getInstance(SPANISH_COLOMBIA);
+    collator.setStrength(Collator.SECONDARY);
+    return Comparator.comparing(DepartmentCoverage::name, Comparator.nullsLast(collator))
+        .thenComparingInt(DepartmentCoverage::code);
   }
 
   private DepartmentCoverage departmentCoverage(List<CoverageRow> departmentRows) {

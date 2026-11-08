@@ -18,6 +18,7 @@ import co.gov.dane.edi.support.OperationalSampleFixture;
 import co.gov.dane.edi.support.OracleIntegrationTest;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -129,6 +130,28 @@ class OperationalAccessServiceIT extends OracleIntegrationTest {
     OperationalAccess access = service.accessFor(territorial(USER_TERRITORIAL_MULTI, "5"));
 
     assertThat(codes(access)).containsExactly(DEPARTMENT_ANTIOQUIA);
+  }
+
+  @Test
+  void territorialCombinedWithFullScopeCannotManageNovelties() {
+    OperationalAccess access =
+        service.accessFor(
+            SessionPrincipal.administrator(
+                USER_TERRITORIAL_MULTI,
+                EnumSet.of(Role.ADMIN_TERRITORIAL, Role.ADMIN_OPERATIVO),
+                "5"));
+
+    assertThat(access.allDepartments()).isTrue();
+    assertThat(access.canManageNovelties()).isFalse();
+  }
+
+  @Test
+  void assignmentsMatchTheUsernameExactly() {
+    // El login devuelve COD_USUA tal como está guardado: otra capitalización es otro usuario.
+    OperationalAccess access =
+        service.accessFor(territorial(USER_TERRITORIAL_MULTI.toUpperCase(Locale.ROOT), "76"));
+
+    assertThat(codes(access)).containsExactly(DEPARTMENT_VALLE);
   }
 
   private static SessionPrincipal territorial(String username, String departmentCode) {

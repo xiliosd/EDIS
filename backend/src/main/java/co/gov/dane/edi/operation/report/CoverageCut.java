@@ -1,10 +1,10 @@
 package co.gov.dane.edi.operation.report;
 
+import co.gov.dane.edi.operation.OperationalTime;
 import co.gov.dane.edi.operation.report.dto.CoverageReport;
 import co.gov.dane.edi.operation.report.dto.CutSummary;
 import co.gov.dane.edi.operation.report.dto.DepartmentCoverage;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 
 /**
  * Corte de cobertura de un departamento: una fotografía fija del reporte. Guarda solo cifras y
@@ -20,9 +20,6 @@ public record CoverageCut(
     String generatedBy,
     OffsetDateTime generatedAt,
     CoverageReport report) {
-
-  /** Colombia no usa horario de verano: el desplazamiento es fijo. */
-  public static final ZoneOffset BOGOTA = ZoneOffset.ofHours(-5);
 
   /** Nombre del departamento tal como quedó en el reporte; sin filas, un nombre por código. */
   public String departmentName() {
@@ -42,6 +39,6 @@ public record CoverageCut(
         departmentCode,
         departmentName(),
         generatedBy,
-        generatedAt.withOffsetSameInstant(BOGOTA));
+        OperationalTime.inZone(generatedAt));
   }
 }
