@@ -16,6 +16,7 @@ import {
   type OperationalStatusFilters,
   type PersonStatusRow,
 } from './reports-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const STATUS_OPTIONS: readonly { value: OperationalStatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Todos' },
@@ -152,8 +153,9 @@ export function OperationalStatusPage() {
           <p className="mt-6 text-ink-muted">No hay funcionarios para estos filtros.</p>
         ) : (
           <>
-            <div
-              className={`mt-6 overflow-x-auto ${result.isPlaceholderData ? 'opacity-60' : ''}`}
+            <ScrollableRegion
+              label="Estado del operativo por entidad"
+              className={`mt-6 ${result.isPlaceholderData ? 'opacity-60' : ''}`}
               aria-busy={result.isPlaceholderData}
             >
               <table className="w-full min-w-[56rem] border-collapse text-sm">
@@ -188,7 +190,7 @@ export function OperationalStatusPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableRegion>
             <ReportPager page={page} pageCount={pageCount} total={total} onChange={setPage} />
           </>
         ))}

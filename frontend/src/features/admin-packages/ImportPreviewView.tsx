@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import type { ImportPreview } from './packages-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 interface ImportPreviewViewProps {
   preview: ImportPreview;
@@ -28,7 +29,7 @@ export const ImportPreviewView = forwardRef<HTMLElement, ImportPreviewViewProps>
         {impact.length === 0 ? (
           <p className="mt-2">Ninguna página guardada cambia con este paquete.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <ScrollableRegion label="Impacto por página" className="mt-3">
             <table className="w-full border-collapse text-left">
               <caption className="mb-2 text-left font-semibold">Impacto por página</caption>
               <thead>
@@ -54,7 +55,7 @@ export const ImportPreviewView = forwardRef<HTMLElement, ImportPreviewViewProps>
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableRegion>
         )}
       </section>
     );

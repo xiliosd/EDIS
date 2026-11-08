@@ -92,7 +92,7 @@ public class NoveltyService {
   @Transactional
   public void assign(OperationalAccess access, String username, NoveltyChangeRequest request) {
     requireNoveltyManagement(access);
-    int year = request.anio();
+    int year = yearOrDefault(request.anio());
     boolean inCatalog =
         repository.findCatalog(year).stream().anyMatch(row -> row.code() == request.noveltyCode());
     if (!inCatalog) {
@@ -123,7 +123,7 @@ public class NoveltyService {
         access,
         username,
         REMOVE_OPERATION,
-        request.anio(),
+        yearOrDefault(request.anio()),
         request.respondentCode(),
         null,
         null,
@@ -235,5 +235,10 @@ public class NoveltyService {
     if (!access.canManageNovelties()) {
       throw new AccessDeniedException("El usuario no gestiona novedades");
     }
+  }
+
+  /** Sin año en el cuerpo (la pantalla usa el de la encuesta activa) se asume el de la encuesta. */
+  private int yearOrDefault(Integer year) {
+    return year == null ? survey.year() : year;
   }
 }

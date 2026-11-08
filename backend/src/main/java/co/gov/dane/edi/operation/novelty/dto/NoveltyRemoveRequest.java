@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
  * como en {@link NoveltyChangeRequest}.
  */
 public record NoveltyRemoveRequest(
-    @Min(1) int anio,
+    @Min(1) Integer anio,
     @NotBlank @Size(max = 11) String respondentCode,
     Integer expectedNoveltyCode,
     String expectedOtherCause) {}

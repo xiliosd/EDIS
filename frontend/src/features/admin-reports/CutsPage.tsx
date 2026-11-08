@@ -14,6 +14,7 @@ import {
   type CutSummary,
   type ReportFilterValue,
 } from './reports-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const BOGOTA = 'America/Bogota';
 
@@ -130,7 +131,7 @@ export function CutsPage() {
           (rows.length === 0 ? (
             <p className="mt-3 text-ink-muted">Todavía no hay cortes para estos filtros.</p>
           ) : (
-            <div className="mt-3 overflow-x-auto">
+            <ScrollableRegion label="Cortes generados" className="mt-3">
               <table className="w-full min-w-[44rem] border-collapse text-sm">
                 <caption className="sr-only">Cortes generados</caption>
                 <thead className="bg-primary/10">
@@ -161,7 +162,7 @@ export function CutsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableRegion>
           ))}
       </section>
     </section>

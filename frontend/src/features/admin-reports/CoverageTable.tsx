@@ -7,6 +7,7 @@ import type {
   EntityCoverage,
   LevelCoverage,
 } from './reports-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const HEADER_CELL = 'px-3 py-2 text-right font-semibold';
 const NUMBER_CELL = 'whitespace-nowrap px-3 py-2 text-right tabular-nums';
@@ -135,7 +136,7 @@ export function CoverageTable({ report, caption }: CoverageTableProps) {
   const departments = report.departments ?? [];
   return (
     <>
-      <div className="mt-4 overflow-x-auto">
+      <ScrollableRegion label={caption} className="mt-4">
         <table className="w-full min-w-[60rem] border-collapse text-sm">
           <caption className="pb-2 text-left font-semibold">{caption}</caption>
           <TotalsHead firstColumn="Departamento y entidad" />
@@ -143,7 +144,7 @@ export function CoverageTable({ report, caption }: CoverageTableProps) {
             <DepartmentRows key={department.code} department={department} />
           ))}
         </table>
-      </div>
+      </ScrollableRegion>
 
       <section aria-labelledby="titulo-consolidado" className="mt-8">
         <h2 id="titulo-consolidado" className="text-xl font-semibold">
@@ -153,7 +154,7 @@ export function CoverageTable({ report, caption }: CoverageTableProps) {
           {formatCount(report.departmentCount)} departamentos y {formatCount(report.entityCount)}{' '}
           entidades.
         </p>
-        <div className="mt-3 overflow-x-auto">
+        <ScrollableRegion label={`Tabla del ${labels.block.toLowerCase()}`} className="mt-3">
           <table className="w-full min-w-[60rem] border-collapse text-sm">
             <caption className="sr-only">{labels.block}</caption>
             <TotalsHead firstColumn="Concepto" />
@@ -169,7 +170,7 @@ export function CoverageTable({ report, caption }: CoverageTableProps) {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableRegion>
       </section>
     </>
   );

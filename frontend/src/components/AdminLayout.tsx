@@ -73,7 +73,8 @@ export function AdminLayout() {
           )}
         </ul>
       </nav>
-      <div>
+      {/* min-w-0: sin él, una tabla ancha estira la columna de la rejilla y la página en móvil. */}
+      <div className="min-w-0">
         <Outlet />
       </div>
     </div>

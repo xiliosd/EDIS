@@ -17,6 +17,7 @@ import {
   type SurveyCode,
   type YearSummary,
 } from './admin-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const STATE_LABELS: Record<string, string> = { borrador: 'Borrador', publicado: 'Publicado' };
 const YEAR_PATTERN = /^\d{4}$/;
@@ -134,7 +135,7 @@ export function YearsPage() {
 
       {yearsQuery.isSuccess && (
         <>
-          <div className="mt-6 overflow-x-auto">
+          <ScrollableRegion label="Años del cuestionario" className="mt-6">
             <table className="w-full border-collapse text-left">
               <caption className="sr-only">Años del cuestionario de {survey}</caption>
               <thead>
@@ -171,7 +172,7 @@ export function YearsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableRegion>
           <Button
             className="mt-6"
             disabled={readOnly}

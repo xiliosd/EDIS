@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Size;
  * (nulos si no tenía novedad): si cambiaron entretanto, la operación responde 409.
  */
 public record NoveltyChangeRequest(
-    @Min(1) int anio,
+    @Min(1) Integer anio,
     @NotBlank @Size(max = 11) String respondentCode,
     int noveltyCode,
     String otherCause,

@@ -103,6 +103,22 @@ class NoveltyServiceIT extends OracleIntegrationTest {
   }
 
   @Test
+  void assignsAndRemovesWithoutYearUsingTheActiveSurveyYear() {
+    // La pantalla no envía el año mientras el usuario no lo cambia en el filtro.
+    service.assign(
+        territorial,
+        USER_TERRITORIAL_MULTI,
+        new NoveltyChangeRequest(null, CASE_NOT_STARTED, NOVELTY_COMMON, null, null, null));
+    assertThat(stored(CASE_NOT_STARTED)).containsEntry("IDFNOV", NOVELTY_COMMON);
+
+    service.remove(
+        territorial,
+        USER_TERRITORIAL_MULTI,
+        new NoveltyRemoveRequest(null, CASE_NOT_STARTED, NOVELTY_COMMON, null));
+    assertThat(stored(CASE_NOT_STARTED)).containsEntry("IDFNOV", null);
+  }
+
+  @Test
   void changesToOtherCauseStoringEntitiesAndReadsTheSameText() {
     service.assign(
         territorial,

@@ -14,6 +14,7 @@ import {
   REPORT_PAGE_SIZE,
   type ReportFilterValue,
 } from './reports-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const CHAPTERS = ['B', 'C', 'D', 'E', 'F', 'G', 'H'];
 const NO_VALUE = '—';
@@ -81,7 +82,7 @@ export function PerformancePage() {
           <p className="mt-6 text-ink-muted">No hay funcionarios que hayan iniciado.</p>
         ) : (
           <>
-            <div className="mt-6 overflow-x-auto">
+            <ScrollableRegion label="Rendimientos por capítulo" className="mt-6">
               <table className="w-full min-w-[72rem] border-collapse text-sm">
                 <caption className="sr-only">
                   Rendimientos por capítulo, {formatCount(all.length)} funcionarios
@@ -122,7 +123,7 @@ export function PerformancePage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableRegion>
             <ReportPager page={page} pageCount={pageCount} total={all.length} onChange={setPage} />
           </>
         ))}

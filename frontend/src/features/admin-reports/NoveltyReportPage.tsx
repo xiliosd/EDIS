@@ -14,6 +14,7 @@ import {
   REPORT_PAGE_SIZE,
   type ReportFilterValue,
 } from './reports-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const COLUMNS = [
   'Departamento',
@@ -74,7 +75,7 @@ export function NoveltyReportPage() {
           <p className="mt-6 text-ink-muted">No hay novedades para estos filtros.</p>
         ) : (
           <>
-            <div className="mt-6 overflow-x-auto">
+            <ScrollableRegion label="Funcionarios con novedad" className="mt-6">
               <table className="w-full min-w-[56rem] border-collapse text-sm">
                 <caption className="sr-only">
                   Funcionarios con novedad, {formatCount(all.length)} en total
@@ -106,7 +107,7 @@ export function NoveltyReportPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableRegion>
             <ReportPager page={page} pageCount={pageCount} total={all.length} onChange={setPage} />
           </>
         ))}

@@ -23,6 +23,7 @@ import {
   restoreVersion,
 } from './history-api';
 import { versionDiff, type Change } from './version-diff';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 function formatDate(iso: string | undefined): string {
   return iso ? new Date(iso).toLocaleString('es-CO') : '';
@@ -272,7 +273,7 @@ export function HistoryPage() {
               El año está publicado: solo se puede restaurar en un borrador.
             </p>
           )}
-          <div className="mt-4 overflow-x-auto">
+          <ScrollableRegion label="Versiones guardadas" className="mt-4">
             <table className="w-full border-collapse text-left">
               <caption className="mb-2 text-left font-semibold">Versiones guardadas</caption>
               <thead>
@@ -328,7 +329,7 @@ export function HistoryPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableRegion>
 
           {entries.length >= 2 && (
             <DiffPanel

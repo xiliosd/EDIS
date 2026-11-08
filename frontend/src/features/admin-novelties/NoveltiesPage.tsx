@@ -23,6 +23,7 @@ import {
   removeNovelty,
   type NoveltyPerson,
 } from './novelties-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const STATUS_LABELS: Record<NonNullable<NoveltyPerson['status']>, string> = {
   COMPLETE: 'Completa',
@@ -240,7 +241,7 @@ export function NoveltiesPage() {
         (peopleList.length === 0 ? (
           <p className="mt-4 text-ink-muted">Esta entidad no tiene funcionarios en la muestra.</p>
         ) : (
-          <div className="mt-4 overflow-x-auto">
+          <ScrollableRegion label="Funcionarios de la entidad y su novedad" className="mt-4">
             <table className="w-full min-w-[40rem] border-collapse text-sm">
               <caption className="sr-only">Funcionarios de la entidad y su novedad</caption>
               <thead className="bg-primary/10">
@@ -310,7 +311,7 @@ export function NoveltiesPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollableRegion>
         ))}
 
       {editing && (

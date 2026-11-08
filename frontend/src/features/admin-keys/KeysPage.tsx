@@ -16,6 +16,7 @@ import {
   KEYS_QUERY_ROOT,
   keysSummaryQueryKey,
 } from './keys-api';
+import { ScrollableRegion } from '../../components/ScrollableRegion';
 
 const CONFLICT_MESSAGE =
   'El número de funcionarios sin clave cambió desde que abrió la confirmación. ' +
@@ -155,7 +156,7 @@ export function KeysPage() {
 
       {summary.isSuccess && (
         <>
-          <div className="mt-6 overflow-x-auto">
+          <ScrollableRegion label="Claves de la muestra por departamento" className="mt-6">
             <table className="w-full min-w-[34rem] border-collapse text-sm">
               <caption className="sr-only">Claves de la muestra por departamento</caption>
               <thead className="bg-primary/10">
@@ -213,7 +214,7 @@ export function KeysPage() {
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </ScrollableRegion>
 
           <div className="mt-6">
             <Button
