@@ -6,6 +6,7 @@ import { SessionMenu } from './components/SessionMenu';
 import { AdminHomePage } from './features/admin/AdminHomePage';
 import { OPERATION_ROLES } from './features/admin/operation-scope';
 import { HistoryPage } from './features/admin-history/HistoryPage';
+import { NoveltiesPage } from './features/admin-novelties/NoveltiesPage';
 import { PackagesPage } from './features/admin-packages/PackagesPage';
 import { PublishPage } from './features/admin-publish/PublishPage';
 import { CoveragePage } from './features/admin-reports/CoveragePage';
@@ -182,6 +183,14 @@ export function App() {
             element={
               <RequireRole roles={OPERATION_ROLES}>
                 <PerformancePage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="novedades"
+            element={
+              <RequireRole roles={['ADMIN_TERRITORIAL']}>
+                <NoveltiesPage />
               </RequireRole>
             }
           />
