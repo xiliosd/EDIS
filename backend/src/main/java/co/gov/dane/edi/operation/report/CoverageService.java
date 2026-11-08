@@ -66,7 +66,7 @@ public class CoverageService {
     requireCompletionQuestions(year, chapterB, chapterH);
     List<CoverageRow> rows =
         repository.findRows(chapterB, chapterH, year, reportSurvey, departments);
-    return buildReport(reportSurvey, year, rows);
+    return buildReport(reportSurvey, year, rows, departments == null);
   }
 
   private void requireCompletionQuestions(int year, String chapterB, String chapterH) {
@@ -80,7 +80,8 @@ public class CoverageService {
     verifiedYears.add(year);
   }
 
-  private CoverageReport buildReport(ReportSurvey reportSurvey, int year, List<CoverageRow> rows) {
+  private CoverageReport buildReport(
+      ReportSurvey reportSurvey, int year, List<CoverageRow> rows, boolean coversAllDepartments) {
     Map<Integer, List<CoverageRow>> byDepartment = new LinkedHashMap<>();
     rows.forEach(
         row ->
@@ -107,6 +108,7 @@ public class CoverageService {
         departments,
         departments.size(),
         distinctEntities.size(),
+        coversAllDepartments,
         national,
         levelTotals(rows));
   }

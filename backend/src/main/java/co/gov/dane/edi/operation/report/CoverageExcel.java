@@ -15,6 +15,7 @@ public final class CoverageExcel {
 
   public static final String COVERAGE_SHEET = "Cobertura";
   public static final String NATIONAL_SHEET = "Consolidado nacional";
+  public static final String SCOPE_SHEET = "Consolidado del alcance";
   public static final String TOTAL_LEVEL = "Total";
 
   private static final List<String> METRIC_HEADERS =
@@ -77,12 +78,25 @@ public final class CoverageExcel {
           nationalRow(
               department.name(), department.entities().size(), TOTAL_LEVEL, department.totals()));
     }
-    rows.add(nationalRow("Total nacional", report.entityCount(), TOTAL_LEVEL, report.national()));
+    rows.add(
+        nationalRow(totalLabel(report, ""), report.entityCount(), TOTAL_LEVEL, report.national()));
     for (LevelCoverage level : report.nationalWebLevels()) {
-      rows.add(nationalRow("Total nacional (carga web)", null, level.level(), level.totals()));
+      rows.add(
+          nationalRow(totalLabel(report, " (carga web)"), null, level.level(), level.totals()));
     }
-    return new XlsxSheet(
-        NATIONAL_SHEET, "Consolidado nacional de cobertura " + suffix, headers, rows);
+    // Solo es nacional si el reporte abarca todos los departamentos; si no, no debe citarse así.
+    String sheetName = report.coversAllDepartments() ? NATIONAL_SHEET : SCOPE_SHEET;
+    String title =
+        (report.coversAllDepartments()
+                ? "Consolidado nacional de cobertura "
+                : "Consolidado del alcance consultado de cobertura ")
+            + suffix;
+    return new XlsxSheet(sheetName, title, headers, rows);
+  }
+
+  private static String totalLabel(CoverageReport report, String suffix) {
+    return (report.coversAllDepartments() ? "Total nacional" : "Total del alcance consultado")
+        + suffix;
   }
 
   private static List<Object> row(

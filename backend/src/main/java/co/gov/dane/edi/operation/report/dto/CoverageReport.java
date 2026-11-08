@@ -12,5 +12,6 @@ public record CoverageReport(
     List<DepartmentCoverage> departments,
     int departmentCount,
     int entityCount,
+    boolean coversAllDepartments,
     CoverageTotals national,
     List<LevelCoverage> nationalWebLevels) {}

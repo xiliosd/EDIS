@@ -900,6 +900,7 @@ export interface components {
             motivo?: string;
         };
         CoverageReport: {
+            coversAllDepartments?: boolean;
             /** Format: int32 */
             departmentCount?: number;
             departments?: components["schemas"]["DepartmentCoverage"][];

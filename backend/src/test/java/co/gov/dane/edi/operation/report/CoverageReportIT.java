@@ -139,7 +139,7 @@ class CoverageReportIT extends OracleIntegrationTest {
     try (XSSFWorkbook workbook =
         new XSSFWorkbook(new ByteArrayInputStream(result.getResponse().getContentAsByteArray()))) {
       Sheet coverage = workbook.getSheet("Cobertura");
-      Sheet national = workbook.getSheet("Consolidado nacional");
+      Sheet national = workbook.getSheet("Consolidado del alcance");
       assertThat(coverage).isNotNull();
       assertThat(national).isNotNull();
       Row header = coverage.getRow(1);
@@ -147,7 +147,9 @@ class CoverageReportIT extends OracleIntegrationTest {
       assertThat(header.getCell(3).getStringCellValue()).isEqualTo("Nivel");
       assertThat(header.getCell(12).getStringCellValue()).isEqualTo("% sin diligenciar");
       assertThat(findEntityTotal(coverage, 900001)).isNotNull();
-      assertThat(findRow(national, 0, "Total nacional")).isNotNull();
+      assertThat(findRow(national, 0, "Total del alcance consultado")).isNotNull();
+      assertThat(findRow(national, 0, "Total nacional")).isNull();
+      assertThat(workbook.getSheet("Consolidado nacional")).isNull();
     }
   }
 
@@ -170,6 +172,47 @@ class CoverageReportIT extends OracleIntegrationTest {
       assertThat(entityTotal.getCell(9).getNumericCellValue()).isEqualTo(2d);
       assertThat(entityTotal.getCell(11).getNumericCellValue()).isEqualTo(3d);
     }
+  }
+
+  @Test
+  void unfilteredOperativeExportIsLabelledNational() throws Exception {
+    MvcResult result =
+        getAs(USER_OPERATIVE, Role.ADMIN_OPERATIVO, null, COVERAGE + "/excel?encuesta=GENERAL")
+            .andExpect(status().isOk())
+            .andReturn();
+    try (XSSFWorkbook workbook =
+        new XSSFWorkbook(new ByteArrayInputStream(result.getResponse().getContentAsByteArray()))) {
+      Sheet sheet = workbook.getSheet("Consolidado nacional");
+      assertThat(sheet).isNotNull();
+      assertThat(findRow(sheet, 0, "Total nacional")).isNotNull();
+      assertThat(findRow(sheet, 0, "Total del alcance consultado")).isNull();
+      assertThat(workbook.getSheet("Consolidado del alcance")).isNull();
+    }
+    getAs(USER_OPERATIVE, Role.ADMIN_OPERATIVO, null, COVERAGE + "?encuesta=GENERAL")
+        .andExpect(jsonPath("$.coversAllDepartments").value(true));
+  }
+
+  @Test
+  void territorialExportWithoutFilterIsLabelledAsScope() throws Exception {
+    MvcResult result =
+        getAs(
+                USER_TERRITORIAL_MULTI,
+                Role.ADMIN_TERRITORIAL,
+                "5",
+                COVERAGE + "/excel?encuesta=GENERAL")
+            .andExpect(status().isOk())
+            .andReturn();
+    try (XSSFWorkbook workbook =
+        new XSSFWorkbook(new ByteArrayInputStream(result.getResponse().getContentAsByteArray()))) {
+      Sheet sheet = workbook.getSheet("Consolidado del alcance");
+      assertThat(sheet).isNotNull();
+      assertThat(findRow(sheet, 0, "Total del alcance consultado")).isNotNull();
+      assertThat(findRow(sheet, 0, "Total nacional")).isNull();
+    }
+    getAs(USER_TERRITORIAL_MULTI, Role.ADMIN_TERRITORIAL, "5", COVERAGE + "?encuesta=GENERAL")
+        .andExpect(jsonPath("$.coversAllDepartments").value(false));
+    getAs(USER_ENGINEER, Role.ADMIN_NACIONAL, null, COVERAGE + "?departamento=5")
+        .andExpect(jsonPath("$.coversAllDepartments").value(false));
   }
 
   @Test

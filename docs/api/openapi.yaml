@@ -2363,6 +2363,8 @@ components:
     CoverageReport:
       type: object
       properties:
+        coversAllDepartments:
+          type: boolean
         departmentCount:
           type: integer
           format: int32
