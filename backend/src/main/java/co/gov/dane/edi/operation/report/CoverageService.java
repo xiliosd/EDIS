@@ -55,12 +55,7 @@ public class CoverageService {
 
   public CoverageReport coverage(
       OperationalAccess access, ReportSurvey reportSurvey, int year, Integer departmentCode) {
-    // Nacional u operativo sin departamento pedido: sin filtro (el catálogo puede no tenerlos
-    // todos).
-    List<Integer> departments =
-        access.allDepartments() && departmentCode == null
-            ? null
-            : access.departmentCodesOrAll(departmentCode);
+    List<Integer> departments = access.departmentFilter(departmentCode);
     String chapterB = tables.tableFor(Chapter.B, survey.code(), year);
     String chapterH = tables.tableFor(Chapter.H, survey.code(), year);
     requireCompletionQuestions(year, chapterB, chapterH);

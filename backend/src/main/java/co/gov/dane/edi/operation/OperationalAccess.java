@@ -38,4 +38,13 @@ public record OperationalAccess(
     requireDepartment(requested);
     return List.of(requested);
   }
+
+  /**
+   * Filtro de departamentos para una consulta: nulo (sin filtro) si el usuario ve todo el país y no
+   * pidió departamento (el catálogo puede no tenerlos todos); si no, {@link
+   * #departmentCodesOrAll(Integer)}.
+   */
+  public List<Integer> departmentFilter(Integer requested) {
+    return allDepartments && requested == null ? null : departmentCodesOrAll(requested);
+  }
 }

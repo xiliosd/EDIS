@@ -11,7 +11,6 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -54,12 +53,12 @@ public class OperationalStatusRepository {
             "SELECT TO_NUMBER(m.COD_ENT) AS ENTITY_CODE, ent.ENTIDAD AS ENTITY_NAME,"
                 + " m.C_C AS RESPONDENT_CODE, m.NOM_APE AS PERSON_NAME,"
                 + " m.AREA_TRA AS LEVEL_CODE, m.TC1 AS CHANNEL, ");
-    sql.append(SampleStatus.STATUS_CASE).append(" AS STATUS, h.COMPLETED_AT AS COMPLETED_AT,");
+    sql.append(SampleStatus.STATUS_CASE).append(" AS STATUS, h.SAVED_AT AS COMPLETED_AT,");
     sql.append(" m.IDFNOV AS NOVELTY_CODE, n.NOVEDAD AS NOVELTY_NAME,");
     sql.append(" m.NOV_OTRA_CAUSA AS OTHER_CAUSE");
     for (Chapter chapter : Chapter.values()) {
       sql.append(", CASE WHEN ")
-          .append(alias(chapter))
+          .append(SampleQueryParts.alias(chapter))
           .append(".ROWS_FOUND IS NULL THEN 1 ELSE 0 END AS MISSING_")
           .append(chapter.code());
     }
@@ -98,41 +97,11 @@ public class OperationalStatusRepository {
       int departmentCode,
       Long entityCode) {
     sql.append(" FROM ").append(survey.sampleTableName()).append(" m");
-    // Los capítulos no tienen clave única en C_C: se une una subconsulta agregada por C_C (una
-    // fila por funcionario) para que una fila repetida no duplique personas.
-    for (Chapter chapter : Chapter.values()) {
-      sql.append(" LEFT JOIN (SELECT C_C, COUNT(*) AS ROWS_FOUND");
-      if (chapter == Chapter.B) {
-        sql.append(", MAX(B07) AS B07");
-      } else if (chapter == Chapter.H) {
-        sql.append(", MAX(H06) AS H06, MAX(FECHA) AS COMPLETED_AT");
-      }
-      sql.append(" FROM ")
-          .append(chapterTables.get(chapter))
-          .append(" GROUP BY C_C) ")
-          .append(alias(chapter))
-          .append(" ON ")
-          .append(alias(chapter))
-          .append(".C_C = m.C_C");
-    }
-    sql.append(" LEFT JOIN GRAL_ENTI ent ON ent.COD_ENT = TO_NUMBER(m.COD_ENT)");
-    sql.append(
-        " LEFT JOIN (SELECT IDFNOV, MAX(NOVEDAD) AS NOVEDAD FROM GRAL_NOVEDAD"
-            + " WHERE PROY LIKE :noveltySurvey AND ANIO = :noveltyYear GROUP BY IDFNOV) n"
-            + " ON n.IDFNOV = m.IDFNOV");
-    parameters.put("noveltySurvey", survey.code() + "%");
-    parameters.put("noveltyYear", year);
-    sql.append(" WHERE m.ANIO = :year AND m.ATV = 1 AND TO_NUMBER(m.COD_DEPTO) = :department");
-    parameters.put("year", String.valueOf(year));
-    parameters.put("department", departmentCode);
-    if (reportSurvey.encCode() != null) {
-      sql.append(" AND m.ENC = :enc");
-      parameters.put("enc", reportSurvey.encCode());
-    }
-    if (entityCode != null) {
-      sql.append(" AND TO_NUMBER(m.COD_ENT) = :entity");
-      parameters.put("entity", entityCode);
-    }
+    SampleQueryParts.appendChapterJoins(sql, chapterTables);
+    SampleQueryParts.appendEntityJoin(sql);
+    SampleQueryParts.appendNoveltyCatalogJoin(sql, parameters, survey, year);
+    SampleQueryParts.appendSampleFilter(
+        sql, parameters, year, reportSurvey, List.of(departmentCode), entityCode);
   }
 
   private static void appendStatus(
@@ -141,11 +110,6 @@ public class OperationalStatusRepository {
       sql.append(" AND (").append(SampleStatus.STATUS_CASE).append(") = :status");
       parameters.put("status", statusFilter.status().name());
     }
-  }
-
-  /** Alias SQL del capítulo: {@code b} y {@code h} los exige {@link SampleStatus#STATUS_CASE}. */
-  private static String alias(Chapter chapter) {
-    return chapter.name().toLowerCase(Locale.ROOT);
   }
 
   private static PersonStatusRow mapRow(ResultSet row) throws SQLException {

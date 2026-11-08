@@ -574,6 +574,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/reports/novelties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Funcionarios con novedad
+         * @description Funcionarios con novedad (entidad, funcionario, nivel, código y texto de la novedad, otra causa) y si además están completos. Sin departamento: todos los del alcance del usuario (todo el país o los del territorial). Contiene datos personales: la respuesta no se guarda en caché. Un departamento fuera del alcance devuelve 403.
+         */
+        get: operations["reportNovelties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/novelties/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Novedades en Excel
+         * @description La hoja Novedades con las mismas filas y reglas de acceso del reporte en pantalla. Contiene datos personales: la descarga no se guarda en caché.
+         */
+        get: operations["reportNoveltiesExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/reports/operational-status": {
         parameters: {
             query?: never;
@@ -606,6 +646,46 @@ export interface paths {
          * @description Todas las filas del filtro (sin paginar) en la hoja Estado operativo. Contiene datos personales: la descarga no se guarda en caché. Mismas reglas de acceso que el listado.
          */
         get: operations["reportOperationalStatusExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rendimientos: fecha y hora de guardado por capítulo
+         * @description Funcionarios que iniciaron (B07 con respuesta) con la fecha y la hora del último guardado de cada capítulo B a H; un capítulo sin guardar trae fecha y hora nulas. Sin departamento: todos los del alcance del usuario. Contiene datos personales: la respuesta no se guarda en caché. Un departamento fuera del alcance devuelve 403.
+         */
+        get: operations["reportPerformance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/performance/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rendimientos en Excel
+         * @description La hoja Rendimientos con columnas Fecha B, Hora B, hasta Fecha H, Hora H. Mismas reglas de acceso que el reporte en pantalla. Contiene datos personales: la descarga no se guarda en caché.
+         */
+        get: operations["reportPerformanceExcel"];
         put?: never;
         post?: never;
         delete?: never;
@@ -964,6 +1044,13 @@ export interface components {
             module?: string;
             title?: string;
         };
+        ChapterTimestamp: {
+            chapter?: string;
+            /** Format: date */
+            date?: string;
+            /** Format: time-local */
+            time?: string;
+        };
         ChecklistItem: {
             code?: string;
             detail?: string;
@@ -1165,6 +1252,23 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
+        NoveltyReportRow: {
+            complete?: boolean;
+            /** Format: int32 */
+            departmentCode?: number;
+            departmentName?: string;
+            /** Format: int64 */
+            entityCode?: number;
+            entityName?: string;
+            /** Format: int32 */
+            level?: number;
+            name?: string;
+            /** Format: int32 */
+            noveltyCode?: number;
+            noveltyName?: string;
+            otherCause?: string;
+            respondentCode?: string;
+        };
         OperationalScope: {
             allDepartments?: boolean;
             canManageKeys?: boolean;
@@ -1206,6 +1310,16 @@ export interface components {
             pageCode?: string;
             /** @enum {string} */
             state?: "SAVED" | "AVAILABLE" | "LOCKED";
+        };
+        PerformanceRow: {
+            chapters?: components["schemas"]["ChapterTimestamp"][];
+            /** Format: int64 */
+            entityCode?: number;
+            entityName?: string;
+            /** Format: int32 */
+            level?: number;
+            name?: string;
+            respondentCode?: string;
         };
         PersonStatusPage: {
             /** Format: int32 */
@@ -3186,6 +3300,63 @@ export interface operations {
             };
         };
     };
+    reportNovelties: {
+        parameters: {
+            query?: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Funcionarios con novedad */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoveltyReportRow"][];
+                };
+            };
+            /** @description Las tablas del año no tienen B07 o H06 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportNoveltiesExcel: {
+        parameters: {
+            query?: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archivo .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+        };
+    };
     reportOperationalStatus: {
         parameters: {
             query: {
@@ -3263,6 +3434,63 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportPerformance: {
+        parameters: {
+            query?: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rendimientos por funcionario */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformanceRow"][];
+                };
+            };
+            /** @description Las tablas del año no tienen B07 o H06 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportPerformanceExcel: {
+        parameters: {
+            query?: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archivo .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
         };

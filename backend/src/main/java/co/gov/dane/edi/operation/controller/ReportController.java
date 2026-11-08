@@ -9,13 +9,18 @@ import co.gov.dane.edi.operation.report.CoverageCut;
 import co.gov.dane.edi.operation.report.CoverageCutService;
 import co.gov.dane.edi.operation.report.CoverageExcel;
 import co.gov.dane.edi.operation.report.CoverageService;
+import co.gov.dane.edi.operation.report.NominalReportService;
+import co.gov.dane.edi.operation.report.NoveltyExcel;
 import co.gov.dane.edi.operation.report.OperationalStatusExcel;
 import co.gov.dane.edi.operation.report.OperationalStatusService;
+import co.gov.dane.edi.operation.report.PerformanceExcel;
 import co.gov.dane.edi.operation.report.ReportSurvey;
 import co.gov.dane.edi.operation.report.ReportYearsRepository;
 import co.gov.dane.edi.operation.report.dto.CoverageReport;
 import co.gov.dane.edi.operation.report.dto.CutRequest;
 import co.gov.dane.edi.operation.report.dto.CutSummary;
+import co.gov.dane.edi.operation.report.dto.NoveltyReportRow;
+import co.gov.dane.edi.operation.report.dto.PerformanceRow;
 import co.gov.dane.edi.operation.report.dto.PersonStatusPage;
 import co.gov.dane.edi.operation.report.dto.StatusFilter;
 import co.gov.dane.edi.security.SessionTokenService;
@@ -63,6 +68,7 @@ public class ReportController {
   private final OperationalAccessService accessService;
   private final CoverageService coverageService;
   private final OperationalStatusService statusService;
+  private final NominalReportService nominalReportService;
   private final CoverageCutService cutService;
   private final SessionTokenService tokens;
   private final ReportYearsRepository yearsRepository;
@@ -74,6 +80,7 @@ public class ReportController {
       OperationalAccessService accessService,
       CoverageService coverageService,
       OperationalStatusService statusService,
+      NominalReportService nominalReportService,
       CoverageCutService cutService,
       SessionTokenService tokens,
       ReportYearsRepository yearsRepository,
@@ -83,6 +90,7 @@ public class ReportController {
     this.accessService = accessService;
     this.coverageService = coverageService;
     this.statusService = statusService;
+    this.nominalReportService = nominalReportService;
     this.cutService = cutService;
     this.tokens = tokens;
     this.yearsRepository = yearsRepository;
@@ -244,6 +252,132 @@ public class ReportController {
             departmentCode,
             LocalDate.now(clock.withZone(BOGOTA)));
     return excelResponse(content, fileName);
+  }
+
+  @Operation(
+      operationId = "reportNovelties",
+      summary = "Funcionarios con novedad",
+      description =
+          "Funcionarios con novedad (entidad, funcionario, nivel, código y texto de la novedad,"
+              + " otra causa) y si además están completos. Sin departamento: todos los del alcance"
+              + " del usuario (todo el país o los del territorial). Contiene datos personales: la"
+              + " respuesta no se guarda en caché. Un departamento fuera del alcance devuelve 403.")
+  @ApiResponse(responseCode = "200", description = "Funcionarios con novedad")
+  @ApiResponse(
+      responseCode = "422",
+      description = "Las tablas del año no tienen B07 o H06",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @GetMapping(path = "/novelties", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<List<NoveltyReportRow>> novelties(
+      @RequestParam(name = "encuesta", defaultValue = "GENERAL") ReportSurvey reportSurvey,
+      @RequestParam(name = "anio", required = false) Integer year,
+      @RequestParam(name = "departamento", required = false) Integer departmentCode,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    int reportYear = year == null ? survey.year() : year;
+    List<NoveltyReportRow> rows =
+        nominalReportService.novelties(access, reportSurvey, reportYear, departmentCode);
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows);
+  }
+
+  @Operation(
+      operationId = "reportNoveltiesExcel",
+      summary = "Novedades en Excel",
+      description =
+          "La hoja Novedades con las mismas filas y reglas de acceso del reporte en pantalla."
+              + " Contiene datos personales: la descarga no se guarda en caché.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Archivo .xlsx",
+      content = @Content(mediaType = XLSX, schema = @Schema(type = "string", format = "binary")))
+  @GetMapping(
+      path = "/novelties/excel",
+      produces = {XLSX, PROBLEM})
+  public ResponseEntity<byte[]> noveltiesExcel(
+      @RequestParam(name = "encuesta", defaultValue = "GENERAL") ReportSurvey reportSurvey,
+      @RequestParam(name = "anio", required = false) Integer year,
+      @RequestParam(name = "departamento", required = false) Integer departmentCode,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    int reportYear = year == null ? survey.year() : year;
+    List<NoveltyReportRow> rows =
+        nominalReportService.novelties(access, reportSurvey, reportYear, departmentCode);
+    byte[] content =
+        xlsxWriter.write(
+            List.of(NoveltyExcel.sheet(rows, reportSurvey, reportYear, departmentCode)));
+    return excelResponse(
+        content,
+        fileName(
+            "novedades",
+            reportSurvey,
+            reportYear,
+            departmentCode,
+            LocalDate.now(clock.withZone(BOGOTA))));
+  }
+
+  @Operation(
+      operationId = "reportPerformance",
+      summary = "Rendimientos: fecha y hora de guardado por capítulo",
+      description =
+          "Funcionarios que iniciaron (B07 con respuesta) con la fecha y la hora del último"
+              + " guardado de cada capítulo B a H; un capítulo sin guardar trae fecha y hora"
+              + " nulas. Sin departamento: todos los del alcance del usuario. Contiene datos"
+              + " personales: la respuesta no se guarda en caché. Un departamento fuera del"
+              + " alcance devuelve 403.")
+  @ApiResponse(responseCode = "200", description = "Rendimientos por funcionario")
+  @ApiResponse(
+      responseCode = "422",
+      description = "Las tablas del año no tienen B07 o H06",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @GetMapping(path = "/performance", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<List<PerformanceRow>> performance(
+      @RequestParam(name = "encuesta", defaultValue = "GENERAL") ReportSurvey reportSurvey,
+      @RequestParam(name = "anio", required = false) Integer year,
+      @RequestParam(name = "departamento", required = false) Integer departmentCode,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    int reportYear = year == null ? survey.year() : year;
+    List<PerformanceRow> rows =
+        nominalReportService.performance(access, reportSurvey, reportYear, departmentCode);
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows);
+  }
+
+  @Operation(
+      operationId = "reportPerformanceExcel",
+      summary = "Rendimientos en Excel",
+      description =
+          "La hoja Rendimientos con columnas Fecha B, Hora B, hasta Fecha H, Hora H. Mismas reglas"
+              + " de acceso que el reporte en pantalla. Contiene datos personales: la descarga"
+              + " no se guarda en caché.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Archivo .xlsx",
+      content = @Content(mediaType = XLSX, schema = @Schema(type = "string", format = "binary")))
+  @GetMapping(
+      path = "/performance/excel",
+      produces = {XLSX, PROBLEM})
+  public ResponseEntity<byte[]> performanceExcel(
+      @RequestParam(name = "encuesta", defaultValue = "GENERAL") ReportSurvey reportSurvey,
+      @RequestParam(name = "anio", required = false) Integer year,
+      @RequestParam(name = "departamento", required = false) Integer departmentCode,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    int reportYear = year == null ? survey.year() : year;
+    List<PerformanceRow> rows =
+        nominalReportService.performance(access, reportSurvey, reportYear, departmentCode);
+    byte[] content =
+        xlsxWriter.write(
+            List.of(PerformanceExcel.sheet(rows, reportSurvey, reportYear, departmentCode)));
+    return excelResponse(
+        content,
+        fileName(
+            "rendimientos",
+            reportSurvey,
+            reportYear,
+            departmentCode,
+            LocalDate.now(clock.withZone(BOGOTA))));
   }
 
   @Operation(
