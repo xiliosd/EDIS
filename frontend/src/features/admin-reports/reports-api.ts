@@ -78,7 +78,8 @@ export type ReportExcelPath =
   | '/api/v1/admin/reports/cuts/{id}/excel'
   | '/api/v1/admin/reports/novelties/excel'
   | '/api/v1/admin/reports/operational-status/excel'
-  | '/api/v1/admin/reports/performance/excel';
+  | '/api/v1/admin/reports/performance/excel'
+  | '/api/v1/admin/keys/excel';
 
 /** Parámetros de la petición de un Excel: filtros en `query` o el identificador en `path`. */
 export interface ReportExcelParams {

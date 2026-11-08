@@ -6,6 +6,7 @@ import { SessionMenu } from './components/SessionMenu';
 import { AdminHomePage } from './features/admin/AdminHomePage';
 import { OPERATION_ROLES } from './features/admin/operation-scope';
 import { HistoryPage } from './features/admin-history/HistoryPage';
+import { KeysPage } from './features/admin-keys/KeysPage';
 import { NoveltiesPage } from './features/admin-novelties/NoveltiesPage';
 import { PackagesPage } from './features/admin-packages/PackagesPage';
 import { PublishPage } from './features/admin-publish/PublishPage';
@@ -191,6 +192,14 @@ export function App() {
             element={
               <RequireRole roles={['ADMIN_TERRITORIAL']}>
                 <NoveltiesPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="claves"
+            element={
+              <RequireRole roles={['ADMIN_NACIONAL']}>
+                <KeysPage />
               </RequireRole>
             }
           />
