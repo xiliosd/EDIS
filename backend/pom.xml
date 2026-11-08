@@ -24,6 +24,8 @@
     <checkstyle.version>14.1.0</checkstyle.version>
     <jacoco.version>0.8.15</jacoco.version>
     <springdoc.version>3.1.1</springdoc.version>
+    <!-- Verificada en Maven Central (release 6.0.0, 2026-10-22). Escritura de .xlsx de los reportes. -->
+    <poi.version>6.0.0</poi.version>
     <!-- Corrige 3 CVE críticos de Tomcat 11.0.24 (CVE-2026-65182, -65905, -68525); quitar cuando Boot traiga Tomcat >= 11.0.26. -->
     <tomcat.version>11.0.26</tomcat.version>
   </properties>
@@ -57,6 +59,11 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>${poi.version}</version>
     </dependency>
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>

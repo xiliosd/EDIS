@@ -490,6 +490,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/reports/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cobertura por departamento y entidad
+         * @description Muestra, novedades, completas, incompletas y sin diligenciar con el criterio único de estado. El territorial solo ve sus departamentos; pedir otro devuelve 403.
+         */
+        get: operations["reportCoverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/coverage/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cobertura en Excel
+         * @description Hojas Cobertura (por entidad y nivel, con total por departamento) y Consolidado nacional. Mismas reglas de acceso que el reporte en pantalla.
+         */
+        get: operations["reportCoverageExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Años disponibles para los reportes
+         * @description Años con funcionarios en la muestra, del más reciente al más antiguo. El administrador del cuestionario recibe 403.
+         */
+        get: operations["reportYears"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/years/{encuesta}": {
         parameters: {
             query?: never;
@@ -839,6 +899,38 @@ export interface components {
         CorrectionReasonRequest: {
             motivo?: string;
         };
+        CoverageReport: {
+            /** Format: int32 */
+            departmentCount?: number;
+            departments?: components["schemas"]["DepartmentCoverage"][];
+            /** Format: int32 */
+            entityCount?: number;
+            /** Format: date-time */
+            generatedAt?: string;
+            national?: components["schemas"]["CoverageTotals"];
+            nationalWebLevels?: components["schemas"]["LevelCoverage"][];
+            /** @enum {string} */
+            survey?: "GENERAL" | "EDI" | "EDID";
+            /** Format: int32 */
+            year?: number;
+        };
+        CoverageTotals: {
+            /** Format: int64 */
+            complete?: number;
+            completePct?: number;
+            /** Format: int64 */
+            effectiveSample?: number;
+            /** Format: int64 */
+            incomplete?: number;
+            incompletePct?: number;
+            /** Format: int64 */
+            notStarted?: number;
+            notStartedPct?: number;
+            /** Format: int64 */
+            novelties?: number;
+            /** Format: int64 */
+            sample?: number;
+        };
         CreateYearRequest: {
             /** Format: int32 */
             fromYear: number;
@@ -853,11 +945,25 @@ export interface components {
             code?: number;
             name?: string;
         };
+        DepartmentCoverage: {
+            /** Format: int32 */
+            code?: number;
+            entities?: components["schemas"]["EntityCoverage"][];
+            name?: string;
+            totals?: components["schemas"]["CoverageTotals"];
+        };
         EditTextRequest: {
             motivo?: string;
             text: string;
             /** Format: int32 */
             version: number;
+        };
+        EntityCoverage: {
+            /** Format: int64 */
+            code?: number;
+            name?: string;
+            totals?: components["schemas"]["CoverageTotals"];
+            webLevels?: components["schemas"]["LevelCoverage"][];
         };
         ExpectedOutcome: {
             errores?: {
@@ -920,6 +1026,11 @@ export interface components {
             /** Format: int32 */
             count?: number;
             triggerValue?: string;
+        };
+        LevelCoverage: {
+            /** Format: int32 */
+            level?: number;
+            totals?: components["schemas"]["CoverageTotals"];
         };
         LoginRequest: {
             /** @enum {string} */
@@ -2766,6 +2877,101 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportCoverage: {
+        parameters: {
+            query?: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cobertura del alcance del usuario */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageReport"];
+                };
+            };
+            /** @description La encuesta no es GENERAL, EDI ni EDID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Las tablas del año no tienen B07 o H06 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportCoverageExcel: {
+        parameters: {
+            query?: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archivo .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description La encuesta no es GENERAL, EDI ni EDID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportYears: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Años de la muestra */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[];
                 };
             };
         };
