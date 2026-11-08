@@ -6,6 +6,7 @@ import co.gov.dane.edi.admin.PackageTooLargeException;
 import co.gov.dane.edi.admin.PublicationBlockedException;
 import co.gov.dane.edi.admin.QuestionnaireReadOnlyException;
 import co.gov.dane.edi.admin.SharedRowException;
+import co.gov.dane.edi.operation.report.ReportUnavailableException;
 import co.gov.dane.edi.service.error.AnswerValidationException;
 import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidCredentialsException;
@@ -122,6 +123,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   ProblemDetail handleSurveyNotAvailable(SurveyNotAvailableException exception) {
     return problem(
         HttpStatus.SERVICE_UNAVAILABLE, "Encuesta no disponible", exception.getMessage());
+  }
+
+  @ExceptionHandler(ReportUnavailableException.class)
+  ProblemDetail handleReportUnavailable(ReportUnavailableException exception) {
+    return problem(
+        HttpStatus.UNPROCESSABLE_CONTENT, ReportUnavailableException.TITLE, exception.getMessage());
   }
 
   @ExceptionHandler(AnswerValidationException.class)

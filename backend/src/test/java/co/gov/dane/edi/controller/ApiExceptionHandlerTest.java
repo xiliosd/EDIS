@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.gov.dane.edi.admin.QuestionnaireReadOnlyException;
+import co.gov.dane.edi.operation.report.ReportUnavailableException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.service.error.TooManyLoginAttemptsException;
 import co.gov.dane.edi.service.error.YearCreationFailedException;
@@ -118,6 +119,20 @@ class ApiExceptionHandlerTest {
                         + " QA y llegan con un paquete de promoción."));
   }
 
+  @Test
+  void reportWithoutRequiredQuestionsIs422InSpanish() throws Exception {
+    mockMvc
+        .perform(get("/test/report-unavailable"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.title").value("Reporte no disponible"))
+        .andExpect(
+            jsonPath("$.detail")
+                .value(
+                    "El cuestionario de 2027 no tiene las preguntas B07 y H06 que definen una"
+                        + " encuesta completa."));
+  }
+
   record Payload(@NotBlank(message = "Ingrese su usuario") String username) {}
 
   @RestController
@@ -158,6 +173,11 @@ class ApiExceptionHandlerTest {
     @GetMapping("/test/read-only")
     void readOnly() {
       throw new QuestionnaireReadOnlyException();
+    }
+
+    @GetMapping("/test/report-unavailable")
+    void reportUnavailable() {
+      throw new ReportUnavailableException(2027);
     }
 
     @PostMapping("/test/validated")

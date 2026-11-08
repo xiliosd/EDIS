@@ -23,8 +23,15 @@ public record OperationalAccess(
     }
   }
 
-  /** Sin departamento pedido: los del usuario (todos si es nacional u operativo). */
+  /**
+   * Sin departamento pedido: los del usuario. Quien tiene {@link #allDepartments()} no debe filtrar
+   * por departamento (esta lista es solo el catálogo y puede estar incompleta).
+   */
   public List<Integer> departmentCodesOrAll(Integer requested) {
+    if (!allDepartments && departments.isEmpty()) {
+      // Una lista vacía nunca significa "todos": sin departamentos asignados no hay acceso.
+      throw new AccessDeniedException("El usuario no tiene departamentos asignados");
+    }
     if (requested == null) {
       return departments.stream().map(Department::code).toList();
     }
