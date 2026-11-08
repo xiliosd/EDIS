@@ -288,11 +288,21 @@ describe('KeysPage', () => {
 
   it('isNotAvailableForOtherRoles', async () => {
     serve(WITH_PENDING, ['ADMIN_TERRITORIAL']);
+    let summaryRequested = false;
+    server.use(
+      http.get(SUMMARY_API, () => {
+        summaryRequested = true;
+        return HttpResponse.json(WITH_PENDING);
+      }),
+    );
     renderApp(KEYS_URL);
 
-    await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Claves de la muestra' })).toBeNull(),
-    );
+    // Estado terminal: la sesión ya resolvió y se muestra el acceso denegado.
+    expect(
+      await screen.findByText('Su usuario no tiene permisos para ver esta sección.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Claves de la muestra' })).toBeNull();
+    expect(summaryRequested).toBe(false);
   });
 
   it('hasNoAccessibilityViolationsInThePageAndTheDialog', async () => {
