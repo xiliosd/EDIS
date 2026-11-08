@@ -9,11 +9,15 @@ import co.gov.dane.edi.operation.report.CoverageCut;
 import co.gov.dane.edi.operation.report.CoverageCutService;
 import co.gov.dane.edi.operation.report.CoverageExcel;
 import co.gov.dane.edi.operation.report.CoverageService;
+import co.gov.dane.edi.operation.report.OperationalStatusExcel;
+import co.gov.dane.edi.operation.report.OperationalStatusService;
 import co.gov.dane.edi.operation.report.ReportSurvey;
 import co.gov.dane.edi.operation.report.ReportYearsRepository;
 import co.gov.dane.edi.operation.report.dto.CoverageReport;
 import co.gov.dane.edi.operation.report.dto.CutRequest;
 import co.gov.dane.edi.operation.report.dto.CutSummary;
+import co.gov.dane.edi.operation.report.dto.PersonStatusPage;
+import co.gov.dane.edi.operation.report.dto.StatusFilter;
 import co.gov.dane.edi.security.SessionTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,6 +28,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.http.CacheControl;
@@ -52,9 +57,12 @@ public class ReportController {
   public static final String XLSX =
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   private static final String PROBLEM = "application/problem+json";
+  private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
+  private static final int MAX_PAGE_SIZE = 100;
 
   private final OperationalAccessService accessService;
   private final CoverageService coverageService;
+  private final OperationalStatusService statusService;
   private final CoverageCutService cutService;
   private final SessionTokenService tokens;
   private final ReportYearsRepository yearsRepository;
@@ -65,6 +73,7 @@ public class ReportController {
   public ReportController(
       OperationalAccessService accessService,
       CoverageService coverageService,
+      OperationalStatusService statusService,
       CoverageCutService cutService,
       SessionTokenService tokens,
       ReportYearsRepository yearsRepository,
@@ -73,6 +82,7 @@ public class ReportController {
       Clock clock) {
     this.accessService = accessService;
     this.coverageService = coverageService;
+    this.statusService = statusService;
     this.cutService = cutService;
     this.tokens = tokens;
     this.yearsRepository = yearsRepository;
@@ -148,6 +158,91 @@ public class ReportController {
     byte[] content = xlsxWriter.write(CoverageExcel.sheets(report));
     String fileName =
         fileName("cobertura", reportSurvey, report.year(), departmentCode, LocalDate.now(clock));
+    return excelResponse(content, fileName);
+  }
+
+  @Operation(
+      operationId = "reportOperationalStatus",
+      summary = "Estado de mi operativo (listado nominal)",
+      description =
+          "Funcionarios del departamento con su estado (completo, con novedad, incompleto o sin"
+              + " diligenciar), filtrable por entidad y estado y paginado (máximo 100 por"
+              + " página). Contiene datos personales: la respuesta no se guarda en caché. Un"
+              + " departamento fuera del alcance del usuario devuelve 403.")
+  @ApiResponse(responseCode = "200", description = "Página del listado")
+  @ApiResponse(
+      responseCode = "400",
+      description = "Parámetros inválidos (departamento obligatorio, size mayor a 100, page < 0)",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description = "Las tablas del año no tienen B07 o H06",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @GetMapping(path = "/operational-status", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<PersonStatusPage> operationalStatus(
+      @RequestParam(name = "encuesta", defaultValue = "GENERAL") ReportSurvey reportSurvey,
+      @RequestParam(name = "anio", required = false) Integer year,
+      @RequestParam(name = "departamento") Integer departmentCode,
+      @RequestParam(name = "entidad", required = false) Long entityCode,
+      @RequestParam(name = "estado", defaultValue = "ALL") StatusFilter statusFilter,
+      @RequestParam(name = "page", defaultValue = "0") int page,
+      @RequestParam(name = "size", defaultValue = "100") int size,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "page debe ser 0 o más y size entre 1 y 100.");
+    }
+    OperationalAccess access = accessService.current(jwt);
+    int reportYear = year == null ? survey.year() : year;
+    PersonStatusPage result =
+        statusService.page(
+            access, reportSurvey, reportYear, departmentCode, entityCode, statusFilter, page, size);
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+  }
+
+  @Operation(
+      operationId = "reportOperationalStatusExcel",
+      summary = "Estado de mi operativo en Excel",
+      description =
+          "Todas las filas del filtro (sin paginar) en la hoja Estado operativo. Contiene datos"
+              + " personales: la descarga no se guarda en caché. Mismas reglas de acceso que el"
+              + " listado.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Archivo .xlsx",
+      content = @Content(mediaType = XLSX, schema = @Schema(type = "string", format = "binary")))
+  @ApiResponse(
+      responseCode = "400",
+      description = "Parámetros inválidos",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @GetMapping(
+      path = "/operational-status/excel",
+      produces = {XLSX, PROBLEM})
+  public ResponseEntity<byte[]> operationalStatusExcel(
+      @RequestParam(name = "encuesta", defaultValue = "GENERAL") ReportSurvey reportSurvey,
+      @RequestParam(name = "anio", required = false) Integer year,
+      @RequestParam(name = "departamento") Integer departmentCode,
+      @RequestParam(name = "entidad", required = false) Long entityCode,
+      @RequestParam(name = "estado", defaultValue = "ALL") StatusFilter statusFilter,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    int reportYear = year == null ? survey.year() : year;
+    var rows =
+        statusService.all(
+            access, reportSurvey, reportYear, departmentCode, entityCode, statusFilter);
+    byte[] content =
+        xlsxWriter.write(
+            List.of(OperationalStatusExcel.sheet(rows, reportSurvey, reportYear, departmentCode)));
+    String fileName =
+        fileName(
+            "estado-operativo",
+            reportSurvey,
+            reportYear,
+            departmentCode,
+            LocalDate.now(clock.withZone(BOGOTA)));
     return excelResponse(content, fileName);
   }
 

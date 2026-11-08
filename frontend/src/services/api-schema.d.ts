@@ -574,6 +574,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/reports/operational-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de mi operativo (listado nominal)
+         * @description Funcionarios del departamento con su estado (completo, con novedad, incompleto o sin diligenciar), filtrable por entidad y estado y paginado (máximo 100 por página). Contiene datos personales: la respuesta no se guarda en caché. Un departamento fuera del alcance del usuario devuelve 403.
+         */
+        get: operations["reportOperationalStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/operational-status/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de mi operativo en Excel
+         * @description Todas las filas del filtro (sin paginar) en la hoja Estado operativo. Contiene datos personales: la descarga no se guarda en caché. Mismas reglas de acceso que el listado.
+         */
+        get: operations["reportOperationalStatusExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/reports/years": {
         parameters: {
             query?: never;
@@ -1166,6 +1206,34 @@ export interface components {
             pageCode?: string;
             /** @enum {string} */
             state?: "SAVED" | "AVAILABLE" | "LOCKED";
+        };
+        PersonStatusPage: {
+            /** Format: int32 */
+            page?: number;
+            rows?: components["schemas"]["PersonStatusRow"][];
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            total?: number;
+        };
+        PersonStatusRow: {
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: int64 */
+            entityCode?: number;
+            entityName?: string;
+            /** Format: int32 */
+            level?: number;
+            loadType?: string;
+            missingChapters?: string[];
+            name?: string;
+            /** Format: int32 */
+            noveltyCode?: number;
+            noveltyName?: string;
+            otherCause?: string;
+            respondentCode?: string;
+            /** @enum {string} */
+            status?: "COMPLETE" | "NOVELTY" | "INCOMPLETE" | "NOT_STARTED";
         };
         ProblemDetail: {
             detail?: string;
@@ -3109,6 +3177,87 @@ export interface operations {
             };
             /** @description El corte no existe */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportOperationalStatus: {
+        parameters: {
+            query: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento: number;
+                entidad?: number;
+                estado?: "ALL" | "COMPLETE" | "INCOMPLETE" | "NOT_STARTED" | "NOVELTY";
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página del listado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonStatusPage"];
+                };
+            };
+            /** @description Parámetros inválidos (departamento obligatorio, size mayor a 100, page < 0) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Las tablas del año no tienen B07 o H06 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportOperationalStatusExcel: {
+        parameters: {
+            query: {
+                encuesta?: "GENERAL" | "EDI" | "EDID";
+                anio?: number;
+                departamento: number;
+                entidad?: number;
+                estado?: "ALL" | "COMPLETE" | "INCOMPLETE" | "NOT_STARTED" | "NOVELTY";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archivo .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description Parámetros inválidos */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

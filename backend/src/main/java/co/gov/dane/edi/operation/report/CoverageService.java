@@ -69,7 +69,7 @@ public class CoverageService {
     return buildReport(reportSurvey, year, rows, departments == null);
   }
 
-  private void requireCompletionQuestions(int year, String chapterB, String chapterH) {
+  void requireCompletionQuestions(int year, String chapterB, String chapterH) {
     if (verifiedYears.contains(year)) {
       return;
     }
