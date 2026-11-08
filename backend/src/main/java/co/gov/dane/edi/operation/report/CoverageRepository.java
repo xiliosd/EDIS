@@ -65,8 +65,14 @@ public class CoverageRepository {
                 + " m.AREA_TRA AS LEVEL_CODE, m.TC1 AS CHANNEL, ");
     sql.append(SampleStatus.STATUS_CASE).append(" AS STATUS, COUNT(*) AS TOTAL FROM ");
     sql.append(survey.sampleTableName()).append(" m");
-    sql.append(" LEFT JOIN ").append(chapterBTable).append(" b ON b.C_C = m.C_C");
-    sql.append(" LEFT JOIN ").append(chapterHTable).append(" h ON h.C_C = m.C_C");
+    // Los capítulos no tienen PK/UNIQUE en C_C: una fila repetida inflaría COUNT(*), por eso se
+    // une una subconsulta agregada por C_C (una fila por funcionario).
+    sql.append(" LEFT JOIN (SELECT C_C, MAX(B07) AS B07 FROM ")
+        .append(chapterBTable)
+        .append(" GROUP BY C_C) b ON b.C_C = m.C_C");
+    sql.append(" LEFT JOIN (SELECT C_C, MAX(H06) AS H06 FROM ")
+        .append(chapterHTable)
+        .append(" GROUP BY C_C) h ON h.C_C = m.C_C");
     sql.append(" JOIN GRAL_DEPARTAMENTOS d ON d.COD_DEPTO = TO_NUMBER(m.COD_DEPTO)");
     sql.append(" LEFT JOIN GRAL_ENTI e ON e.COD_ENT = TO_NUMBER(m.COD_ENT)");
     sql.append(" WHERE m.ANIO = :year AND m.ATV = 1");

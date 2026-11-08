@@ -1,6 +1,8 @@
 package co.gov.dane.edi.operation.report;
 
+import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_COMPLETE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_INACTIVE;
+import static co.gov.dane.edi.support.OperationalSampleFixture.CASE_INCOMPLETE;
 import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_ANTIOQUIA;
 import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_ATLANTICO;
 import static co.gov.dane.edi.support.OperationalSampleFixture.DEPARTMENT_VALLE;
@@ -276,6 +278,28 @@ class CoverageServiceIT extends OracleIntegrationTest {
 
     assertThatThrownBy(() -> service.coverage(nobody, ReportSurvey.GENERAL, survey.year(), null))
         .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void repeatedChapterRowsDoNotInflateSampleOrComplete() {
+    CoverageTotals before =
+        entity(department(report(ReportSurvey.GENERAL), 5), ENTITY_MIXED).totals();
+    jdbc.update(
+        "INSERT INTO EDIN_20_CAP_B_UBICA (C_C, ESTADO, TC, B07) VALUES (?, 1, 1, '1')",
+        CASE_COMPLETE);
+    jdbc.update(
+        "INSERT INTO EDIN_20_CAP_H_PREV_PRACT (C_C, ESTADO, TC, H06) VALUES (?, 1, 1, '1')",
+        CASE_COMPLETE);
+    jdbc.update(
+        "INSERT INTO EDIN_20_CAP_B_UBICA (C_C, ESTADO, TC, B07) VALUES (?, 1, 1, '1')",
+        CASE_INCOMPLETE);
+
+    CoverageTotals after =
+        entity(department(report(ReportSurvey.GENERAL), 5), ENTITY_MIXED).totals();
+
+    assertThat(after).isEqualTo(before);
+    assertTotals(after, 9, 2, 2, 2);
+    // Las filas repetidas las borra clearFixture (clear elimina los capítulos por rango de C_C).
   }
 
   @Test
