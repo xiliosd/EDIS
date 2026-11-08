@@ -1,6 +1,10 @@
 -- Datos FICTICIOS. Nunca cargar aquí datos reales de servidores públicos (Ley 1581 de 2012).
 DELETE FROM EDIN_MUESTRA;
 DELETE FROM GRAL_USUARIOS_ADM;
+DELETE FROM GRAL_TERRITORIAL_ACCESO;
+DELETE FROM GRAL_DEPARTAMENTOS;
+DELETE FROM GRAL_ENTI;
+DELETE FROM GRAL_NOVEDAD;
 DELETE FROM FRM_PREGUNTA;
 DELETE FROM FRM_PRE_GRUPO;
 DELETE FROM FRM_CAP_PROY;
@@ -34,6 +38,32 @@ INSERT INTO GRAL_USUARIOS_ADM (COD_USUA, CLAVE, NOMBRE, CARGO, ROL, COD_DPTO, PR
   ('adm.nacional', 'Nac#2026x', 'Administrador Ficticio', 'Coordinador', 1, NULL, 'EDIN'),
   ('adm.bogota', 'Bog#2026x', 'Territorial Ficticio', 'Asistente', 2, '11', 'EDIN'),
   ('adm.edid', 'Edid#2026', 'Otro Proyecto', 'Asistente', 1, NULL, 'EDID');
+
+-- Fase 4 (dev): departamentos 11 y 25, entidades 899998/899999. La muestra de las pruebas
+-- (OperationalSampleFixture) usa departamentos 5, 8 y 76 y entidades 9000xx: no chocan.
+INSERT INTO GRAL_DEPARTAMENTOS (COD_DEPTO, NOM_DEPTO, TERRIT) VALUES
+  (11, 'Bogota D.C. (ficticio)', 'Territorial Ficticia Centro'),
+  (25, 'Cundinamarca (ficticio)', 'Territorial Ficticia Centro');
+INSERT INTO GRAL_ENTI (PROY, COD_ENT, ENTIDAD, ACT_ENT) VALUES
+  ('EDIN', 899999, 'Entidad Ficticia Uno', 1), ('EDIN', 899998, 'Entidad Ficticia Dos', 1);
+INSERT INTO GRAL_NOVEDAD (PROY, CONSEC, IDFNOV, NOVEDAD, ANIO) VALUES
+  ('EDIN', 1, 3, 'Retiro ficticio', 2026), ('EDIN', 2, 8, 'Otra causa', 2026),
+  ('EDIN', 3, 17, 'Incapacidad ficticia', 2026);
+INSERT INTO EDIN_MUESTRA (ANIO, COD_ENT, COD_DEPTO, C_C, NOM_APE, ATV, TC1, LGN, PSW,
+                          ENC, AREA_TRA, TC2, IDFNOV, NOV_OTRA_CAUSA, IDMUES) VALUES
+  ('2026', '899998', '25', '1000000007', 'Persona Ficticia Siete', 1, 1, 'PRUEBA07', 'Clave#07',
+   '1', 1, 1000007, NULL, NULL, 'IDM2026D07'),
+  ('2026', '899998', '25', '1000000008', 'Persona Ficticia Ocho', 1, 1, 'PRUEBA08', 'Clave#08',
+   '1', 2, 1000008, 3, NULL, 'IDM2026D08'),
+  ('2026', '899998', '25', '1000000009', 'Persona Ficticia Nueve', 1, 2, NULL, NULL,
+   '2', 3, 1000009, 8, 'Motivo ficticio', 'IDM2026D09');
+INSERT INTO GRAL_TERRITORIAL_ACCESO (CODIGO, COD_DEPTO, COD_USUA, PROY) VALUES
+  (1, 11, 'territorial-multi', 'EDIN, EDID'), (2, 25, 'territorial-multi', 'EDIN, EDID');
+INSERT INTO GRAL_USUARIOS_ADM (COD_USUA, CLAVE, NOMBRE, CARGO, ROL, COD_DPTO, PROY) VALUES
+  ('territorial-multi', 'Fixt#2026a', 'Territorial Multi Ficticio', 'Asistente', 2, '11', 'EDIN'),
+  ('territorial-solo', 'Fixt#2026b', 'Territorial Solo Ficticio', 'Asistente', 2, '11', 'EDIN'),
+  ('operativo', 'Fixt#2026c', 'Operativo Ficticio', 'Analista', 3, NULL, 'EDIN'),
+  ('ingeniero', 'Fixt#2026d', 'Ingeniero Ficticio', 'Ingeniero', 1, NULL, 'EDIN');
 
 INSERT INTO FRM_PREGUNTA (COD_PRE, PREGUNTA, TIPO) VALUES
   (1, 'Nivel del empleo que desempe&ntilde;a en la entidad durante el 200X', 'P'),

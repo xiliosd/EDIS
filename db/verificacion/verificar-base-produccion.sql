@@ -75,3 +75,38 @@ SELECT TABLE_NAME, PRIVILEGE
  ORDER BY TABLE_NAME, PRIVILEGE;
 SELECT PRIVILEGE FROM SESSION_PRIVS
  WHERE PRIVILEGE LIKE '%ANY TABLE%' OR PRIVILEGE = 'CREATE TABLE';
+
+-- ---------------------------------------------------------------------------------------------
+-- Fase 4 (reportes, novedades y claves). Solo estructura y privilegios: sin datos personales.
+-- ---------------------------------------------------------------------------------------------
+PROMPT == 9. Estructura de los catálogos de la Fase 4 (confirma db/dev/schema.sql)
+SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, CHAR_USED,
+       DATA_PRECISION, DATA_SCALE, NULLABLE
+  FROM ALL_TAB_COLUMNS
+ WHERE OWNER = 'DANE_DIRPEN'
+   AND TABLE_NAME IN ('GRAL_NOVEDAD', 'GRAL_ENTI', 'GRAL_DEPARTAMENTOS', 'GRAL_TERRITORIAL_ACCESO')
+ ORDER BY TABLE_NAME, COLUMN_ID;
+
+PROMPT == 10. Columnas de EDIN_MUESTRA que usa la Fase 4 (y H06 del capítulo H)
+SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, CHAR_USED,
+       DATA_PRECISION, DATA_SCALE, NULLABLE
+  FROM ALL_TAB_COLUMNS
+ WHERE OWNER = 'DANE_DIRPEN'
+   AND ((TABLE_NAME = 'EDIN_MUESTRA'
+         AND COLUMN_NAME IN ('ANIO', 'ENC', 'COD_ENT', 'COD_DEPTO', 'C_C', 'NOM_APE', 'AREA_TRA',
+                             'ATV', 'TC1', 'TC2', 'LGN', 'PSW', 'IDFNOV', 'NOV_OTRA_CAUSA',
+                             'IDMUES'))
+     OR (TABLE_NAME = 'EDIN_20_CAP_H_PREV_PRACT' AND COLUMN_NAME = 'H06'))
+ ORDER BY TABLE_NAME, COLUMN_ID;
+
+PROMPT == 11. Privilegios para UPDATE sobre EDIN_MUESTRA (novedades y claves escriben ahí)
+SELECT TABLE_NAME, PRIVILEGE
+  FROM USER_TAB_PRIVS
+ WHERE TABLE_NAME = 'EDIN_MUESTRA'
+ ORDER BY PRIVILEGE;
+SELECT PRIVILEGE FROM SESSION_PRIVS
+ WHERE PRIVILEGE IN ('UPDATE ANY TABLE', 'SELECT ANY TABLE');
+
+PROMPT == 12. Catálogo de novedades (sin datos personales): confirma el código de "otra causa"
+PROMPT ==     (app.operation.novelty-other-cause-code, por defecto 8; el PHP mezcla 8 y 17)
+SELECT IDFNOV, NOVEDAD FROM GRAL_NOVEDAD ORDER BY IDFNOV;
