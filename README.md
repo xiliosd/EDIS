@@ -700,11 +700,13 @@ después de la versión del paquete, la vista previa avisa que importar lo reemp
 6. **Verificar la base real antes de promover.** Ejecute
    `db/verificacion/verificar-base-produccion.sql` con el usuario de la aplicación (solo lectura). Las
    secciones 9 a 12 revisan estructura, privilegios de `UPDATE` y el catálogo de novedades; las
-   secciones 13 a 17 revisan supuestos sobre los datos y solo devuelven conteos, tipos o códigos de
-   catálogo, nunca datos personales: 13 (`COD_USUA` igual en `GRAL_USUARIOS_ADM` y
-   `GRAL_TERRITORIAL_ACCESO`), 14 (cédulas repetidas en los capítulos B y H), 15 (valores de
-   `IDFNOV`: «sin novedad» debe ser `NULL`, no 0), 16 (`COD_ENT` o `COD_DEPTO` no numéricos) y 17
-   (`NOV_OTRA_CAUSA` con referencias `&#`). Cada consulta trae en un comentario lo esperado y qué
+   secciones 13 a 18 revisan supuestos sobre los datos y solo devuelven conteos, tipos o códigos de
+   catálogo, nunca datos personales: 13 (asignaciones de `GRAL_TERRITORIAL_ACCESO` sin usuario en
+   `GRAL_USUARIOS_ADM`; los tipos de `COD_USUA` pueden diferir, la aplicación une con `TO_CHAR`),
+   14 (cédulas repetidas en los capítulos B y H), 15 (valores de `IDFNOV`: «sin novedad» debe ser
+   `NULL`, no 0), 16 (`COD_ENT` o `COD_DEPTO` no numéricos: uno solo hace fallar el reporte entero
+   con ORA-01722), 17 (`NOV_OTRA_CAUSA` con referencias `&#`) y 18 (`COD_DEPTO` sin fila en
+   `GRAL_DEPARTAMENTOS`: cuentan con el nombre «Departamento N»). Cada consulta trae en un comentario lo esperado y qué
    hacer; si una no se cumple, no promueva la Fase 4 y revise el caso. Ajuste el año de las tablas de
    capítulo en la consulta 14 si no es el de `EDIN_20_CAP_*`.
 

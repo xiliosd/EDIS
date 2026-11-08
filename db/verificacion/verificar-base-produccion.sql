@@ -118,14 +118,16 @@ SELECT IDFNOV, NOVEDAD FROM GRAL_NOVEDAD ORDER BY IDFNOV;
 -- Ajuste el año de las tablas de capítulo (aquí «20», como EDIN_20_CAP_B_UBICA) si cambia.
 -- ---------------------------------------------------------------------------------------------
 PROMPT == 13. GRAL_USUARIOS_ADM.COD_USUA y GRAL_TERRITORIAL_ACCESO.COD_USUA: mismo identificador
-PROMPT ==     Esperado: ambas columnas del mismo tipo y filas_de_acceso_sin_usuario = 0. En dev ambas
-PROMPT ==     son el nombre de usuario (VARCHAR2); en el respaldo la de acceso era NUMBER(10). Si no
-PROMPT ==     coinciden, el alcance territorial no resuelve: no promover y revisar con quien
-PROMPT ==     administra los usuarios cómo se relacionan (la aplicación une con TO_CHAR en ambos
-PROMPT ==     lados).
+PROMPT ==     Los tipos se muestran solo como información: pueden ser distintos (en el respaldo la
+PROMPT ==     de usuarios es texto y la de acceso NUMBER(10)) porque la aplicación une ambas con
+PROMPT ==     TO_CHAR. Lo que bloquea es la segunda consulta: filas_de_acceso_sin_usuario debe ser 0.
+PROMPT ==     Si es mayor, esas asignaciones no resuelven el alcance territorial: no promover y
+PROMPT ==     revisar con quien administra los usuarios cómo se relacionan.
+PROMPT ==     El dueño se toma del esquema actual de la sesión; si las tablas son de otro dueño
+PROMPT ==     (consulta 3, p. ej. DANE_DIRPEN), ejecute antes ALTER SESSION SET CURRENT_SCHEMA.
 SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION
   FROM ALL_TAB_COLUMNS
- WHERE OWNER = 'DANE_DIRPEN'
+ WHERE OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
    AND COLUMN_NAME = 'COD_USUA'
    AND TABLE_NAME IN ('GRAL_USUARIOS_ADM', 'GRAL_TERRITORIAL_ACCESO')
  ORDER BY TABLE_NAME;
@@ -157,16 +159,17 @@ SELECT IDFNOV, COUNT(*) AS FILAS
  ORDER BY IDFNOV NULLS FIRST;
 
 PROMPT == 16. Filas de la muestra con COD_ENT o COD_DEPTO no numéricos
-PROMPT ==     Esperado: 0 en las tres cuentas. Los reportes unen con los catálogos numéricos
-PROMPT ==     (GRAL_ENTI, GRAL_DEPARTAMENTOS): una fila no numérica quedaría fuera de ellos. Si hay,
-PROMPT ==     corrija esos códigos en la muestra o avise para ajustar la conversión.
-SELECT SUM(CASE WHEN COD_ENT IS NOT NULL
-                 AND NOT REGEXP_LIKE(TRIM(TO_CHAR(COD_ENT)), '^[0-9]+$') THEN 1 ELSE 0 END)
-         AS COD_ENT_NO_NUMERICO,
-       SUM(CASE WHEN COD_DEPTO IS NOT NULL
-                 AND NOT REGEXP_LIKE(TRIM(TO_CHAR(COD_DEPTO)), '^[0-9]+$') THEN 1 ELSE 0 END)
-         AS COD_DEPTO_NO_NUMERICO,
-       SUM(CASE WHEN COD_ENT IS NULL OR COD_DEPTO IS NULL THEN 1 ELSE 0 END)
+PROMPT ==     Esperado: 0 en las tres cuentas. Los reportes convierten esos códigos con TO_NUMBER:
+PROMPT ==     una sola fila no numérica NO queda fuera, hace fallar el reporte entero (ORA-01722,
+PROMPT ==     error 500) para todo el país y todos los departamentos. Si hay, corrija esos códigos
+PROMPT ==     en la muestra antes de promover.
+SELECT NVL(SUM(CASE WHEN COD_ENT IS NOT NULL
+                     AND NOT REGEXP_LIKE(TRIM(TO_CHAR(COD_ENT)), '^[0-9]+$')
+                    THEN 1 ELSE 0 END), 0) AS COD_ENT_NO_NUMERICO,
+       NVL(SUM(CASE WHEN COD_DEPTO IS NOT NULL
+                     AND NOT REGEXP_LIKE(TRIM(TO_CHAR(COD_DEPTO)), '^[0-9]+$')
+                    THEN 1 ELSE 0 END), 0) AS COD_DEPTO_NO_NUMERICO,
+       NVL(SUM(CASE WHEN COD_ENT IS NULL OR COD_DEPTO IS NULL THEN 1 ELSE 0 END), 0)
          AS CON_CODIGO_NULO
   FROM EDIN_MUESTRA;
 
@@ -179,3 +182,17 @@ SELECT COUNT(*) AS FILAS_CON_REFERENCIAS_NUMERICAS
   FROM EDIN_MUESTRA
  WHERE NOV_OTRA_CAUSA IS NOT NULL
    AND INSTR(NOV_OTRA_CAUSA, '&#') > 0;
+
+PROMPT == 18. Filas de la muestra con COD_DEPTO numérico que no está en GRAL_DEPARTAMENTOS
+PROMPT ==     (solo el conteo). Esperado: 0. Si es mayor, esas filas siguen contando en Cobertura,
+PROMPT ==     Novedades, Rendimientos y Claves, pero con el nombre «Departamento N»; el territorial
+PROMPT ==     no las ve porque su alcance sale del catálogo. Revise el catálogo o esos códigos.
+SELECT COUNT(*) AS FILAS_CON_DEPTO_SIN_CATALOGO
+  FROM EDIN_MUESTRA M
+ WHERE M.COD_DEPTO IS NOT NULL
+   AND REGEXP_LIKE(TRIM(TO_CHAR(M.COD_DEPTO)), '^[0-9]+$')
+   AND NOT EXISTS (SELECT 1
+                     FROM GRAL_DEPARTAMENTOS D
+                    WHERE D.COD_DEPTO = TO_NUMBER(CASE WHEN REGEXP_LIKE(TRIM(TO_CHAR(M.COD_DEPTO)),
+                                                           '^[0-9]+$')
+                                               THEN TRIM(TO_CHAR(M.COD_DEPTO)) END));
