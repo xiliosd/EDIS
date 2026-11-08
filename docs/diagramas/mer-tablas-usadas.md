@@ -5,6 +5,15 @@
 > secuencias ni disparadores: los ids se generan con MAX+1. `FRM_RTA_GRUPO` tiene clave compuesta
 > `(COD_GRUPO, GRUPO)`. El DDL completo está en `db/dev/schema.sql`. Aquí solo se listan las
 > columnas que usa la aplicación.
+>
+> **Fase 4.** `GRAL_NOVEDAD`, `GRAL_ENTI`, `GRAL_DEPARTAMENTOS` y `GRAL_TERRITORIAL_ACCESO` se agregan
+> con el DDL del respaldo del 2026-11-05 (sin tocarlas: solo lectura). Las relaciones con
+> `EDIN_MUESTRA` son lógicas (la base no declara llaves foráneas conocidas) y los capítulos se unen por
+> subconsultas agregadas por `C_C`. En el respaldo `GRAL_TERRITORIAL_ACCESO.COD_USUA` es `NUMBER(10)`;
+> en desarrollo guarda el nombre de usuario de `GRAL_USUARIOS_ADM.COD_USUA`. La aplicación une con
+> `TO_CHAR` en ambos lados y la consulta 13 de `db/verificacion/verificar-base-produccion.sql`
+> confirma en la base real que ambos identificadores coinciden. La Fase 4 solo escribe
+> `EDIN_MUESTRA.IDFNOV`, `NOV_OTRA_CAUSA`, `LGN` y `PSW`.
 
 ```mermaid
 erDiagram
@@ -21,6 +30,12 @@ erDiagram
   FRM_PRE_AYUDA }o--o| GRAL_AYUDAS : "COD_AYU = COD"
   FRM_ENC_AYUDA }o--o| GRAL_AYUDAS : "COD_AYU = COD"
   EDIN_MUESTRA ||--o| EDIN_20_CAP_B_UBICA : "C_C"
+  EDIN_MUESTRA }o--o| EDIN_20_CAP_H_PREV_PRACT : "C_C"
+  EDIN_MUESTRA }o--o| GRAL_ENTI : "COD_ENT"
+  EDIN_MUESTRA }o--o| GRAL_DEPARTAMENTOS : "COD_DEPTO"
+  EDIN_MUESTRA }o--o| GRAL_NOVEDAD : "IDFNOV"
+  GRAL_DEPARTAMENTOS ||--o{ GRAL_TERRITORIAL_ACCESO : "COD_DEPTO"
+  GRAL_USUARIOS_ADM ||--o{ GRAL_TERRITORIAL_ACCESO : "COD_USUA"
   FRM_CAP_PROY {
     number COD_CAP_PROY "PK"
     number COD_PRE_GRUPO
@@ -100,6 +115,46 @@ erDiagram
     number TC1
     number ATV
     varchar COD_ENT
+    varchar COD_DEPTO
+    varchar ENC "1 EDI, 2 EDID; nulo = sin clasificar"
+    number IDFNOV "novedad; NULL = sin novedad"
+    varchar NOV_OTRA_CAUSA "texto de otra causa, VARCHAR2(500)"
+    varchar IDMUES "id para auditoría, sin dato personal"
+  }
+  EDIN_20_CAP_H_PREV_PRACT {
+    varchar C_C
+    varchar H06 "no nulo = capítulo H terminado"
+    timestamp FECHA
+  }
+  GRAL_NOVEDAD {
+    varchar PROY "VARCHAR2(100)"
+    number CONSEC
+    number IDFNOV "PK, NUMBER(3)"
+    varchar NOVEDAD "VARCHAR2(200)"
+    number ANIO
+  }
+  GRAL_ENTI {
+    varchar PROY "VARCHAR2(10)"
+    number COD_ENT "PK, NUMBER(11)"
+    varchar ENTIDAD "VARCHAR2(300)"
+    number ACT_ENT
+  }
+  GRAL_DEPARTAMENTOS {
+    number COD_DEPTO "PK"
+    varchar NOM_DEPTO "VARCHAR2(100)"
+    varchar TERRIT "territorial, VARCHAR2(100)"
+  }
+  GRAL_TERRITORIAL_ACCESO {
+    number CODIGO "PK"
+    number COD_DEPTO "NUMBER(10)"
+    varchar COD_USUA "ver nota: tipo distinto en producción"
+    varchar PROY "lista, p. ej. EDIN, EDID"
+  }
+  GRAL_USUARIOS_ADM {
+    varchar COD_USUA
+    varchar ROL "1 ingeniero, 2 territorial, 3 operativo"
+    varchar COD_DPTO "departamento propio"
+    varchar PROY
   }
   EDIN_20_CAP_B_UBICA {
     varchar C_C

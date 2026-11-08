@@ -23,6 +23,10 @@ dos aplicaciones independientes: `backend/` (Spring Boot) y `frontend/` (React).
 - [Plan de la Fase 3c (publicar, corregir y promover)](docs/superpowers/plans/2026-11-04-fase-3c-publicar-corregir-promover.md)
 - [Diagrama de secuencia de publicar un año](docs/diagramas/secuencia-publicar.md)
 - [Diagrama de secuencia de promover un año o una corrección](docs/diagramas/secuencia-promover.md)
+- [Diagrama de secuencia de asignar una novedad (Fase 4)](docs/diagramas/secuencia-asignar-novedad.md)
+ - [Diseño de la Fase 4 (reportes, novedades y claves)](docs/superpowers/specs/2026-11-07-fase-4-reportes-novedades-claves-design.md)
+ - [Plan de la Fase 4](docs/superpowers/plans/2026-11-07-fase-4-reportes-novedades-claves.md)
+ - [Diferencias de los reportes frente al PHP](docs/fase-4-diferencias-reportes.md)
  - [Reglas de EDIN 2026](docs/reglas/edin-2026.md)
  - [MER de las tablas usadas](docs/diagramas/mer-tablas-usadas.md)
  - [Contrato OpenAPI](docs/api/openapi.yaml)
@@ -120,6 +124,32 @@ y preguntas nuevas) admiten hasta 1000 caracteres en la solicitud y el límite d
 servicio (ver «Juego de caracteres y límites por campo»). Las claves desconocidas se devuelven en `errors` recortadas a 30 caracteres.
 `POST /finish` es idempotente: con las 9 páginas guardadas siempre devuelve el mismo radicado y
 `OBS` solo se escribe la primera vez que llega texto.
+
+### Fase 4: reportes, novedades y claves
+
+Prefijo `/api/v1/admin`. Todas las respuestas con datos personales (listados nominales, novedades,
+rendimientos, gestión de novedades y claves) llevan `Cache-Control: no-store`. Las escrituras llevan
+`@AllowedInReadOnlyQuestionnaire`: funcionan en producción aunque `QUESTIONNAIRE_WRITES_ENABLED` sea
+`false`. Un departamento fuera del alcance del usuario o una acción no permitida a su rol responde 403.
+Los reportes aceptan `encuesta` (`GENERAL`, `EDI` o `EDID`), `anio` (por defecto el de `SURVEY_YEAR`) y
+`departamento`; cada uno tiene su variante `.../excel` (libro `.xlsx` generado al vuelo).
+
+| Verbo | Ruta | Roles | Descripción |
+| :-- | :-- | :-- | :-- |
+| `GET` | `/operation/scope` | nacional, territorial, operativo | Departamentos del usuario y si gestiona novedades o claves |
+| `GET` | `/reports/years` | los tres | Años con muestra |
+| `GET` | `/reports/coverage` y `/reports/coverage/excel` | los tres | Cobertura por departamento y entidad, con consolidado |
+| `GET`, `POST` | `/reports/cuts` | los tres | Lista y crea cortes de cobertura (JSON con cifras agregadas en `REPORTS_DIR`) |
+| `GET` | `/reports/cuts/{id}/excel` | los tres | Descarga un corte |
+| `GET` | `/reports/operational-status` y `.../excel` | los tres | Estado nominal por departamento y entidad (paginado, máx. 100) |
+| `GET` | `/reports/novelties` y `.../excel` | los tres | Funcionarios con novedad |
+| `GET` | `/reports/performance` y `.../excel` | los tres | Fecha y hora de guardado de cada capítulo |
+| `GET` | `/novelties/catalog`, `/novelties/entities` | territorial | Catálogo y entidades de sus departamentos |
+| `POST` | `/novelties/people` | territorial | Funcionarios de una entidad (la cédula nunca va en la URL) |
+| `POST` | `/novelties/assign`, `/novelties/remove` | territorial | Asigna o quita la novedad; 409 si cambió desde que se cargó, 422 si no es válida |
+| `GET` | `/keys/summary` | nacional | Funcionarios con y sin clave por departamento |
+| `POST` | `/keys/generate` | nacional | Genera clave a quienes no tienen; 409 si el número esperado cambió |
+| `GET` | `/keys/excel` | nacional | Excel de claves de un departamento |
 
 ## Autores
 
@@ -245,6 +275,16 @@ Imágenes (usuario no root, versión base fija, healthcheck, etiquetas de respon
 - Volumen `rules-data` (`/data/rules`, variable `RULES_DIR`): JSON de saltos y validaciones. Si no
   existe `EDIN-2026.json`, el backend siembra el de la imagen. El backend corre en **una sola
   instancia** (decisión D6).
+- Volumen `reports-data` (`/data/reports`, variable `REPORTS_DIR`): cortes de cobertura de la Fase 4
+  (un JSON por corte, solo cifras agregadas). Si el volumen no persiste, el histórico se pierde al
+  recrear el contenedor; haga copia de él como del de reglas.
+- **Análisis de dependencias (SCA).** No forma parte de `./mvnw verify`: corre solo en el job `sca` de
+  CI (OWASP Dependency-Check con `NVD_API_KEY` y `npm audit`). Apache POI 6.0.0 entró en la Fase 4 y
+  no se analizó localmente: confirme que el primer pipeline no reporte vulnerabilidades críticas.
+- **No active el registro `TRACE` de `org.springframework.jdbc` en producción** (ni
+  `JdbcTemplate` ni `StatementCreatorUtils` en ese nivel): imprimiría los parámetros de las
+  sentencias, entre ellos las claves (`PSW`) y las cédulas que escriben las novedades y la
+  generación de claves.
 
 **Local con contenedores**
 
@@ -358,6 +398,8 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `RULES_DIR` | Carpeta de los JSON de reglas | No | `/data/rules` |
 | `RULES_SEED_DIR` | Semilla de reglas ficticias; solo desarrollo | No | vacía |
 | `QUESTIONNAIRE_WRITES_ENABLED` | Permite cambiar el cuestionario (`FRM_*` y archivo de reglas) desde la administración. Propiedad `app.admin.questionnaire-writes-enabled`. Con `false` toda escritura de `/api/v1/admin/**` responde 403 «Cuestionario de solo lectura» y solo se importan paquetes de promoción (la primera lectura de un año sin archivo de reglas lo sigue creando desde la semilla, sin tocar `FRM_*`); ver Deployment | No | `false` (`true` en desarrollo, lo fija compose, y en QA; `false` en producción) |
+| `REPORTS_DIR` | Carpeta de los cortes de cobertura (JSON con cifras agregadas, sin datos personales). Propiedad `app.operation.cuts-dir`. Debe ser un volumen persistente; ver Deployment | No | `/data/reports` |
+| `NOVELTY_OTHER_CAUSE_CODE` | Código de `GRAL_NOVEDAD.IDFNOV` que exige texto de «otra causa». Propiedad `app.operation.novelty-other-cause-code`. **Verifíquelo en la base antes de promover** (consulta 12 de `db/verificacion/verificar-base-produccion.sql`): el PHP mezclaba 8 y 17 | No | `8` |
 | `RECEIPT_KEY` | Clave del radicado (HMAC, mín. 32), estable por ambiente | Sí | ver nota |
 | `JWT_SECRET` | Secreto de firma de la sesión (mínimo 32 caracteres aleatorios) | Sí | genere con `openssl rand -base64 48` |
 | `SESSION_MINUTES` | Duración de la sesión | No | `30` |
@@ -376,6 +418,9 @@ Fuente: [.env.example](.env.example) (copiar como `.env`, que git ignora).
 | `E2E_FLOW_PASSWORD_MOVIL` | Clave de ese usuario | No | ver `db/dev/data.sql` |
 | `E2E_ADMIN_USER` | Administrador ficticio de la prueba del cuestionario | No | `adm.nacional` |
 | `E2E_ADMIN_PASSWORD` | Clave de ese administrador | No | ver `db/dev/data.sql` |
+| `E2E_OPERATIVE_USER`, `E2E_OPERATIVE_PASSWORD` | Operativo ficticio de las E2E de la Fase 4 | No | `operativo` / ver `db/dev/data.sql` |
+| `E2E_TERRITORIAL_USER`, `E2E_TERRITORIAL_PASSWORD` | Territorial ficticio (departamentos 11 y 25) | No | `territorial-multi` / ver `db/dev/data.sql` |
+| `E2E_ENGINEER_USER`, `E2E_ENGINEER_PASSWORD` | Ingeniero ficticio (`ADMIN_NACIONAL`, claves) | No | `ingeniero` / ver `db/dev/data.sql` |
 
 **`JWT_SECRET` y `RECEIPT_KEY`.** Genere cada una con `openssl rand -base64 48`. Fuera de los
 perfiles `dev` y `test`, el backend no arranca si alguna conserva el valor de ejemplo de
@@ -402,7 +447,7 @@ Capturadas con Playwright contra el entorno local con datos ficticios.
 openapi-fetch 0.17.0, Tailwind CSS 4.3.3, Vite 7.3.6, TypeScript 5.9.3
 
 **Server:** Java 21, Spring Boot 4.1.1 (webmvc, security, validation, actuator, JDBC),
-springdoc-openapi 3.1.1, Tomcat 11.0.26
+springdoc-openapi 3.1.1, Apache POI 6.0.0 (`poi-ooxml`, libros `.xlsx`), Tomcat 11.0.26
 
 **Base de datos:** Oracle (`DANE_DIRPEN`, servicio `TRANS21`); Oracle Free 23 en desarrollo; driver ojdbc17
 
@@ -625,6 +670,44 @@ Producción queda con **el mismo número de versión que QA**: la importación c
 paquete, y una edición posterior en producción la sube desde ahí. Si en producción se hizo un cambio
 después de la versión del paquete, la vista previa avisa que importar lo reemplaza.
 
+**Reportes, novedades y claves (Fase 4).** Cada rol ve en el menú solo lo suyo
+(`GRAL_USUARIOS_ADM.ROL`: 1 = ingeniero, 2 = territorial, 3 = operativo central):
+
+| Rol | Reportes | Gestión de novedades | Claves |
+| :-- | :-- | :-- | :-- |
+| Ingeniero (`ADMIN_NACIONAL`) | Todos, todos los departamentos | No | Generar y descargar |
+| Territorial (`ADMIN_TERRITORIAL`) | Todos, solo sus departamentos (`GRAL_TERRITORIAL_ACCESO`; si no tiene filas, su `COD_DPTO`) | Asignar, cambiar y quitar | No |
+| Operativo (`ADMIN_OPERATIVO`) | Todos, todos los departamentos | No | No |
+
+1. **Reportes** (`/admin/reportes/...`): *Cobertura* (pestañas General, EDI y EDID, por departamento y
+   entidad, con consolidado), *Cortes e histórico* (genera y descarga el corte de un departamento),
+   *Estado del operativo* (listado nominal con filtro de estado, de a 100), *Novedades* y
+   *Rendimientos*. Cada pantalla tiene «Exportar a Excel». Las cifras difieren de las del PHP en nueve
+   puntos corregidos a propósito: ver
+   [las diferencias frente al PHP](docs/fase-4-diferencias-reportes.md).
+2. **Gestión de novedades** (`/admin/novedades`, territorial): elija el departamento y la entidad,
+   y use «Asignar», «Cambiar» o «Quitar» sobre el funcionario. «Otra causa» exige texto (máximo 500
+   bytes Latin-9). Si otra persona cambió la novedad entretanto, la pantalla avisa y recarga. La
+   novedad no impide que el funcionario ingrese a la encuesta y solo se quita a mano.
+3. **Claves** (`/admin/claves`, ingeniero): el resumen muestra por departamento los funcionarios web
+   activos con y sin clave. «Generar claves» pide confirmación con el número exacto, asigna `LGN` y
+   `PSW` solo a quienes no tienen y nunca cambia las existentes. Las claves no se muestran en pantalla:
+   se descargan en el Excel de cada departamento.
+4. **Cortes.** Cada corte es un JSON con cifras agregadas en `REPORTS_DIR` (volumen `reports-data`).
+5. **Tabla de la muestra de EDID.** `SurveyProperties` mapea EDID a `EDID_MUESTRA`, tabla que no está en
+   el respaldo. Los reportes no la usan: filtran EDI y EDID con la columna `ENC` de la muestra de la
+   encuesta configurada (`'1'` EDI, `'2'` EDID), como el PHP.
+6. **Verificar la base real antes de promover.** Ejecute
+   `db/verificacion/verificar-base-produccion.sql` con el usuario de la aplicación (solo lectura). Las
+   secciones 9 a 12 revisan estructura, privilegios de `UPDATE` y el catálogo de novedades; las
+   secciones 13 a 17 revisan supuestos sobre los datos y solo devuelven conteos, tipos o códigos de
+   catálogo, nunca datos personales: 13 (`COD_USUA` igual en `GRAL_USUARIOS_ADM` y
+   `GRAL_TERRITORIAL_ACCESO`), 14 (cédulas repetidas en los capítulos B y H), 15 (valores de
+   `IDFNOV`: «sin novedad» debe ser `NULL`, no 0), 16 (`COD_ENT` o `COD_DEPTO` no numéricos) y 17
+   (`NOV_OTRA_CAUSA` con referencias `&#`). Cada consulta trae en un comentario lo esperado y qué
+   hacer; si una no se cumple, no promueva la Fase 4 y revise el caso. Ajuste el año de las tablas de
+   capítulo en la consulta 14 si no es el de `EDIN_20_CAP_*`.
+
 **Regenerar el contrato y los tipos.** El contrato lo genera el backend durante `./mvnw verify`
 (CI falla si `docs/api/openapi.yaml` no coincide). Los tipos del frontend:
 
@@ -678,6 +761,22 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
   estructural.
 - **Reordenar solo dentro del mismo bloque (`GRUPO`)**; cruzar bloques responde 422.
 
+## Decisiones de la Fase 4
+
+Detalle en el [diseño de la Fase 4](docs/superpowers/specs/2026-11-07-fase-4-reportes-novedades-claves-design.md).
+
+- **Sin DDL.** Las únicas escrituras en la base son `EDIN_MUESTRA.IDFNOV`, `NOV_OTRA_CAUSA`, `LGN` y
+  `PSW`; los cortes van a archivos (`REPORTS_DIR`).
+- **Departamentos por petición.** El alcance del territorial se resuelve en cada petición (caché de
+  60 s por usuario), no en el token: un cambio en `GRAL_TERRITORIAL_ACCESO` aplica sin cerrar sesión.
+- **Cédula fuera de las URL.** Las operaciones sobre un funcionario reciben `C_C` en el cuerpo (POST).
+- **Una fila por funcionario.** Los capítulos se unen por subconsultas agregadas por `C_C`, porque la
+  base real no tiene clave conocida sobre `C_C` en ellos.
+- **Excel generado al vuelo** con Apache POI; nunca se guarda en el servidor.
+- **Regiones de tabla con foco.** Las tablas anchas se desplazan dentro de una región con nombre que
+  entra en el orden de tabulación (`ScrollableRegion`); el contenido del panel de administración usa
+  `min-w-0` para que una tabla ancha no estire la página en móvil.
+
 ## Excepciones a los lineamientos de nombres
 
 - Paquetes Java en minúscula (`co.gov.dane.edi...`) y clases en PascalCase, según la convención de Java.
@@ -686,6 +785,14 @@ Detalle en la sección «Desviaciones de implementación (3a)» del
 
 ## Deuda técnica y riesgos
 
+- **Pendientes de la Fase 4.** (1) El retiro del admin PHP es un paso del despliegue: no se borra
+  código PHP en este repositorio; apáguelo cuando la Fase 4 esté en producción y verificada. (2) D7
+  sin cambios: `PSW` sigue en texto plano y ahora el ingeniero puede volver a descargar las claves
+  (el diseño lo decidió así); el plan de salida (BCrypt con `PSW VARCHAR2(60)`) sigue pendiente de
+  autorización de DDL. (3) Falta ejecutar en la base real las secciones 9 a 17 del script de
+  verificación y confirmar `NOVELTY_OTHER_CAUSE_CODE`. (4) La cobertura nacional (< 5 s) solo se
+  ha medido con datos de desarrollo. (5) SCA de Apache POI pendiente del primer pipeline (ver
+  Deployment).
 - **Contraseñas en texto plano (D7).** La columna `PSW` es `VARCHAR2(8)` y no se puede cambiar sin DDL.
   Se comparan con `MessageDigest.isEqual` y nunca aparecen en logs ni respuestas. Plan de salida:
   ampliar `PSW` a `VARCHAR2(60)` y migrar a BCrypt.

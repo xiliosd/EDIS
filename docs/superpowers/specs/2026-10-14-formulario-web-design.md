@@ -265,6 +265,11 @@ mobile-first, modo oscuro, skeletons de carga, estados vacíos y de error con re
 
 ### 7.1 API (`/api/v1`, OpenAPI 3, errores RFC 7807)
 
+> **Reportes, novedades y claves:** el detalle de rutas, roles y reglas de la Fase 4 está en el
+> [diseño de la Fase 4](2026-11-07-fase-4-reportes-novedades-claves-design.md) (su §10 lista las
+> diferencias con esta spec: rol `ADMIN_OPERATIVO`, cifras corregidas y claves descargables varias
+> veces). Las rutas de esos temas que aparecen abajo son orientativas.
+
 **Autenticación:** `GET /auth/csrf`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`.
 
 **Encuestado** (rol `ENCUESTADO`; `C_C` siempre desde el token):
@@ -287,6 +292,10 @@ mobile-first, modo oscuro, skeletons de carga, estados vacíos y de error con re
 **Operación:** `GET /actuator/health`; Swagger UI en `/swagger-ui.html` según `SWAGGER_ENABLED`.
 
 ### 7.2 Seguridad
+
+> Nota Fase 4: las claves de la muestra se asignan en `EDIN_MUESTRA` y el ingeniero puede volver a
+> descargarlas; no se muestran «una sola vez». Ver §7 y §10 del
+> [diseño de la Fase 4](2026-11-07-fase-4-reportes-novedades-claves-design.md).
 
 - Credenciales por variables de entorno. Las credenciales presentes en `Conexion/Conexion_oracle.php` del
   sistema PHP **no se copian** al repositorio nuevo; se recomienda rotarlas (estuvieron en el código y en

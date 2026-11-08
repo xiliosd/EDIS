@@ -4,6 +4,43 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+Sin cambios pendientes.
+
+## [0.2.0] - 2026-11-08
+
+Fase 4: reportes del operativo, gestión de novedades y claves de la muestra (reemplaza esas
+funciones del admin PHP; ver `docs/fase-4-diferencias-reportes.md`).
+
+### Agregado
+- Reportes `/api/v1/admin/reports/...` con Excel (`.xlsx` real, Apache POI 6.0.0): cobertura general,
+  EDI y EDID por departamento y entidad, cortes e histórico, estado nominal del operativo,
+  novedades y rendimientos. Rol `ADMIN_OPERATIVO` con todos los reportes.
+- Gestión de novedades para el territorial (`/api/v1/admin/novelties/...`): asignar, cambiar y quitar,
+  con «otra causa» (máximo 500 bytes Latin-9), control de concurrencia (409) y auditoría sin datos
+  personales.
+- Claves de la muestra para el ingeniero (`/api/v1/admin/keys/...`): resumen, generación para quienes
+  no tienen y Excel por departamento.
+- Pantallas del administrador: Cobertura, Cortes e histórico, Estado del operativo, Novedades,
+  Rendimientos, Gestión de novedades y Claves, con menú por rol.
+- Variables `REPORTS_DIR` y `NOVELTY_OTHER_CAUSE_CODE`, y volumen `reports-data`.
+- `db/verificacion/verificar-base-produccion.sql`: secciones 9 a 17 (estructura, privilegios y
+  supuestos sobre los datos de la Fase 4, solo con conteos y códigos de catálogo).
+- Pruebas E2E `admin-operativo.spec.ts` (operativo, territorial e ingeniero; Chromium y móvil, con
+  axe). Diagramas: MER ampliado y secuencia de asignar una novedad.
+- Componente `ScrollableRegion`: las tablas anchas se desplazan en una región con nombre y foco.
+
+### Corregido
+- Asignar o quitar una novedad sin año en el cuerpo (el filtro sin cambiar) respondía 400; ahora
+  se usa el año de la encuesta activa, como el resto de las consultas.
+- El contenido del panel de administración estiraba la página en móvil con tablas anchas
+  (`min-w-0` en la columna).
+
+### Seguridad
+- No active el registro `TRACE` de `org.springframework.jdbc` en producción: imprimiría los
+  parámetros de las sentencias (claves y cédulas).
+
+## [0.1.0] - Fases 1 a 3 (sin publicar como versión)
+
 ### Agregado
 - Ayudas visibles para el encuestado (pendiente de la Fase 2): el detalle de página
   (`GET /api/v1/survey/pages/{pagina}`) trae `help` (`term`, `title`, `definition` en texto plano)
