@@ -119,6 +119,28 @@ describe('OperationalStatusPage', () => {
     );
   });
 
+  it('hidesTheTableWhenTheDepartmentIsCleared', async () => {
+    serve();
+    // Con un solo departamento el filtro lo vuelve a elegir solo: se necesitan dos.
+    server.use(
+      http.get('*/api/v1/admin/operation/scope', () =>
+        HttpResponse.json({
+          ...SCOPE,
+          departments: [...SCOPE.departments, { code: 8, name: 'Atlántico' }],
+        }),
+      ),
+    );
+    renderApp('/admin/reportes/estado');
+    await userEvent.selectOptions(await screen.findByLabelText('Departamento'), '5');
+    await screen.findByRole('table', { name: /Estado de los funcionarios/ });
+
+    await userEvent.selectOptions(screen.getByLabelText('Departamento'), '');
+
+    await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
+    expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Seleccione un departamento para ver/)).toBeInTheDocument();
+  });
+
   it('downloadsTheExcelWithTheFilters', async () => {
     serve();
     let requested: URL | undefined;

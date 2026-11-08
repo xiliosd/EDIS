@@ -61,7 +61,7 @@ export function OperationalStatusPage() {
     queryKey: operationalStatusQueryKey(filters, page),
     queryFn: () => fetchOperationalStatus(filters, page),
     enabled: hasDepartment,
-    placeholderData: keepPreviousData,
+    placeholderData: hasDepartment ? keepPreviousData : undefined,
   });
   const download = useMutation({ mutationFn: () => downloadOperationalStatusExcel(filters) });
 
@@ -143,10 +143,11 @@ export function OperationalStatusPage() {
           <p className="mt-6 text-ink-muted">Cargando estado…</p>
         )}
       </div>
-      {result.isError && (
+      {hasDepartment && result.isError && (
         <ErrorState message={errorMessage(result.error)} onRetry={() => void result.refetch()} />
       )}
-      {result.data &&
+      {hasDepartment &&
+        result.data &&
         (rows.length === 0 ? (
           <p className="mt-6 text-ink-muted">No hay funcionarios para estos filtros.</p>
         ) : (
