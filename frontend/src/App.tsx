@@ -4,9 +4,12 @@ import { AdminLayout } from './components/AdminLayout';
 import { AppLayout } from './components/AppLayout';
 import { SessionMenu } from './components/SessionMenu';
 import { AdminHomePage } from './features/admin/AdminHomePage';
+import { OPERATION_ROLES } from './features/admin/operation-scope';
 import { HistoryPage } from './features/admin-history/HistoryPage';
 import { PackagesPage } from './features/admin-packages/PackagesPage';
 import { PublishPage } from './features/admin-publish/PublishPage';
+import { CoveragePage } from './features/admin-reports/CoveragePage';
+import { CutsPage } from './features/admin-reports/CutsPage';
 import { QuestionnaireTreePage } from './features/admin-questions/QuestionnaireTreePage';
 import { YearsPage } from './features/admin-questions/YearsPage';
 import { HomeRedirect } from './features/auth/HomeRedirect';
@@ -136,6 +139,22 @@ export function App() {
             element={
               <RequireRole roles={['ADMIN_CUESTIONARIO']}>
                 <PackagesPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="reportes/cobertura"
+            element={
+              <RequireRole roles={OPERATION_ROLES}>
+                <CoveragePage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="reportes/cortes"
+            element={
+              <RequireRole roles={OPERATION_ROLES}>
+                <CutsPage />
               </RequireRole>
             }
           />

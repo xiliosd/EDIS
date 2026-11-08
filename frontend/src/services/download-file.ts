@@ -16,3 +16,12 @@ export function downloadBlobFile(fileName: string, blob: Blob): void {
   // Revocar en el mismo turno puede cancelar la descarga antes de que el navegador la lea.
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
+
+/**
+ * El nombre que fija el servidor en Content-Disposition (p. ej. EDIN-2026-v7-correccion.zip):
+ * solo un nombre simple con la extensión esperada; si no, undefined y se usa uno de respaldo.
+ */
+export function serverFileName(disposition: string | null, extension: string): string | undefined {
+  const name = /filename="?([A-Za-z0-9][A-Za-z0-9._-]*)"?/.exec(disposition ?? '')?.[1];
+  return name?.toLowerCase().endsWith(extension) ? name : undefined;
+}

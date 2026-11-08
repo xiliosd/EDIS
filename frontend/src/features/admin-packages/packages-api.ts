@@ -1,7 +1,7 @@
 import { apiClient, ensureCsrfToken } from '../../services/api-client';
 import { unwrap } from '../../services/api-error';
 import type { components } from '../../services/api-schema';
-import { downloadBlobFile } from '../../services/download-file';
+import { downloadBlobFile, serverFileName } from '../../services/download-file';
 
 export type ImportPreview = components['schemas']['ImportPreview'];
 export type PackageKind = 'anio' | 'correccion';
@@ -26,13 +26,10 @@ export async function downloadPackage(
       return result;
     });
   const blob = (await unwrap(request)) as unknown as Blob;
-  downloadBlobFile(serverFileName(disposition) ?? `paquete-${survey}-${year}-${kind}.zip`, blob);
-}
-
-/** El nombre que fija el servidor (p. ej. EDIN-2026-v7-correccion.zip); solo un nombre simple. */
-function serverFileName(disposition: string | null): string | undefined {
-  const name = /filename="?([A-Za-z0-9][A-Za-z0-9._-]*)"?/.exec(disposition ?? '')?.[1];
-  return name?.toLowerCase().endsWith('.zip') ? name : undefined;
+  downloadBlobFile(
+    serverFileName(disposition, '.zip') ?? `paquete-${survey}-${year}-${kind}.zip`,
+    blob,
+  );
 }
 
 /** `confirmar=false` solo revisa el paquete y muestra el impacto; `true` lo importa. */

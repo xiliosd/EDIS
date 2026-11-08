@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { downloadTextFile } from './download-file';
+import { downloadTextFile, serverFileName } from './download-file';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -29,5 +29,19 @@ describe('downloadTextFile', () => {
     expect(revoke).not.toHaveBeenCalled();
     vi.runAllTimers();
     expect(revoke).toHaveBeenCalledWith('blob:x');
+  });
+});
+
+describe('serverFileName', () => {
+  it('returnsASimpleNameWithTheExpectedExtension', () => {
+    expect(serverFileName('attachment; filename="cobertura-GENERAL-2026.xlsx"', '.xlsx')).toBe(
+      'cobertura-GENERAL-2026.xlsx',
+    );
+  });
+
+  it('rejectsOtherExtensionsPathsAndMissingHeaders', () => {
+    expect(serverFileName('attachment; filename="paquete.zip"', '.xlsx')).toBeUndefined();
+    expect(serverFileName('attachment; filename="../x.xlsx"', '.xlsx')).toBeUndefined();
+    expect(serverFileName(null, '.xlsx')).toBeUndefined();
   });
 });
