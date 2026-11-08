@@ -233,6 +233,29 @@
                   </limits>
                 </rule>
                 <rule>
+                  <!-- Acceso y alcance operativo (quién ve qué departamento): 80 %. -->
+                  <element>PACKAGE</element>
+                  <includes><include>co.gov.dane.edi.operation</include></includes>
+                  <limits>
+                    <limit><counter>LINE</counter><value>COVEREDRATIO</value><minimum>0.80</minimum></limit>
+                  </limits>
+                </rule>
+                <rule>
+                  <!-- Listados nominales (datos personales): 80 % por clase. -->
+                  <element>CLASS</element>
+                  <includes>
+                    <include>co.gov.dane.edi.operation.report.NominalReportService*</include>
+                    <include>co.gov.dane.edi.operation.report.OperationalStatus*</include>
+                    <include>co.gov.dane.edi.operation.report.NoveltyReport*</include>
+                    <include>co.gov.dane.edi.operation.report.NoveltyExcel*</include>
+                    <include>co.gov.dane.edi.operation.report.PerformanceReport*</include>
+                    <include>co.gov.dane.edi.operation.report.PerformanceExcel*</include>
+                  </includes>
+                  <limits>
+                    <limit><counter>LINE</counter><value>COVEREDRATIO</value><minimum>0.80</minimum></limit>
+                  </limits>
+                </rule>
+                <rule>
                   <element>PACKAGE</element>
                   <includes><include>co.gov.dane.edi.rules</include></includes>
                   <limits>

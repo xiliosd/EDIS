@@ -237,6 +237,89 @@ describe('CoveragePage', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 
+  it('movesBetweenSurveyTabsWithTheArrowKeys', async () => {
+    serve(['ADMIN_OPERATIVO'], SCOPE_ALL);
+    await openPage();
+    const user = userEvent.setup();
+    const general = screen.getByRole('tab', { name: 'General' });
+
+    general.focus();
+    await user.keyboard('{ArrowLeft}');
+    // Desde la primera pestaña, la flecha izquierda vuelve a la última.
+    expect(screen.getByRole('tab', { name: 'EDID' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'EDID' })).toHaveAttribute('aria-selected', 'true');
+
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
+
+    await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('retriesTheReportAfterAnError', async () => {
+    serve(['ADMIN_OPERATIVO'], SCOPE_ALL);
+    let calls = 0;
+    server.use(
+      http.get('*/api/v1/admin/reports/coverage', () => {
+        calls += 1;
+        return calls === 1
+          ? HttpResponse.json(
+              { title: 'Error', status: 503, detail: 'Base no disponible.' },
+              { status: 503, headers: PROBLEM },
+            )
+          : HttpResponse.json(report(true));
+      }),
+    );
+    renderApp(COVERAGE_URL);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByRole('table', { name: /Cobertura General 2026/ })).toBeVisible();
+  });
+
+  it('saysWhenThereIsNoSampleForTheFilters', async () => {
+    serve(['ADMIN_OPERATIVO'], SCOPE_ALL);
+    server.use(
+      http.get('*/api/v1/admin/reports/coverage', () =>
+        HttpResponse.json({ ...report(true), departments: undefined }),
+      ),
+    );
+    renderApp(COVERAGE_URL);
+
+    expect(await screen.findByText('No hay muestra para los filtros elegidos.')).toBeVisible();
+    expect(screen.queryByRole('table', { name: /Cobertura General/ })).not.toBeInTheDocument();
+  });
+
+  it('showsEntitiesWithoutWebLevelsAsPlainText', async () => {
+    serve(['ADMIN_OPERATIVO'], SCOPE_ALL);
+    const base = report(true);
+    const department = base.departments![0];
+    server.use(
+      http.get('*/api/v1/admin/reports/coverage', () =>
+        HttpResponse.json({
+          ...base,
+          nationalWebLevels: undefined,
+          departments: [
+            {
+              ...department,
+              entities: [{ ...department.entities![0], webLevels: undefined }],
+            },
+            { ...department, code: 8, name: 'Atlántico', entities: undefined },
+          ],
+        }),
+      ),
+    );
+    await openPage();
+
+    expect(screen.getByText('Alcaldía Ficticia de Prueba')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /Alcaldía Ficticia de Prueba/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'Total Atlántico' })).toBeVisible();
+    expect(screen.queryByText(/Nivel 1 \(carga web\)/)).not.toBeInTheDocument();
+  });
+
   it('hasNoAxeViolations', async () => {
     serve(['ADMIN_OPERATIVO'], SCOPE_ALL);
     await openPage();
