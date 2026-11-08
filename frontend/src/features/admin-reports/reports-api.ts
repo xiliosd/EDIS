@@ -1,6 +1,6 @@
 import { apiClient, ensureCsrfToken } from '../../services/api-client';
 import { unwrap } from '../../services/api-error';
-import type { components } from '../../services/api-schema';
+import type { components, operations } from '../../services/api-schema';
 import { downloadBlobFile, serverFileName } from '../../services/download-file';
 
 export type ReportSurvey = NonNullable<components['schemas']['CoverageReport']['survey']>;
@@ -124,5 +124,97 @@ export function downloadCutExcel(id: string): Promise<void> {
     '/api/v1/admin/reports/cuts/{id}/excel',
     { path: { id } },
     `corte-cobertura-${id}.xlsx`,
+  );
+}
+
+export type OperationalStatusFilter = NonNullable<
+  operations['reportOperationalStatus']['parameters']['query']['estado']
+>;
+export type PersonStatusPage = components['schemas']['PersonStatusPage'];
+export type PersonStatusRow = components['schemas']['PersonStatusRow'];
+export type NoveltyReportRow = components['schemas']['NoveltyReportRow'];
+export type PerformanceRow = components['schemas']['PerformanceRow'];
+
+/** Tamaño de página del estado del operativo (servidor) y de novedades y rendimientos (cliente). */
+export const REPORT_PAGE_SIZE = 100;
+
+export interface OperationalStatusFilters extends ReportFilterValue {
+  status: OperationalStatusFilter;
+  entity?: number;
+}
+
+function statusQuery(filters: OperationalStatusFilters) {
+  return {
+    ...coverageQuery(filters),
+    entidad: filters.entity,
+    estado: filters.status,
+  };
+}
+
+export function operationalStatusQueryKey(filters: OperationalStatusFilters, page: number) {
+  return ['admin', 'reports', 'operational-status', filters, page] as const;
+}
+
+export function fetchOperationalStatus(
+  filters: OperationalStatusFilters,
+  page: number,
+): Promise<PersonStatusPage> {
+  return unwrap(
+    apiClient.GET('/api/v1/admin/reports/operational-status', {
+      params: {
+        query: {
+          ...statusQuery(filters),
+          departamento: filters.department as number,
+          page,
+          size: REPORT_PAGE_SIZE,
+        },
+      },
+    }),
+  );
+}
+
+export function downloadOperationalStatusExcel(filters: OperationalStatusFilters): Promise<void> {
+  return downloadReportExcel(
+    '/api/v1/admin/reports/operational-status/excel',
+    { query: statusQuery(filters) },
+    `estado-operativo-${filters.survey}-${filters.year ?? 'actual'}.xlsx`,
+  );
+}
+
+export function noveltiesQueryKey(filters: ReportFilterValue) {
+  return ['admin', 'reports', 'novelties', filters] as const;
+}
+
+export function fetchNovelties(filters: ReportFilterValue): Promise<NoveltyReportRow[]> {
+  return unwrap(
+    apiClient.GET('/api/v1/admin/reports/novelties', { params: { query: coverageQuery(filters) } }),
+  );
+}
+
+export function downloadNoveltiesExcel(filters: ReportFilterValue): Promise<void> {
+  return downloadReportExcel(
+    '/api/v1/admin/reports/novelties/excel',
+    { query: coverageQuery(filters) },
+    `novedades-${filters.survey}-${filters.year ?? 'actual'}.xlsx`,
+  );
+}
+
+export function performanceQueryKey(filters: ReportFilterValue) {
+  return ['admin', 'reports', 'performance', filters] as const;
+}
+
+export function fetchPerformance(filters: ReportFilterValue): Promise<PerformanceRow[]> {
+  return unwrap(
+    apiClient.GET('/api/v1/admin/reports/performance', {
+      params: { query: coverageQuery(filters) },
+    }),
+  );
+}
+
+export function downloadPerformanceExcel(filters: ReportFilterValue): Promise<void> {
+  return downloadReportExcel(
+    '/api/v1/admin/reports/performance/excel',
+    { query: coverageQuery(filters) },
+    `rendimientos-${filters.survey}-${filters.year ?? 'actual'}.xlsx`,
   );
 }

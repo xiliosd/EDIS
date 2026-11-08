@@ -10,6 +10,9 @@ import { PackagesPage } from './features/admin-packages/PackagesPage';
 import { PublishPage } from './features/admin-publish/PublishPage';
 import { CoveragePage } from './features/admin-reports/CoveragePage';
 import { CutsPage } from './features/admin-reports/CutsPage';
+import { NoveltyReportPage } from './features/admin-reports/NoveltyReportPage';
+import { OperationalStatusPage } from './features/admin-reports/OperationalStatusPage';
+import { PerformancePage } from './features/admin-reports/PerformancePage';
 import { QuestionnaireTreePage } from './features/admin-questions/QuestionnaireTreePage';
 import { YearsPage } from './features/admin-questions/YearsPage';
 import { HomeRedirect } from './features/auth/HomeRedirect';
@@ -155,6 +158,30 @@ export function App() {
             element={
               <RequireRole roles={OPERATION_ROLES}>
                 <CutsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="reportes/estado"
+            element={
+              <RequireRole roles={OPERATION_ROLES}>
+                <OperationalStatusPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="reportes/novedades"
+            element={
+              <RequireRole roles={OPERATION_ROLES}>
+                <NoveltyReportPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="reportes/rendimientos"
+            element={
+              <RequireRole roles={OPERATION_ROLES}>
+                <PerformancePage />
               </RequireRole>
             }
           />
