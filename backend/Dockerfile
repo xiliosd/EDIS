@@ -15,14 +15,16 @@ LABEL org.opencontainers.image.title="formulario-edi-backend" \
       org.opencontainers.image.authors="Oscar Dueñas" \
       org.opencontainers.image.documentation="README.md del repositorio formulario-web"
 RUN groupadd --system app && useradd --system --gid app --home-dir /app --no-create-home app \
- && mkdir -p /app /data/rules && chown -R app:app /app /data/rules
+ && mkdir -p /app /data/rules /data/reports \
+ && chown -R app:app /app /data/rules /data/reports
 WORKDIR /app
 COPY --from=build --chown=app:app /workspace/extracted/lib ./lib
 COPY --from=build --chown=app:app /workspace/extracted/formulario-edi-backend.jar ./app.jar
 USER app
 ENV RULES_DIR=/data/rules \
+    REPORTS_DIR=/data/reports \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
-VOLUME ["/data/rules"]
+VOLUME ["/data/rules", "/data/reports"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/liveness HTTP/1.0\r\n\r\n' >&3 && grep -q UP <&3"]

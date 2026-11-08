@@ -29,6 +29,7 @@ services:
     volumes:
       - ./db/dev:/db/dev:ro
       - rules-data:/data/rules
+      - reports-data:/data/reports
     depends_on:
       oracle:
         condition: service_healthy
@@ -45,3 +46,4 @@ services:
 
 volumes:
   rules-data:
+  reports-data:

@@ -90,6 +90,17 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
           "PublicationAdminController.publish",
           "HistoryAdminController.restore");
 
+  /**
+   * Escrituras que producción sí permite (@AllowedInReadOnlyQuestionnaire): el paquete de promoción
+   * y los cortes de cobertura, que no tocan el cuestionario. Una nueva exige revisarla aquí.
+   */
+  private static final Set<String> ALLOWED_WRITES =
+      Set.of("PackageAdminController.importPackage", "ReportController.createCut");
+
+  /** Su 403 documentado es de alcance (departamento ajeno), no de la compuerta de solo lectura. */
+  private static final Set<String> ALLOWED_WRITE_OPERATION_IDS =
+      Set.of("packageImport", "reportCutCreate");
+
   @Autowired private MockMvc mockMvc;
   @Autowired private SessionTokenService tokens;
   @Autowired private JdbcTemplate jdbc;
@@ -157,7 +168,7 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
           }
           String name = handler.getBeanType().getSimpleName() + "." + handler.getMethod().getName();
           if (handler.hasMethodAnnotation(AllowedInReadOnlyQuestionnaire.class)) {
-            assertThat(name).isEqualTo("PackageAdminController.importPackage");
+            assertThat(ALLOWED_WRITES).contains(name);
             continue;
           }
           blocked.add(name);
@@ -200,7 +211,10 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
       for (String method : paths.get(path).propertyNames()) {
         JsonNode operation = paths.get(path).get(method);
         String id = operation.get("operationId").asString();
-        if (!"get".equals(method) && !"packageImport".equals(id)) {
+        if (ALLOWED_WRITE_OPERATION_IDS.contains(id)) {
+          continue;
+        }
+        if (!"get".equals(method)) {
           writes.add(id);
         }
         if (operation.get("responses").has("403")) {

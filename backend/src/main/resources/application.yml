@@ -46,6 +46,9 @@ app:
     year: ${SURVEY_YEAR}
     db-schema: ${DB_SCHEMA:DANE_DIRPEN}
     rules-dir: ${RULES_DIR:/data/rules}
+  operation:
+    cuts-dir: ${REPORTS_DIR:/data/reports}
+    novelty-other-cause-code: ${NOVELTY_OTHER_CAUSE_CODE:8}
   rules-seed:
     dir: ${RULES_SEED_DIR:}
   security:

@@ -10,6 +10,8 @@ app:
     code: EDIN
     year: 2026
     rules-dir: ${java.io.tmpdir}/edi-rules-test-${random.uuid}
+  operation:
+    cuts-dir: ${java.io.tmpdir}/edi-cuts-test-${random.uuid}
   rules-seed:
     dir: ../db/dev/rules-seed
   security:

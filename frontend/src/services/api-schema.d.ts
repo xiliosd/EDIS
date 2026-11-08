@@ -530,6 +530,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/reports/cuts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Histórico de cortes de cobertura
+         * @description Cortes del año, el más reciente primero. El territorial solo ve los de sus departamentos; pedir otro devuelve 403.
+         */
+        get: operations["reportCutList"];
+        put?: never;
+        /**
+         * Generar un corte de cobertura
+         * @description Guarda una fotografía de la cobertura de un departamento en el servidor (solo cifras, sin datos personales). Funciona aunque el cuestionario sea de solo lectura. Un departamento fuera del alcance del usuario devuelve 403.
+         */
+        post: operations["reportCutCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/cuts/{id}/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar un corte en Excel
+         * @description El mismo Excel de cobertura, con las cifras del momento del corte. 404 si no existe; un corte de otro departamento devuelve 403.
+         */
+        get: operations["reportCutExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/reports/years": {
         parameters: {
             query?: never;
@@ -940,6 +984,27 @@ export interface components {
         };
         CsrfTokenResponse: {
             token?: string;
+        };
+        CutRequest: {
+            /** Format: int32 */
+            anio?: number;
+            /** Format: int32 */
+            departamento: number;
+            /** @enum {string} */
+            encuesta: "GENERAL" | "EDI" | "EDID";
+        };
+        CutSummary: {
+            /** Format: int32 */
+            departmentCode?: number;
+            departmentName?: string;
+            /** Format: date-time */
+            generatedAt?: string;
+            generatedBy?: string;
+            id?: string;
+            /** @enum {string} */
+            survey?: "GENERAL" | "EDI" | "EDID";
+            /** Format: int32 */
+            year?: number;
         };
         Department: {
             /** Format: int32 */
@@ -2948,6 +3013,102 @@ export interface operations {
             };
             /** @description La encuesta no es GENERAL, EDI ni EDID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportCutList: {
+        parameters: {
+            query?: {
+                anio?: number;
+                departamento?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cortes del alcance del usuario */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CutSummary"][];
+                };
+            };
+        };
+    };
+    reportCutCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CutRequest"];
+            };
+        };
+        responses: {
+            /** @description Corte generado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CutSummary"];
+                };
+            };
+            /** @description El departamento no es del alcance del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Las tablas del año no tienen B07 o H06 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    reportCutExcel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archivo .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description El corte no existe */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,20 +1,27 @@
 package co.gov.dane.edi.operation.controller;
 
+import co.gov.dane.edi.admin.AllowedInReadOnlyQuestionnaire;
 import co.gov.dane.edi.config.SurveyProperties;
 import co.gov.dane.edi.operation.OperationalAccess;
 import co.gov.dane.edi.operation.OperationalAccessService;
 import co.gov.dane.edi.operation.excel.XlsxWriter;
+import co.gov.dane.edi.operation.report.CoverageCut;
+import co.gov.dane.edi.operation.report.CoverageCutService;
 import co.gov.dane.edi.operation.report.CoverageExcel;
 import co.gov.dane.edi.operation.report.CoverageService;
 import co.gov.dane.edi.operation.report.ReportSurvey;
 import co.gov.dane.edi.operation.report.ReportYearsRepository;
 import co.gov.dane.edi.operation.report.dto.CoverageReport;
+import co.gov.dane.edi.operation.report.dto.CutRequest;
+import co.gov.dane.edi.operation.report.dto.CutSummary;
+import co.gov.dane.edi.security.SessionTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -22,15 +29,20 @@ import java.util.Locale;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/admin/reports")
@@ -43,6 +55,8 @@ public class ReportController {
 
   private final OperationalAccessService accessService;
   private final CoverageService coverageService;
+  private final CoverageCutService cutService;
+  private final SessionTokenService tokens;
   private final ReportYearsRepository yearsRepository;
   private final XlsxWriter xlsxWriter;
   private final SurveyProperties survey;
@@ -51,12 +65,16 @@ public class ReportController {
   public ReportController(
       OperationalAccessService accessService,
       CoverageService coverageService,
+      CoverageCutService cutService,
+      SessionTokenService tokens,
       ReportYearsRepository yearsRepository,
       XlsxWriter xlsxWriter,
       SurveyProperties survey,
       Clock clock) {
     this.accessService = accessService;
     this.coverageService = coverageService;
+    this.cutService = cutService;
+    this.tokens = tokens;
     this.yearsRepository = yearsRepository;
     this.xlsxWriter = xlsxWriter;
     this.survey = survey;
@@ -131,6 +149,83 @@ public class ReportController {
     String fileName =
         fileName("cobertura", reportSurvey, report.year(), departmentCode, LocalDate.now(clock));
     return excelResponse(content, fileName);
+  }
+
+  @Operation(
+      operationId = "reportCutCreate",
+      summary = "Generar un corte de cobertura",
+      description =
+          "Guarda una fotografía de la cobertura de un departamento en el servidor (solo cifras,"
+              + " sin datos personales). Funciona aunque el cuestionario sea de solo lectura. Un"
+              + " departamento fuera del alcance del usuario devuelve 403.")
+  @ApiResponse(responseCode = "200", description = "Corte generado")
+  @ApiResponse(
+      responseCode = "403",
+      description = "El departamento no es del alcance del usuario",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @ApiResponse(
+      responseCode = "422",
+      description = "Las tablas del año no tienen B07 o H06",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @AllowedInReadOnlyQuestionnaire
+  @PostMapping(
+      path = "/cuts",
+      consumes = MediaType.APPLICATION_JSON_VALUE,
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  public CutSummary createCut(
+      @Valid @RequestBody CutRequest request,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    String username = tokens.principalFrom(jwt).administratorUsername();
+    return cutService.create(access, request, username);
+  }
+
+  @Operation(
+      operationId = "reportCutList",
+      summary = "Histórico de cortes de cobertura",
+      description =
+          "Cortes del año, el más reciente primero. El territorial solo ve los de sus"
+              + " departamentos; pedir otro devuelve 403.")
+  @ApiResponse(responseCode = "200", description = "Cortes del alcance del usuario")
+  @GetMapping(path = "/cuts", produces = MediaType.APPLICATION_JSON_VALUE)
+  public List<CutSummary> cuts(
+      @RequestParam(name = "anio", required = false) Integer year,
+      @RequestParam(name = "departamento", required = false) Integer departmentCode,
+      @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    return cutService.list(access, year == null ? survey.year() : year, departmentCode);
+  }
+
+  @Operation(
+      operationId = "reportCutExcel",
+      summary = "Descargar un corte en Excel",
+      description =
+          "El mismo Excel de cobertura, con las cifras del momento del corte. 404 si no existe;"
+              + " un corte de otro departamento devuelve 403.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Archivo .xlsx",
+      content = @Content(mediaType = XLSX, schema = @Schema(type = "string", format = "binary")))
+  @ApiResponse(
+      responseCode = "404",
+      description = "El corte no existe",
+      content =
+          @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+  @GetMapping(
+      path = "/cuts/{id}/excel",
+      produces = {XLSX, PROBLEM})
+  public ResponseEntity<byte[]> cutExcel(
+      @PathVariable("id") String id, @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    OperationalAccess access = accessService.current(jwt);
+    CoverageCut cut =
+        cutService
+            .find(access, id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El corte no existe."));
+    byte[] content = xlsxWriter.write(CoverageExcel.sheets(cut.report()));
+    return excelResponse(content, "corte-cobertura-" + cut.id() + ".xlsx");
   }
 
   private CoverageReport buildCoverage(

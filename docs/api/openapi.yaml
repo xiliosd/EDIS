@@ -1703,6 +1703,98 @@ paths:
       summary: Cobertura en Excel
       tags:
       - Reportes
+  /api/v1/admin/reports/cuts:
+    get:
+      description: "Cortes del año, el más reciente primero. El territorial solo ve\
+        \ los de sus departamentos; pedir otro devuelve 403."
+      operationId: reportCutList
+      parameters:
+      - in: query
+        name: anio
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: departamento
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CutSummary"
+          description: Cortes del alcance del usuario
+      summary: Histórico de cortes de cobertura
+      tags:
+      - Reportes
+    post:
+      description: "Guarda una fotografía de la cobertura de un departamento en el\
+        \ servidor (solo cifras, sin datos personales). Funciona aunque el cuestionario\
+        \ sea de solo lectura. Un departamento fuera del alcance del usuario devuelve\
+        \ 403."
+      operationId: reportCutCreate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CutRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CutSummary"
+          description: Corte generado
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El departamento no es del alcance del usuario
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Las tablas del año no tienen B07 o H06
+      summary: Generar un corte de cobertura
+      tags:
+      - Reportes
+  /api/v1/admin/reports/cuts/{id}/excel:
+    get:
+      description: "El mismo Excel de cobertura, con las cifras del momento del corte.\
+        \ 404 si no existe; un corte de otro departamento devuelve 403."
+      operationId: reportCutExcel
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: Archivo .xlsx
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El corte no existe
+      summary: Descargar un corte en Excel
+      tags:
+      - Reportes
   /api/v1/admin/reports/years:
     get:
       description: "Años con funcionarios en la muestra, del más reciente al más antiguo.\
@@ -2437,6 +2529,52 @@ components:
       properties:
         token:
           type: string
+    CutRequest:
+      type: object
+      properties:
+        anio:
+          type: integer
+          format: int32
+          maximum: 2100
+          minimum: 2020
+        departamento:
+          type: integer
+          format: int32
+          maximum: 999
+          minimum: 1
+        encuesta:
+          type: string
+          enum:
+          - GENERAL
+          - EDI
+          - EDID
+      required:
+      - departamento
+      - encuesta
+    CutSummary:
+      type: object
+      properties:
+        departmentCode:
+          type: integer
+          format: int32
+        departmentName:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        generatedBy:
+          type: string
+        id:
+          type: string
+        survey:
+          type: string
+          enum:
+          - GENERAL
+          - EDI
+          - EDID
+        year:
+          type: integer
+          format: int32
     Department:
       type: object
       properties:
