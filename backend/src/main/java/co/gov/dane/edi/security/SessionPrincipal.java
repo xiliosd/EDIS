@@ -57,6 +57,14 @@ public record SessionPrincipal(String subject, Set<Role> roles, String departmen
     return subject.substring(RESPONDENT_PREFIX.length());
   }
 
+  /** Nombre de usuario del administrador (COD_USUA); no aplica a un encuestado. */
+  public String administratorUsername() {
+    if (!subject.startsWith(ADMIN_PREFIX)) {
+      throw new IllegalStateException("La sesión no es de un administrador");
+    }
+    return subject.substring(ADMIN_PREFIX.length());
+  }
+
   @Override
   public String toString() {
     return "SessionPrincipal[roles=" + roles + "]";

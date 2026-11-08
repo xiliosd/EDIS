@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/operation/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar el alcance operativo del usuario
+         * @description Nacional y operativo ven todos los departamentos; el territorial, solo los asignados. El administrador del cuestionario recibe 403.
+         */
+        get: operations["operationScope"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questionnaire/{encuesta}/{anio}": {
         parameters: {
             query?: never;
@@ -828,6 +848,11 @@ export interface components {
         CsrfTokenResponse: {
             token?: string;
         };
+        Department: {
+            /** Format: int32 */
+            code?: number;
+            name?: string;
+        };
         EditTextRequest: {
             motivo?: string;
             text: string;
@@ -922,6 +947,14 @@ export interface components {
             text: string;
             /** Format: int32 */
             version: number;
+        };
+        OperationalScope: {
+            allDepartments?: boolean;
+            canManageKeys?: boolean;
+            canManageNovelties?: boolean;
+            /** Format: int32 */
+            defaultYear?: number;
+            departments?: components["schemas"]["Department"][];
         };
         PageAnswersRequest: {
             answers: {
@@ -1198,6 +1231,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminEnvironment"];
+                };
+            };
+        };
+    };
+    operationScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alcance del usuario */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationalScope"];
                 };
             };
         };

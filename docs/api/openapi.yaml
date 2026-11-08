@@ -19,6 +19,8 @@ tags:
   name: Simulador de reglas
 - description: Lectura y diligenciamiento del cuestionario
   name: Encuesta
+- description: Alcance operativo del administrador
+  name: Operación
 - description: "Reglas de salto, validaciones y casos de prueba de un año (rol ADMIN_CUESTIONARIO).\
     \ En un año publicado cada cambio es una corrección: exige motivo (10 a 500 caracteres),\
     \ no agrega errores y no deja casos de prueba en rojo"
@@ -49,6 +51,21 @@ paths:
       summary: Consultar si este ambiente permite cambiar el cuestionario
       tags:
       - Ambiente de administración
+  /api/v1/admin/operation/scope:
+    get:
+      description: "Nacional y operativo ven todos los departamentos; el territorial,\
+        \ solo los asignados. El administrador del cuestionario recibe 403."
+      operationId: operationScope
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationalScope"
+          description: Alcance del usuario
+      summary: Consultar el alcance operativo del usuario
+      tags:
+      - Operación
   /api/v1/admin/questionnaire/{encuesta}/{anio}:
     get:
       operationId: questionnaire
@@ -2244,6 +2261,14 @@ components:
       properties:
         token:
           type: string
+    Department:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        name:
+          type: string
     EditTextRequest:
       type: object
       properties:
@@ -2446,6 +2471,22 @@ components:
       - numeral
       - text
       - version
+    OperationalScope:
+      type: object
+      properties:
+        allDepartments:
+          type: boolean
+        canManageKeys:
+          type: boolean
+        canManageNovelties:
+          type: boolean
+        defaultYear:
+          type: integer
+          format: int32
+        departments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Department"
     PageAnswersRequest:
       type: object
       properties:

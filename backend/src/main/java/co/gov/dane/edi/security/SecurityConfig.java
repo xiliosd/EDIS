@@ -81,6 +81,19 @@ public class SecurityConfig {
               authorize
                   .requestMatchers("/api/v1/admin/questionnaire/**", "/api/v1/admin/years/**")
                   .hasRole(Role.ADMIN_CUESTIONARIO.name());
+              // Operación: el administrador del cuestionario no ve datos de la muestra.
+              authorize
+                  .requestMatchers("/api/v1/admin/operation/**", "/api/v1/admin/reports/**")
+                  .hasAnyRole(
+                      Role.ADMIN_NACIONAL.name(),
+                      Role.ADMIN_TERRITORIAL.name(),
+                      Role.ADMIN_OPERATIVO.name());
+              authorize
+                  .requestMatchers("/api/v1/admin/novelties/**")
+                  .hasRole(Role.ADMIN_TERRITORIAL.name());
+              authorize
+                  .requestMatchers("/api/v1/admin/keys/**")
+                  .hasRole(Role.ADMIN_NACIONAL.name());
               authorize.requestMatchers("/api/v1/admin/**").hasAnyRole(administratorRoles);
               authorize.anyRequest().authenticated();
             })
