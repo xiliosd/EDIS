@@ -23,7 +23,10 @@ function formatCutDate(iso: string | undefined): string {
 }
 
 function formatCutTime(iso: string | undefined): string {
-  return iso ? new Date(iso).toLocaleTimeString('es-CO', { timeZone: BOGOTA, hour12: false }) : '';
+  // hourCycle h23 y no hour12: false, que en algunos navegadores muestra la medianoche como 24.
+  return iso
+    ? new Date(iso).toLocaleTimeString('es-CO', { timeZone: BOGOTA, hourCycle: 'h23' })
+    : '';
 }
 
 function surveyLabel(survey: CutSummary['survey']): string {

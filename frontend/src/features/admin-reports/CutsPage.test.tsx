@@ -88,6 +88,32 @@ describe('CutsPage', () => {
     expect(within(row).getByRole('button', { name: /Descargar corte de Antioquia/ })).toBeVisible();
   });
 
+  it('showsMidnightInBogotaAsHourZeroNotTwentyFour', async () => {
+    const midnightCut: CutSummary = {
+      ...OLD_CUT,
+      id: '20261108-000500-abcdef',
+      // 05:05 UTC son las 00:05 en Bogotá.
+      generatedAt: '2026-11-08T05:05:00Z',
+      generatedBy: 'eva.prueba',
+    };
+    serve();
+    server.use(http.get(CUTS_API, () => HttpResponse.json([midnightCut])));
+    const timeFormat = vi.spyOn(Date.prototype, 'toLocaleTimeString');
+    await openPage();
+
+    const row = screen.getByRole('row', { name: /eva\.prueba/ });
+    expect(within(row).getByText('0:05:00')).toBeInTheDocument();
+    expect(within(row).queryByText(/^24:/)).not.toBeInTheDocument();
+    expect(timeFormat).toHaveBeenCalledWith(
+      'es-CO',
+      expect.objectContaining({ timeZone: 'America/Bogota', hourCycle: 'h23' }),
+    );
+    expect(timeFormat).not.toHaveBeenCalledWith(
+      'es-CO',
+      expect.objectContaining({ hour12: false }),
+    );
+  });
+
   it('showsTheGeneratedCutAsANewRowAndSendsTheFilters', async () => {
     const stored = serve();
     let body: unknown;

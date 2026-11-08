@@ -53,7 +53,7 @@ test('el servidor público diligencia toda la encuesta y obtiene su radicado', a
   // B1: combo de nivel y edad con rango 15–99.
   await expect(page).toHaveURL(/\/encuesta\/pagina\/B1$/);
   // Ayuda del enunciado (FRM_PRE_AYUDA ficticia): abre debajo del texto y Escape la cierra.
-  const helpTerm = page.getByRole('button', { name: 'desempeña' });
+  const helpTerm = page.getByRole('button', { name: 'desempeña', exact: true });
   const definition = page.getByText('Definición ficticia de desempeño.');
   await helpTerm.click();
   await expect(helpTerm).toHaveAttribute('aria-expanded', 'true');
