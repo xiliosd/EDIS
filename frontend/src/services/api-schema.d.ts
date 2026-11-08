@@ -24,6 +24,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/novelties/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Asignar o modificar la novedad de un funcionario
+         * @description Por cédula y año (en el cuerpo). La novedad debe existir en el catálogo del año y la de "otra causa" exige texto (máximo 500 bytes Latin-9). Si la novedad cambió desde que se cargó la pantalla responde 409. Funciona aunque el cuestionario sea de solo lectura.
+         */
+        post: operations["noveltyAssign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/novelties/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Catálogo de novedades
+         * @description Novedades de GRAL_NOVEDAD de la encuesta y el año; requiresText marca la de "otra causa". Solo el administrador territorial.
+         */
+        get: operations["noveltyCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/novelties/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entidades de un departamento
+         * @description Entidades con funcionarios activos en el departamento, con el tamaño de la muestra y cuántos tienen novedad. Un departamento ajeno devuelve 403.
+         */
+        get: operations["noveltyEntities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/novelties/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Funcionarios de una entidad con su novedad
+         * @description Consulta (no escribe): va por POST para que el filtro no quede en la URL. Contiene datos personales: la respuesta no se guarda en caché. Un departamento ajeno devuelve 403.
+         */
+        post: operations["noveltyPeople"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/novelties/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quitar la novedad de un funcionario
+         * @description Limpia la novedad y la causa. Mismas reglas de alcance y concurrencia que asignar.
+         */
+        post: operations["noveltyRemove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/operation/scope": {
         parameters: {
             query?: never;
@@ -1252,6 +1352,59 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
+        NoveltyCatalogEntry: {
+            /** Format: int32 */
+            code?: number;
+            name?: string;
+            requiresText?: boolean;
+        };
+        NoveltyChangeRequest: {
+            /** Format: int32 */
+            anio?: number;
+            /** Format: int32 */
+            expectedNoveltyCode?: number;
+            expectedOtherCause?: string;
+            /** Format: int32 */
+            noveltyCode?: number;
+            otherCause?: string;
+            respondentCode: string;
+        };
+        NoveltyEntity: {
+            /** Format: int64 */
+            code?: number;
+            name?: string;
+            /** Format: int64 */
+            sampleSize?: number;
+            /** Format: int64 */
+            withNovelty?: number;
+        };
+        NoveltyPeopleRequest: {
+            /** Format: int32 */
+            anio?: number;
+            /** Format: int32 */
+            departamento: number;
+            /** Format: int64 */
+            entidad: number;
+        };
+        NoveltyPerson: {
+            /** Format: int32 */
+            level?: number;
+            name?: string;
+            /** Format: int32 */
+            noveltyCode?: number;
+            otherCause?: string;
+            respondentCode?: string;
+            /** @enum {string} */
+            status?: "COMPLETE" | "NOVELTY" | "INCOMPLETE" | "NOT_STARTED";
+        };
+        NoveltyRemoveRequest: {
+            /** Format: int32 */
+            anio?: number;
+            /** Format: int32 */
+            expectedNoveltyCode?: number;
+            expectedOtherCause?: string;
+            respondentCode: string;
+        };
         NoveltyReportRow: {
             complete?: boolean;
             /** Format: int32 */
@@ -1590,6 +1743,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminEnvironment"];
+                };
+            };
+        };
+    };
+    noveltyAssign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoveltyChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Novedad guardada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El usuario no gestiona novedades */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El funcionario no está en la muestra de los departamentos del usuario */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La novedad cambió desde que se cargó la pantalla */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Novedad fuera del catálogo o causa vacía o demasiado larga */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    noveltyCatalog: {
+        parameters: {
+            query?: {
+                anio?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catálogo del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoveltyCatalogEntry"][];
+                };
+            };
+        };
+    };
+    noveltyEntities: {
+        parameters: {
+            query: {
+                anio?: number;
+                departamento: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entidades del departamento */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoveltyEntity"][];
+                };
+            };
+        };
+    };
+    noveltyPeople: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoveltyPeopleRequest"];
+            };
+        };
+        responses: {
+            /** @description Funcionarios activos de la entidad */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoveltyPerson"][];
+                };
+            };
+            /** @description El departamento no es del alcance del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Las tablas del año no tienen B07 o H06 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    noveltyRemove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoveltyRemoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Novedad quitada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El usuario no gestiona novedades */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El funcionario no está en la muestra de los departamentos del usuario */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description La novedad cambió desde que se cargó la pantalla */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };

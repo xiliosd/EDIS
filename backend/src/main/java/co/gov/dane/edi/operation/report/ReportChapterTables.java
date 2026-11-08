@@ -28,7 +28,7 @@ public class ReportChapterTables {
   }
 
   /** Solo B y H, suficientes para el estado de cada funcionario. */
-  Map<Chapter, String> statusChapters(int year) {
+  public Map<Chapter, String> statusChapters(int year) {
     return resolve(year, Chapter.B, Chapter.H);
   }
 

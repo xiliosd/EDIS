@@ -36,6 +36,11 @@ public class AdminAudit {
     }
   }
 
+  /** Si {@code code} puede ir tal cual entre los códigos de la auditoría. */
+  public static boolean isValidCode(String code) {
+    return code != null && CODE.matcher(code).matches();
+  }
+
   public void record(String user, String survey, int year, String operation, List<String> codes) {
     validate(operation, codes);
     AUDIT.info(

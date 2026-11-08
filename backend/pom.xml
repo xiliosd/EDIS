@@ -217,6 +217,14 @@
                   </limits>
                 </rule>
                 <rule>
+                  <!-- Datos personales (novedades de la muestra): 80 % como pagos y autenticación. -->
+                  <element>PACKAGE</element>
+                  <includes><include>co.gov.dane.edi.operation.novelty</include></includes>
+                  <limits>
+                    <limit><counter>LINE</counter><value>COVEREDRATIO</value><minimum>0.80</minimum></limit>
+                  </limits>
+                </rule>
+                <rule>
                   <element>PACKAGE</element>
                   <includes><include>co.gov.dane.edi.rules</include></includes>
                   <limits>

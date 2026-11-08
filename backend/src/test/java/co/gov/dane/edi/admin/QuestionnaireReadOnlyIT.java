@@ -95,11 +95,16 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
    * y los cortes de cobertura, que no tocan el cuestionario. Una nueva exige revisarla aquí.
    */
   private static final Set<String> ALLOWED_WRITES =
-      Set.of("PackageAdminController.importPackage", "ReportController.createCut");
+      Set.of(
+          "PackageAdminController.importPackage",
+          "ReportController.createCut",
+          "NoveltyController.people",
+          "NoveltyController.assign",
+          "NoveltyController.remove");
 
   /** Su 403 documentado es de alcance (departamento ajeno), no de la compuerta de solo lectura. */
   private static final Set<String> ALLOWED_WRITE_OPERATION_IDS =
-      Set.of("packageImport", "reportCutCreate");
+      Set.of("packageImport", "reportCutCreate", "noveltyPeople", "noveltyAssign", "noveltyRemove");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private SessionTokenService tokens;

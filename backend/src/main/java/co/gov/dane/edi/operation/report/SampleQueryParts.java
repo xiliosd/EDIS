@@ -11,14 +11,15 @@ import java.util.Map;
  * rendimientos): joins de capítulos, catálogo de novedades, entidad y filtros de la muestra. Los
  * nombres de tabla llegan validados por {@code AnswerTableResolver} y {@code SurveyProperties};
  * todo valor va como parámetro. Alias fijos: {@code m} muestra, {@code ent} entidad, {@code n}
- * novedad y uno por capítulo ({@link #alias(Chapter)}).
+ * novedad y uno por capítulo ({@link #alias(Chapter)}). Público para la gestión de novedades\n *
+ * ({@code operation.novelty}), que lista la misma muestra con el mismo criterio de estado.
  */
-final class SampleQueryParts {
+public final class SampleQueryParts {
 
   private SampleQueryParts() {}
 
   /** Alias SQL del capítulo: {@code b} y {@code h} los exige {@link SampleStatus#STATUS_CASE}. */
-  static String alias(Chapter chapter) {
+  public static String alias(Chapter chapter) {
     return chapter.name().toLowerCase(Locale.ROOT);
   }
 
@@ -28,7 +29,7 @@ final class SampleQueryParts {
    * alias: {@code ROWS_FOUND}, {@code SAVED_AT} (último {@code FECHA}); en B además {@code B07} y
    * en H {@code H06}.
    */
-  static void appendChapterJoins(StringBuilder sql, Map<Chapter, String> chapterTables) {
+  public static void appendChapterJoins(StringBuilder sql, Map<Chapter, String> chapterTables) {
     for (Map.Entry<Chapter, String> entry : chapterTables.entrySet()) {
       Chapter chapter = entry.getKey();
       sql.append(" LEFT JOIN (SELECT C_C, COUNT(*) AS ROWS_FOUND, MAX(FECHA) AS SAVED_AT");
@@ -48,12 +49,12 @@ final class SampleQueryParts {
   }
 
   /** Une la entidad ({@code ent}) con la muestra. */
-  static void appendEntityJoin(StringBuilder sql) {
+  public static void appendEntityJoin(StringBuilder sql) {
     sql.append(" LEFT JOIN GRAL_ENTI ent ON ent.COD_ENT = TO_NUMBER(m.COD_ENT)");
   }
 
   /** Une el catálogo de novedades de la encuesta y el año ({@code n.NOVEDAD}), uno por IDFNOV. */
-  static void appendNoveltyCatalogJoin(
+  public static void appendNoveltyCatalogJoin(
       StringBuilder sql, Map<String, Object> parameters, SurveyProperties survey, int year) {
     sql.append(
         " LEFT JOIN (SELECT IDFNOV, MAX(NOVEDAD) AS NOVEDAD FROM GRAL_NOVEDAD"
@@ -69,7 +70,7 @@ final class SampleQueryParts {
    * @param departments departamentos a incluir; nulo para no filtrar por departamento (Ruling 3)
    * @param entityCode entidad; nulo para todas
    */
-  static void appendSampleFilter(
+  public static void appendSampleFilter(
       StringBuilder sql,
       Map<String, Object> parameters,
       int year,
