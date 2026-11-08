@@ -104,6 +104,7 @@ describe('OperationalStatusPage', () => {
     const queries = serve(250);
     await openPage();
     const next = screen.getByRole('button', { name: 'Siguiente' });
+    next.focus();
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
     expect(screen.getByText(/Página 1 de 3/)).toBeInTheDocument();
 
@@ -112,6 +113,10 @@ describe('OperationalStatusPage', () => {
     await waitFor(() => expect(queries.at(-1)?.get('page')).toBe('1'));
     expect(await screen.findByText(/Página 2 de 3/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeEnabled();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Siguiente' }));
+    expect(screen.getByRole('navigation', { name: 'Paginación' })).toContainElement(
+      document.activeElement as HTMLElement,
+    );
   });
 
   it('downloadsTheExcelWithTheFilters', async () => {

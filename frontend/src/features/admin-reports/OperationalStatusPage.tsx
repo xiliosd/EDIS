@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '../../components/Button';
 import { ErrorState } from '../../components/ErrorState';
 import { useDocumentTitle } from '../../hooks/use-document-title';
@@ -61,6 +61,7 @@ export function OperationalStatusPage() {
     queryKey: operationalStatusQueryKey(filters, page),
     queryFn: () => fetchOperationalStatus(filters, page),
     enabled: hasDepartment,
+    placeholderData: keepPreviousData,
   });
   const download = useMutation({ mutationFn: () => downloadOperationalStatusExcel(filters) });
 
@@ -150,7 +151,10 @@ export function OperationalStatusPage() {
           <p className="mt-6 text-ink-muted">No hay funcionarios para estos filtros.</p>
         ) : (
           <>
-            <div className="mt-6 overflow-x-auto">
+            <div
+              className={`mt-6 overflow-x-auto ${result.isPlaceholderData ? 'opacity-60' : ''}`}
+              aria-busy={result.isPlaceholderData}
+            >
               <table className="w-full min-w-[56rem] border-collapse text-sm">
                 <caption className="sr-only">
                   Estado de los funcionarios, {formatCount(total)} en total
