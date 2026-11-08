@@ -11,7 +11,7 @@ import java.util.Map;
  * rendimientos): joins de capítulos, catálogo de novedades, entidad y filtros de la muestra. Los
  * nombres de tabla llegan validados por {@code AnswerTableResolver} y {@code SurveyProperties};
  * todo valor va como parámetro. Alias fijos: {@code m} muestra, {@code ent} entidad, {@code n}
- * novedad y uno por capítulo ({@link #alias(Chapter)}). Público para la gestión de novedades\n *
+ * novedad y uno por capítulo ({@link #alias(Chapter)}). Público para la gestión de novedades
  * ({@code operation.novelty}), que lista la misma muestra con el mismo criterio de estado.
  */
 public final class SampleQueryParts {

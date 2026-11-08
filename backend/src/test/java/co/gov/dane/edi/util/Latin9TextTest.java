@@ -77,6 +77,13 @@ class Latin9TextTest {
         .isEqualTo("“Hola” 😀 — A");
   }
 
+  /** Formas no canónicas que puede haber guardado el PHP: ceros a la izquierda y Latin-9. */
+  @Test
+  void decodesLeadingZerosAndLatin9CharactersStoredAsReferences() {
+    assertThat(Latin9Text.decodeNumericReferences("&#08220;x&#x0201D; Caf&#233; &#8364;"))
+        .isEqualTo("“x” Café €");
+  }
+
   @Test
   void leavesNamedAndInvalidReferencesUntouched() {
     assertThat(Latin9Text.decodeNumericReferences("&amp; &#; &#xZZ; &#1114112; &#55357; a&#65"))

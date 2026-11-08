@@ -2,6 +2,7 @@ package co.gov.dane.edi.operation.novelty;
 
 import co.gov.dane.edi.admin.AdminAudit;
 import co.gov.dane.edi.config.SurveyProperties;
+import co.gov.dane.edi.operation.Department;
 import co.gov.dane.edi.operation.OperationProperties;
 import co.gov.dane.edi.operation.OperationalAccess;
 import co.gov.dane.edi.operation.novelty.NoveltyRepository.CurrentNovelty;
@@ -15,7 +16,9 @@ import co.gov.dane.edi.service.error.ConflictException;
 import co.gov.dane.edi.service.error.InvalidEditException;
 import co.gov.dane.edi.service.error.ResourceNotFoundException;
 import co.gov.dane.edi.util.Latin9Text;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -138,10 +141,22 @@ public class NoveltyService {
       String storedText,
       Integer expectedCode,
       String expectedText) {
-    List<Integer> departments = access.departmentFilter(null);
-    // El esperado se compara en su forma guardada, convertido igual que al escribir.
-    String expectedStored =
-        expectedText == null || expectedText.isEmpty() ? null : Latin9Text.encode(expectedText);
+    List<Integer> departments = ownDepartments(access);
+    CurrentNovelty current =
+        repository
+            .findCurrentForUpdate(year, respondentCode, departments)
+            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_MESSAGE));
+    // Se compara en el espacio decodificado (lo que la pantalla leyó): el texto heredado puede
+    // tener formas que encode no reproduce (&#233;, &#x201C;, ceros a la izquierda).
+    boolean unchanged =
+        sameCode(current.noveltyCode(), expectedCode)
+            && Objects.equals(
+                emptyAsNull(Latin9Text.decodeNumericReferences(current.storedText())),
+                emptyAsNull(expectedText));
+    if (!unchanged) {
+      throw new ConflictException(CONFLICT_MESSAGE);
+    }
+    // La fila quedó bloqueada; el UPDATE vuelve a exigir los valores crudos leídos.
     int updated =
         repository.updateNovelty(
             year,
@@ -149,12 +164,8 @@ public class NoveltyService {
             departments,
             noveltyCode,
             storedText,
-            expectedCode,
-            expectedStored);
-    CurrentNovelty current =
-        repository
-            .findCurrent(year, respondentCode, departments)
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_MESSAGE));
+            current.noveltyCode(),
+            current.storedText());
     if (updated == 0) {
       throw new ConflictException(CONFLICT_MESSAGE);
     }
@@ -189,6 +200,35 @@ public class NoveltyService {
 
   private static String auditCode(Integer noveltyCode) {
     return noveltyCode == null ? NO_NOVELTY : String.valueOf(noveltyCode);
+  }
+
+  /**
+   * Departamentos en los que el usuario puede escribir: siempre su lista explícita (Ruling 8,
+   * diseño §6). Quien ve todo el país (roles combinados con nacional u operativo) no escribe
+   * novedades, para que nadie cambie funcionarios de todo el país por tener también el rol
+   * territorial.
+   */
+  private static List<Integer> ownDepartments(OperationalAccess access) {
+    if (access.allDepartments() || !access.canManageNovelties()) {
+      throw new AccessDeniedException("El usuario no gestiona novedades en sus departamentos");
+    }
+    List<Integer> departments = access.departments().stream().map(Department::code).toList();
+    if (departments.isEmpty()) {
+      throw new AccessDeniedException("El usuario no tiene departamentos asignados");
+    }
+    return departments;
+  }
+
+  private static boolean sameCode(BigDecimal stored, Integer expected) {
+    if (stored == null || expected == null) {
+      return stored == null && expected == null;
+    }
+    return stored.compareTo(BigDecimal.valueOf(expected)) == 0;
+  }
+
+  private static String emptyAsNull(String text) {
+    // Oracle guarda la cadena vacía como NULL.
+    return text == null || text.isEmpty() ? null : text;
   }
 
   private static void requireNoveltyManagement(OperationalAccess access) {

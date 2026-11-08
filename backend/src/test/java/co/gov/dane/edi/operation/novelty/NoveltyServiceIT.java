@@ -263,6 +263,68 @@ class NoveltyServiceIT extends OracleIntegrationTest {
         .containsEntry("TEXT", OTHER_CAUSE_TEXT);
   }
 
+  /**
+   * Texto heredado con formas que encode no produce (Latin-9 como entidad, hexadecimal, ceros a la
+   * izquierda): la pantalla devuelve lo que leyó y la operación no debe quedar en 409 para siempre.
+   */
+  @Test
+  void legacyTextWithNonCanonicalReferencesCanBeChangedWithTheTextAsRead() {
+    jdbc.update(
+        "UPDATE EDIN_MUESTRA SET IDFNOV = 8, NOV_OTRA_CAUSA = ? WHERE C_C = ?",
+        "Caf&#233; &#x201C;x&#x201D; &#08364;",
+        CASE_NOT_STARTED);
+    String read = person(CASE_NOT_STARTED).otherCause();
+    assertThat(read).isEqualTo("Café “x” €");
+
+    service.remove(
+        territorial,
+        USER_TERRITORIAL_MULTI,
+        new NoveltyRemoveRequest(year, CASE_NOT_STARTED, NOVELTY_OTHER_CAUSE, read));
+    assertThat(stored(CASE_NOT_STARTED)).containsEntry("IDFNOV", null).containsEntry("TEXT", null);
+
+    // Y un texto leído distinto sigue siendo conflicto.
+    jdbc.update(
+        "UPDATE EDIN_MUESTRA SET IDFNOV = 8, NOV_OTRA_CAUSA = 'Caf&#233;' WHERE C_C = ?",
+        CASE_NOT_STARTED);
+    assertThatThrownBy(
+            () ->
+                service.remove(
+                    territorial,
+                    USER_TERRITORIAL_MULTI,
+                    new NoveltyRemoveRequest(year, CASE_NOT_STARTED, NOVELTY_OTHER_CAUSE, "Cafe")))
+        .isInstanceOf(ConflictException.class);
+    assertThat(stored(CASE_NOT_STARTED)).containsEntry("TEXT", "Caf&#233;");
+  }
+
+  /** Ruling 8: con roles combinados (nacional + territorial) nadie escribe en todo el país. */
+  @Test
+  void combinedNationalAndTerritorialRolesCannotWrite() {
+    OperationalAccess combined =
+        accessService.accessFor(
+            SessionPrincipal.administrator(
+                USER_TERRITORIAL_MULTI,
+                EnumSet.of(Role.ADMIN_NACIONAL, Role.ADMIN_TERRITORIAL),
+                "5"));
+    assertThat(combined.allDepartments()).isTrue();
+    assertThat(combined.canManageNovelties()).isTrue();
+
+    assertThatThrownBy(
+            () ->
+                service.assign(
+                    combined, USER_TERRITORIAL_MULTI, change(CASE_NO_CATALOG_WITH_KEY, 3)))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(
+            () ->
+                service.remove(
+                    combined,
+                    USER_TERRITORIAL_MULTI,
+                    new NoveltyRemoveRequest(
+                        year, CASE_COMPLETE_WITH_NOVELTY, NOVELTY_COMMON, null)))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThat(stored(CASE_NO_CATALOG_WITH_KEY)).containsEntry("IDFNOV", null);
+    assertThat(stored(CASE_COMPLETE_WITH_NOVELTY)).containsEntry("IDFNOV", 3);
+  }
+
   @Test
   void personOfAnotherDepartmentOrMissingIsNotFoundWithoutChanges() {
     Throwable otherDepartment =

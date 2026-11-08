@@ -31,8 +31,11 @@ public class NoveltyRepository {
   /** Entidad con su muestra activa. */
   public record EntityRow(long code, String name, long sampleSize, long withNovelty) {}
 
-  /** Novedad guardada de un funcionario y su IDMUES (identificador no personal). */
-  public record CurrentNovelty(BigDecimal noveltyCode, String sampleId) {}
+  /**
+   * Novedad guardada de un funcionario, con la causa cruda (sin decodificar), y su IDMUES
+   * (identificador no personal).
+   */
+  public record CurrentNovelty(BigDecimal noveltyCode, String storedText, String sampleId) {}
 
   private final NamedParameterJdbcTemplate jdbc;
   private final SurveyProperties survey;
@@ -119,13 +122,15 @@ public class NoveltyRepository {
   }
 
   /**
-   * Cambia la novedad solo si la fila sigue con los valores esperados. {@code DECODE} compara NULL
-   * con NULL como iguales (sin novedad esperada = sin novedad guardada).
+   * Cambia la novedad solo si la fila sigue con los valores crudos leídos con {@link
+   * #findCurrentForUpdate}. {@code DECODE} compara NULL con NULL como iguales.
    *
-   * @param departments departamentos del usuario; nulo si ve todo el país (Ruling 3)
+   * @param departments departamentos propios del usuario (nunca nulo: la escritura no aplica el
+   *     Ruling 3)
    * @param noveltyCode nueva novedad; nula para quitarla
    * @param storedText causa ya convertida con {@link Latin9Text#encode}; nula si no aplica
-   * @param expectedText causa esperada en su forma guardada
+   * @param readCode IDFNOV tal como se leyó
+   * @param readText NOV_OTRA_CAUSA tal como se leyó (sin decodificar)
    * @return filas actualizadas
    */
   public int updateNovelty(
@@ -134,16 +139,16 @@ public class NoveltyRepository {
       List<Integer> departments,
       Integer noveltyCode,
       String storedText,
-      Integer expectedCode,
-      String expectedText) {
+      BigDecimal readCode,
+      String readText) {
     MapSqlParameterSource parameters =
         new MapSqlParameterSource()
             .addValue("noveltyCode", noveltyCode, Types.NUMERIC)
             .addValue("storedText", storedText, Types.VARCHAR)
             .addValue("respondentCode", respondentCode, Types.VARCHAR)
             .addValue("year", String.valueOf(year), Types.VARCHAR)
-            .addValue("expectedCode", expectedCode, Types.NUMERIC)
-            .addValue("expectedText", expectedText, Types.VARCHAR);
+            .addValue("readCode", readCode, Types.NUMERIC)
+            .addValue("readText", readText, Types.VARCHAR);
     StringBuilder sql = new StringBuilder("UPDATE ");
     sql.append(survey.sampleTableName())
         .append(
@@ -151,30 +156,35 @@ public class NoveltyRepository {
                 + " WHERE C_C = :respondentCode AND ANIO = :year");
     appendDepartmentFilter(sql, parameters, departments);
     sql.append(
-        " AND DECODE(IDFNOV, :expectedCode, 1, 0) = 1"
-            + " AND DECODE(NOV_OTRA_CAUSA, :expectedText, 1, 0) = 1");
+        " AND DECODE(IDFNOV, :readCode, 1, 0) = 1"
+            + " AND DECODE(NOV_OTRA_CAUSA, :readText, 1, 0) = 1");
     return jdbc.update(sql.toString(), parameters);
   }
 
   /**
-   * La novedad guardada de un funcionario visible para el usuario; vacío si no existe en el año o
-   * es de otro departamento (quien llama no debe distinguir los dos casos).
+   * La novedad guardada (cruda) de un funcionario de los departamentos indicados, bloqueando la
+   * fila hasta el fin de la transacción; vacío si no existe en el año o es de otro departamento
+   * (quien llama no debe distinguir los dos casos).
    */
-  public Optional<CurrentNovelty> findCurrent(
+  public Optional<CurrentNovelty> findCurrentForUpdate(
       int year, String respondentCode, List<Integer> departments) {
     MapSqlParameterSource parameters =
         new MapSqlParameterSource()
             .addValue("respondentCode", respondentCode, Types.VARCHAR)
             .addValue("year", String.valueOf(year), Types.VARCHAR);
-    StringBuilder sql = new StringBuilder("SELECT IDFNOV, IDMUES FROM ");
+    StringBuilder sql = new StringBuilder("SELECT IDFNOV, NOV_OTRA_CAUSA, IDMUES FROM ");
     sql.append(survey.sampleTableName()).append(" WHERE C_C = :respondentCode AND ANIO = :year");
     appendDepartmentFilter(sql, parameters, departments);
+    sql.append(" FOR UPDATE");
     return jdbc
         .query(
             sql.toString(),
             parameters,
             (row, index) ->
-                new CurrentNovelty(row.getBigDecimal("IDFNOV"), row.getString("IDMUES")))
+                new CurrentNovelty(
+                    row.getBigDecimal("IDFNOV"),
+                    row.getString("NOV_OTRA_CAUSA"),
+                    row.getString("IDMUES")))
         .stream()
         .findFirst();
   }
