@@ -127,6 +127,51 @@ class NoveltyControllerIT extends OracleIntegrationTest {
   }
 
   @Test
+  void assignAndRemoveWithoutYearUseTheActiveSurveyYear() throws Exception {
+    postAs(territorial(), "/assign", Map.of("respondentCode", CASE_NOT_STARTED, "noveltyCode", 3))
+        .andExpect(status().isNoContent());
+    assertThat(storedCode(CASE_NOT_STARTED)).isEqualTo(3);
+
+    postAs(
+            territorial(),
+            "/remove",
+            Map.of("respondentCode", CASE_NOT_STARTED, "expectedNoveltyCode", 3))
+        .andExpect(status().isNoContent());
+    assertThat(storedCode(CASE_NOT_STARTED)).isNull();
+  }
+
+  @Test
+  void explicitYearInTheBodyIsRespected() throws Exception {
+    int previousYear = survey.year() - 1;
+    // La misma persona en la muestra del año anterior, con el catálogo de ese año (el fixture
+    // borra por rango de cédulas y por código de novedad en cualquier año).
+    jdbc.update(
+        "INSERT INTO EDIN_MUESTRA (ANIO, COD_ENT, COD_DEPTO, C_C, NOM_APE, ATV, TC1, ENC,"
+            + " AREA_TRA, TC2, IDMUES) SELECT ?, COD_ENT, COD_DEPTO, C_C, NOM_APE, ATV, TC1, ENC,"
+            + " AREA_TRA, TC2, IDMUES FROM EDIN_MUESTRA WHERE C_C = ? AND ANIO = ?",
+        String.valueOf(previousYear),
+        CASE_NOT_STARTED,
+        String.valueOf(survey.year()));
+    jdbc.update("UPDATE GRAL_NOVEDAD SET ANIO = ? WHERE IDFNOV = 3", previousYear);
+
+    postAs(
+            territorial(),
+            "/assign",
+            Map.of("anio", previousYear, "respondentCode", CASE_NOT_STARTED, "noveltyCode", 3))
+        .andExpect(status().isNoContent());
+    assertThat(storedCode(CASE_NOT_STARTED, previousYear)).isEqualTo(3);
+    assertThat(storedCode(CASE_NOT_STARTED)).isNull();
+
+    postAs(
+            territorial(),
+            "/remove",
+            Map.of(
+                "anio", previousYear, "respondentCode", CASE_NOT_STARTED, "expectedNoveltyCode", 3))
+        .andExpect(status().isNoContent());
+    assertThat(storedCode(CASE_NOT_STARTED, previousYear)).isNull();
+  }
+
+  @Test
   void errorsAreProblemDetailsWithoutTheRespondentCode() throws Exception {
     MvcResult invalid =
         postAs(territorial(), "/assign", assignBody(CASE_NOT_STARTED, 8, " "))
@@ -226,12 +271,16 @@ class NoveltyControllerIT extends OracleIntegrationTest {
   }
 
   private Integer storedCode(String code) {
+    return storedCode(code, survey.year());
+  }
+
+  private Integer storedCode(String code, int year) {
     java.math.BigDecimal value =
         jdbc.queryForObject(
             "SELECT IDFNOV FROM EDIN_MUESTRA WHERE C_C = ? AND ANIO = ?",
             java.math.BigDecimal.class,
             code,
-            String.valueOf(survey.year()));
+            String.valueOf(year));
     return value == null ? null : value.intValueExact();
   }
 
