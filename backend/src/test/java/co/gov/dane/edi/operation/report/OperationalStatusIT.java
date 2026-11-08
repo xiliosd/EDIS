@@ -218,6 +218,20 @@ class OperationalStatusIT extends OracleIntegrationTest {
   }
 
   @Test
+  void catalogEntityNameIsShownAndRowsAreOrderedByEntityName() throws Exception {
+    JsonNode mixed = page("departamento=5&entidad=900001");
+    assertThat(rowOf(mixed, CASE_COMPLETE).get("entityName").asText())
+        .isEqualTo("Entidad Ficticia Mixta");
+    // Dept 8: se renombra la entidad 900003 para que el orden no dependa del NLS_SORT de la base.
+    jdbc.update("UPDATE GRAL_ENTI SET ENTIDAD = 'Zeta Ficticia' WHERE COD_ENT = 900003");
+    JsonNode atlantico = page("departamento=8");
+    assertThat(codesOf(atlantico)).containsExactly(CASE_EDID_COMPLETE, CASE_AT_SIGN_ENTITY);
+    assertThat(atlantico.get("rows").get(0).get("entityName").asText())
+        .isEqualTo("Entidad Ficticia EDID");
+    assertThat(atlantico.get("rows").get(1).get("entityName").asText()).isEqualTo("Zeta Ficticia");
+  }
+
+  @Test
   void responsesAreNotCached() throws Exception {
     MvcResult json = asOperative(USER_OPERATIVE, "?departamento=5");
     assertThat(json.getResponse().getHeader(HttpHeaders.CACHE_CONTROL)).contains("no-store");

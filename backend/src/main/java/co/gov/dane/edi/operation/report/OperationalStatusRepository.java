@@ -51,7 +51,7 @@ public class OperationalStatusRepository {
     Map<String, Object> parameters = new HashMap<>();
     StringBuilder sql =
         new StringBuilder(
-            "SELECT TO_NUMBER(m.COD_ENT) AS ENTITY_CODE, e.ENTIDAD AS ENTITY_NAME,"
+            "SELECT TO_NUMBER(m.COD_ENT) AS ENTITY_CODE, ent.ENTIDAD AS ENTITY_NAME,"
                 + " m.C_C AS RESPONDENT_CODE, m.NOM_APE AS PERSON_NAME,"
                 + " m.AREA_TRA AS LEVEL_CODE, m.TC1 AS CHANNEL, ");
     sql.append(SampleStatus.STATUS_CASE).append(" AS STATUS, h.COMPLETED_AT AS COMPLETED_AT,");
@@ -65,7 +65,7 @@ public class OperationalStatusRepository {
     }
     appendFrom(sql, parameters, chapterTables, year, reportSurvey, departmentCode, entityCode);
     appendStatus(sql, parameters, statusFilter);
-    sql.append(" ORDER BY e.ENTIDAD NULLS LAST, TO_NUMBER(m.COD_ENT), m.TC1, m.NOM_APE, m.C_C");
+    sql.append(" ORDER BY ent.ENTIDAD NULLS LAST, TO_NUMBER(m.COD_ENT), m.TC1, m.NOM_APE, m.C_C");
     if (limit != null) {
       sql.append(" OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY");
       parameters.put("offset", offset);
@@ -115,7 +115,7 @@ public class OperationalStatusRepository {
           .append(alias(chapter))
           .append(".C_C = m.C_C");
     }
-    sql.append(" LEFT JOIN GRAL_ENTI e ON e.COD_ENT = TO_NUMBER(m.COD_ENT)");
+    sql.append(" LEFT JOIN GRAL_ENTI ent ON ent.COD_ENT = TO_NUMBER(m.COD_ENT)");
     sql.append(
         " LEFT JOIN (SELECT IDFNOV, MAX(NOVEDAD) AS NOVEDAD FROM GRAL_NOVEDAD"
             + " WHERE PROY LIKE :noveltySurvey AND ANIO = :noveltyYear GROUP BY IDFNOV) n"
