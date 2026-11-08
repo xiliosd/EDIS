@@ -9,22 +9,16 @@ servers:
 security:
 - sessionCookie: []
 tags:
-- description: Lista de comprobación y publicación de un año (rol ADMIN_CUESTIONARIO)
-  name: Publicación del cuestionario
 - description: Inicio y cierre de sesión
   name: Autenticación
-- description: Modo del ambiente (administradores)
-  name: Ambiente de administración
 - description: Reportes operativos de la muestra (consulta y Excel)
   name: Reportes
 - description: Reglas y páginas de un año para probarlas sin respuestas (ADMIN_CUESTIONARIO)
   name: Simulador de reglas
-- description: Lectura y diligenciamiento del cuestionario
-  name: Encuesta
 - description: Gestión de novedades de la muestra por la territorial
   name: Novedades
-- description: Alcance operativo del administrador
-  name: Operación
+- description: Usuarios y claves de la muestra
+  name: Claves
 - description: "Reglas de salto, validaciones y casos de prueba de un año (rol ADMIN_CUESTIONARIO).\
     \ En un año publicado cada cambio es una corrección: exige motivo (10 a 500 caracteres),\
     \ no agrega errores y no deja casos de prueba en rojo"
@@ -32,6 +26,14 @@ tags:
 - description: Versiones del archivo de reglas de un año y su restauración en borrador
     (rol ADMIN_CUESTIONARIO)
   name: Historial del cuestionario
+- description: Lista de comprobación y publicación de un año (rol ADMIN_CUESTIONARIO)
+  name: Publicación del cuestionario
+- description: Modo del ambiente (administradores)
+  name: Ambiente de administración
+- description: Lectura y diligenciamiento del cuestionario
+  name: Encuesta
+- description: Alcance operativo del administrador
+  name: Operación
 - description: "Paquete verificable de un año publicado: se genera en QA y se importa\
     \ en producción (rol ADMIN_CUESTIONARIO)"
   name: Paquetes de promoción
@@ -55,6 +57,103 @@ paths:
       summary: Consultar si este ambiente permite cambiar el cuestionario
       tags:
       - Ambiente de administración
+  /api/v1/admin/keys/excel:
+    get:
+      description: "Hoja Claves con entidad, código de entidad, cédula, nombre, usuario\
+        \ y clave de los elegibles con usuario del departamento, para la carta al\
+        \ coordinador. Contiene datos personales y claves: la descarga no se guarda\
+        \ en caché. 404 si el departamento no tiene elegibles en la muestra del añ\
+        o."
+      operationId: keysExcel
+      parameters:
+      - in: query
+        name: anio
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: departamento
+        required: true
+        schema:
+          type: integer
+          format: int32
+          maximum: 999
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: Archivo .xlsx
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El departamento no tiene elegibles en la muestra del año
+      summary: Descargar usuarios y claves de un departamento
+      tags:
+      - Claves
+  /api/v1/admin/keys/generate:
+    post:
+      description: "Asigna usuario y clave (8 letras A-Z) a los elegibles del año\
+        \ que no tienen usuario; nunca cambia uno existente. expectedWithoutKey es\
+        \ el número que se confirmó en pantalla: si cambió, responde 409 sin generar.\
+        \ Funciona aunque el cuestionario sea de solo lectura."
+      operationId: keysGenerate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KeysGenerateRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeysGenerateResult"
+          description: Cantidad de claves generadas
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El usuario no es administrador nacional
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: El número de funcionarios sin clave cambió desde la confirmación
+      summary: Generar usuarios y claves pendientes
+      tags:
+      - Claves
+  /api/v1/admin/keys/summary:
+    get:
+      description: "Funcionarios elegibles (carga web y activos, como el login), con\
+        \ usuario y sin usuario, por departamento. Solo el administrador nacional."
+      operationId: keysSummary
+      parameters:
+      - in: query
+        name: anio
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeysSummary"
+          description: Resumen del año
+      summary: Resumen de claves por departamento
+      tags:
+      - Claves
   /api/v1/admin/novelties/assign:
     post:
       description: Por cédula y año (en el cuerpo). La novedad debe existir en el
@@ -3108,6 +3207,23 @@ components:
           type: string
         totals:
           $ref: "#/components/schemas/CoverageTotals"
+    DepartmentKeys:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        eligible:
+          type: integer
+          format: int64
+        name:
+          type: string
+        withKey:
+          type: integer
+          format: int64
+        withoutKey:
+          type: integer
+          format: int64
     EditTextRequest:
       type: object
       properties:
@@ -3248,6 +3364,34 @@ components:
       required:
       - rules
       - version
+    KeysGenerateRequest:
+      type: object
+      properties:
+        anio:
+          type: integer
+          format: int32
+          maximum: 2100
+          minimum: 2000
+        expectedWithoutKey:
+          type: integer
+          format: int64
+          minimum: 0
+    KeysGenerateResult:
+      type: object
+      properties:
+        generated:
+          type: integer
+          format: int64
+    KeysSummary:
+      type: object
+      properties:
+        departments:
+          type: array
+          items:
+            $ref: "#/components/schemas/DepartmentKeys"
+        year:
+          type: integer
+          format: int32
     LegacySkip:
       type: object
       properties:

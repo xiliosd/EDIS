@@ -225,6 +225,14 @@
                   </limits>
                 </rule>
                 <rule>
+                  <!-- Claves de la muestra (credenciales y datos personales): 80 %. -->
+                  <element>PACKAGE</element>
+                  <includes><include>co.gov.dane.edi.operation.keys</include></includes>
+                  <limits>
+                    <limit><counter>LINE</counter><value>COVEREDRATIO</value><minimum>0.80</minimum></limit>
+                  </limits>
+                </rule>
+                <rule>
                   <element>PACKAGE</element>
                   <includes><include>co.gov.dane.edi.rules</include></includes>
                   <limits>

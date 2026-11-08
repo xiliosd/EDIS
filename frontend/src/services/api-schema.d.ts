@@ -24,6 +24,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/keys/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Descargar usuarios y claves de un departamento
+         * @description Hoja Claves con entidad, código de entidad, cédula, nombre, usuario y clave de los elegibles con usuario del departamento, para la carta al coordinador. Contiene datos personales y claves: la descarga no se guarda en caché. 404 si el departamento no tiene elegibles en la muestra del año.
+         */
+        get: operations["keysExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/keys/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generar usuarios y claves pendientes
+         * @description Asigna usuario y clave (8 letras A-Z) a los elegibles del año que no tienen usuario; nunca cambia uno existente. expectedWithoutKey es el número que se confirmó en pantalla: si cambió, responde 409 sin generar. Funciona aunque el cuestionario sea de solo lectura.
+         */
+        post: operations["keysGenerate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/keys/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resumen de claves por departamento
+         * @description Funcionarios elegibles (carga web y activos, como el login), con usuario y sin usuario, por departamento. Solo el administrador nacional.
+         */
+        get: operations["keysSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/novelties/assign": {
         parameters: {
             query?: never;
@@ -1245,6 +1305,17 @@ export interface components {
             name?: string;
             totals?: components["schemas"]["CoverageTotals"];
         };
+        DepartmentKeys: {
+            /** Format: int32 */
+            code?: number;
+            /** Format: int64 */
+            eligible?: number;
+            name?: string;
+            /** Format: int64 */
+            withKey?: number;
+            /** Format: int64 */
+            withoutKey?: number;
+        };
         EditTextRequest: {
             motivo?: string;
             text: string;
@@ -1314,6 +1385,21 @@ export interface components {
             rules: components["schemas"]["RuleSet"];
             /** Format: int32 */
             version: number;
+        };
+        KeysGenerateRequest: {
+            /** Format: int32 */
+            anio?: number;
+            /** Format: int64 */
+            expectedWithoutKey?: number;
+        };
+        KeysGenerateResult: {
+            /** Format: int64 */
+            generated?: number;
+        };
+        KeysSummary: {
+            departments?: components["schemas"]["DepartmentKeys"][];
+            /** Format: int32 */
+            year?: number;
         };
         LegacySkip: {
             /** Format: int32 */
@@ -1743,6 +1829,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminEnvironment"];
+                };
+            };
+        };
+    };
+    keysExcel: {
+        parameters: {
+            query: {
+                anio?: number;
+                departamento: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archivo .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description El departamento no tiene elegibles en la muestra del año */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    keysGenerate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeysGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Cantidad de claves generadas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeysGenerateResult"];
+                };
+            };
+            /** @description El usuario no es administrador nacional */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description El número de funcionarios sin clave cambió desde la confirmación */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    keysSummary: {
+        parameters: {
+            query?: {
+                anio?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resumen del año */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeysSummary"];
                 };
             };
         };

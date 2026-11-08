@@ -91,8 +91,9 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
           "HistoryAdminController.restore");
 
   /**
-   * Escrituras que producción sí permite (@AllowedInReadOnlyQuestionnaire): el paquete de promoción
-   * y los cortes de cobertura, que no tocan el cuestionario. Una nueva exige revisarla aquí.
+   * Escrituras que producción sí permite (@AllowedInReadOnlyQuestionnaire): el paquete de
+   * promoción, los cortes de cobertura, las novedades y las claves, que no tocan el cuestionario.
+   * Una nueva exige revisarla aquí.
    */
   private static final Set<String> ALLOWED_WRITES =
       Set.of(
@@ -100,11 +101,18 @@ class QuestionnaireReadOnlyIT extends OracleIntegrationTest {
           "ReportController.createCut",
           "NoveltyController.people",
           "NoveltyController.assign",
-          "NoveltyController.remove");
+          "NoveltyController.remove",
+          "SampleKeysController.generate");
 
-  /** Su 403 documentado es de alcance (departamento ajeno), no de la compuerta de solo lectura. */
+  /** Su 403 documentado es de alcance o de rol, no de la compuerta de solo lectura. */
   private static final Set<String> ALLOWED_WRITE_OPERATION_IDS =
-      Set.of("packageImport", "reportCutCreate", "noveltyPeople", "noveltyAssign", "noveltyRemove");
+      Set.of(
+          "packageImport",
+          "reportCutCreate",
+          "noveltyPeople",
+          "noveltyAssign",
+          "noveltyRemove",
+          "keysGenerate");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private SessionTokenService tokens;
