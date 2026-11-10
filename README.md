@@ -27,6 +27,7 @@ dos aplicaciones independientes: `backend/` (Spring Boot) y `frontend/` (React).
  - [Diseño de la Fase 4 (reportes, novedades y claves)](docs/superpowers/specs/2026-11-07-fase-4-reportes-novedades-claves-design.md)
  - [Plan de la Fase 4](docs/superpowers/plans/2026-11-07-fase-4-reportes-novedades-claves.md)
  - [Diferencias de los reportes frente al PHP](docs/fase-4-diferencias-reportes.md)
+ - [Guía paso a paso: instalar en otro equipo con la base real](docs/guia-instalacion-servidor.md)
  - [Reglas de EDIN 2026](docs/reglas/edin-2026.md)
  - [MER de las tablas usadas](docs/diagramas/mer-tablas-usadas.md)
  - [Contrato OpenAPI](docs/api/openapi.yaml)
